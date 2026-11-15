@@ -1,0 +1,17 @@
+# local to each server — never commit
+board/config.json
+board/state.json
+board/state.json.tmp
+board/log/
+board/update.lock
+board/update-result.json
+board/deploy.lock
+/projects.json
+/CLAUDE.md
+/session-state.md
+*.bak
+*.bak-*
+.DS_Store
+board/secrets/
+install-info.json
+setup-plan.md

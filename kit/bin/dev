@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+set -u
+
+# 솔루션 목록 = ~/dev-server/projects.json (상황판과 같은 파일 — 새 솔루션은 거기 한 줄)
+mapfile -t PROJECTS < <(python3 -c '
+import json,os
+for i,p in enumerate(json.load(open(os.path.expanduser("~/dev-server/projects.json"))),1):
+    print(str(i)+"|"+p["name"]+"|"+p["dir"]+"|"+p["key"])
+' 2>/dev/null)
+# 상황판 포트·언어·주인 = ~/dev-server/board/config.json «port»·«lang»·«owner» (없으면 8800·en·Owner)
+read -r PORT DEV_LANG OWNER < <(python3 -c '
+import json,os
+try: c=json.load(open(os.path.expanduser("~/dev-server/board/config.json")))
+except Exception: c={}
+l="ko" if c.get("lang")=="ko" else "en"
+print(int(c.get("port",8800)), l, (c.get("owner") or ("주인" if l=="ko" else "Owner")).replace(" ","_"))' 2>/dev/null || echo "8800 en Owner")
+export DEV_LANG OWNER
+t() { [ "$DEV_LANG" = ko ] && printf '%s' "$1" || printf '%s' "$2"; }   # t "한글" "English"
+
+project_of() {  # 폴더 → 솔루션 이름
+  local cwd="$1" p
+  for p in "${PROJECTS[@]}"; do
+    IFS='|' read -r _n name dir <<<"$p"
+    case "$cwd" in "$dir"|"$dir"/*) echo "$name"; return;; esac
+  done
+  t "기타" "other"; echo
+}
+
+sessions_json() { [ -x "$HOME/dev-server/kit/bin/ai-key-wait" ] && "$HOME/dev-server/kit/bin/ai-key-wait"; claude agents --json --all 2>/dev/null || echo "[]"; }
+
+rooms_tsv() {
+  local tmp="${TMPDIR:-/tmp}/.devboard.$$"
+  curl -s -m 5 -H "Host: localhost:$PORT" "http://127.0.0.1:$PORT/api/board" -o "$tmp" 2>/dev/null || rm -f "$tmp"
+  [ -s "$tmp" ] || sessions_json > "$tmp.a"   # 상황판 서버가 꺼졌을 때 — 파일로(방 900개 넘으면 환경 변수로는 너무 김)
+  python3 - "$tmp" "$@" "${PROJECTS[@]}" <<'PY'
+import json,sys,datetime,os
+K=os.environ.get("DEV_LANG")=="ko"; L=lambda ko,en: ko if K else en
+f,mode=sys.argv[1],sys.argv[2]
+key=sys.argv[3] if mode=="project" else None; pdir=sys.argv[4] if mode=="project" else None
+projs=[l.split("|") for l in sys.argv[(5 if mode=="project" else 3):]]
+names={p[3]:p[1] for p in projs}
+def proj_of(cwd):
+    for p in projs:
+        if cwd==p[2] or cwd.startswith(p[2]+"/"): return p[3]
+    return ""
+rows=[]
+try:
+    d=json.load(open(f))
+    for r in d.get("rooms",[]):
+        if r.get("kind")!="background": continue
+        st=r.get("status") or {}
+        code=st.get("code") or "?"
+        if code=="stopped" and st.get("loginGone"): code="stuck"
+        rows.append(dict(id=r["id"],sid=r.get("sessionId") or "",cwd=r.get("cwd") or "",alive=bool(r.get("alive")),
+                         code=code,label=st.get("label") or code,name=r.get("name") or "-",proj=r.get("project") or proj_of(r.get("cwd") or ""),t=r.get("startedAt") or 0))
+except Exception:
+    print("#note\t"+L("상황판 서버가 응답하지 않아 claude agents 로 봤어요(켜진 방만)","Board server not responding — showing running sessions from claude agents"))
+    try: a=json.load(open(f+".a"))
+    except Exception: a=[]
+    for x in a:
+        if x.get("kind")!="background" or not x.get("id"): continue
+        alive=bool(x.get("pid")); s=x.get("status")
+        code=("working" if s=="busy" else "waiting" if s=="waiting" else "done") if alive else "off"   # 상황판 없이는 멈춘 까닭을 모름 — 꺼진 방은 숨김
+        lab={"working":L("일하는 중","working"),"waiting":L("답 기다림","waiting for you"),"done":L("끝남","done"),"stopped":L("멈춤","stopped"),"off":L("꺼짐","off")}[code]
+        rows.append(dict(id=x["id"],sid=x.get("sessionId") or "",cwd=x.get("cwd") or "",alive=alive,code=code,label=lab,name=x.get("name") or "-",proj=proj_of(x.get("cwd") or ""),t=x.get("startedAt") or 0))
+icon={"waiting":"⏸","blocked":"❌","stuck":"⚠","stopped":"■","working":"▶","later":"🕓","done":"✓","off":"⏹"}
+order={"waiting":0,"blocked":1,"stuck":2,"stopped":3,"working":4,"later":5,"done":6,"off":7}
+gone=("done","off")
+live=sorted([r for r in rows if r["code"] not in gone],key=lambda r:(order.get(r["code"],9),-r["t"]))
+def line(r,withproj=True):
+    t=datetime.datetime.fromtimestamp(r["t"]/1000).strftime("%m-%d %H:%M") if r["t"] else "-"
+    nm=r["name"] if len(r["name"])<=40 else r["name"][:39]+"…"
+    pj=(f"{names.get(r['proj'],L('기타','other')):11}" if withproj else "")
+    return f"{icon.get(r['code'],'·')} {pj}{r['label']} · {nm}  ({t})"
+def out(r,withproj=True): print("\t".join([r["id"],r["sid"],r["cwd"],"1" if r["alive"] else "0",line(r,withproj)]))
+if mode=="live":
+    for r in live: out(r)
+    print("#hidden\t"+str(sum(1 for r in rows if r["code"] in gone)))
+else:
+    mine=[r for r in rows if r["proj"]==key or r["cwd"]==pdir or r["cwd"].startswith(pdir+"/")]
+    for r in [r for r in live if r in mine]: out(r,False)
+    for r in sorted([r for r in mine if r["code"] in gone],key=lambda r:-r["t"])[:5]: out(r,False)
+PY
+  rm -f "$tmp" "$tmp.a"
+}
+
+enter_room() {  # 고른 방 대화로 들어가기 — 켜진 방은 attach, 꺼진 방은 그 폴더에서 같은 대화 이어서(상황판 «터미널에서 이어가기» 와 같음)
+  local id="$1" sid="$2" cwd="$3" alive="$4"
+  echo
+  if [ "$alive" = 1 ]; then
+    t "→ [$id] 방으로 들어갑니다. 나오기: ← 키(방은 계속 일함) · Ctrl+Z 는 터미널로" "→ Opening session [$id]. Leave with ← (it keeps running) · Ctrl+Z drops to the shell"; echo
+    exec claude attach "$id"
+  fi
+  if [ -n "$sid" ] && [ -d "$cwd" ]; then
+    # 같은 대화를 다른 터미널에서 이미 열어 둔 경우 — 둘이 같은 대화에 이어 쓰면 엉킨다
+    if pgrep -u "$(id -u)" -f -- "--resume $sid" >/dev/null 2>&1; then
+      t "  ⚠ 이 대화는 다른 터미널 창에서 이미 열려 있어요 — 그 창을 쓰세요. 그래도 여기서 열까요? (y + Enter)" "  ⚠ This conversation is already open in another terminal — use that one. Open here anyway? (y + Enter)"; echo
+      local yn; read -r yn; [ "$(pick_key "$yn")" = y ] || return
+    fi
+    t "→ [$id] 방은 꺼져 있어 같은 대화를 이 창에서 이어서 엽니다. 나가기: /exit" "→ Session [$id] is off — reopening the same conversation here. Leave with /exit"; echo
+    cd "$cwd" && exec claude --resume "$sid"
+  fi
+  t "이 방은 열 수 없습니다(대화 기록 없음) — 상황판에서 보세요." "This session can't be opened (no conversation) — check the board."; echo
+}
+
+pick_key() {  # 입력 정리 — 앞뒤 공백 · 대문자 · 한글 자판 그대로 누른 글자(ㄴ=s ㅊ=c ㅜ=n ㅁ=a ㅠ=b)
+  local c="$1"; c="${c//[[:space:]]/}"; c="${c,,}"
+  case "$c" in ㄴ) c=s;; ㅊ) c=c;; ㅜ) c=n;; ㅁ) c=a;; ㅠ) c=b;; esac
+  printf '%s' "$c"
+}
+
+open_project() {  # 그 솔루션: 새 일 시작 · 지금 방 · 최근 끝난 방
+  local name="$1" dir="$2" key="$3" c i line
+  local ids=() sids=() cwds=() alives=()
+  while IFS=$'\t' read -r id sid cwd alive line; do
+    [ -z "$id" ] || [ "$id" = "#note" ] && continue
+    ids+=("$id"); sids+=("$sid"); cwds+=("$cwd"); alives+=("$alive")
+    [ "${#ids[@]}" = 1 ] && { echo; echo "── $name ──"; }
+    echo "  ${#ids[@]}) $line"
+  done < <(rooms_tsv project "$key" "$dir")
+  [ "${#ids[@]}" = 0 ] && { echo; echo "── $name ──"; t "  (이 솔루션에 방 없음)" "  (no sessions for this solution)"; echo; }
+  echo "  n) $(t '새 일 시작 — 새 작업방을 열고 들어갑니다' 'New task — open a new session and go in')"
+  echo "  Enter) $(t '뒤로' 'Back')"
+  while :; do
+    read -rp "$(t '번호·글자 넣고 Enter: ' 'Number or letter, then Enter: ')" c; c="$(pick_key "$c")"
+    [ -z "$c" ] && return
+    if [ "$c" = n ]; then
+      cd "$dir" || return
+      local out id
+      out=$(claude --bg -n "$name" 2>&1); echo "$out"
+      id=$(grep -oE '\b[0-9a-f]{8}\b' <<<"$out" | head -1)
+      [ -n "$id" ] && exec claude attach "$id"
+      return
+    fi
+    if [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le "${#ids[@]}" ]; then
+      i=$((c-1)); enter_room "${ids[$i]}" "${sids[$i]}" "${cwds[$i]}" "${alives[$i]}"; return
+    fi
+    t "  «$c» 는 없는 번호예요 — 위 목록의 번호나 n, 뒤로는 그냥 Enter" "  «$c» isn't on the list — pick a number or n, Enter to go back"; echo
+  done
+}
+
+pick_project() {  # s) 솔루션 고르기
+  local p n name dir key c
+  echo; t "── 솔루션 고르기 ──" "── Pick a solution ──"; echo
+  for p in "${PROJECTS[@]}"; do IFS='|' read -r n name _ _ <<<"$p"; echo "  $n) $name"; done
+  echo "  Enter) $(t '뒤로' 'Back')"
+  while :; do
+    read -rp "$(t '번호 넣고 Enter: ' 'Number, then Enter: ')" c; c="$(pick_key "$c")"
+    [ -z "$c" ] && return
+    for p in "${PROJECTS[@]}"; do
+      IFS='|' read -r n name dir key <<<"$p"
+      [ "$c" = "$n" ] && { open_project "$name" "$dir" "$key"; return; }
+    done
+    t "  «$c» 는 없는 번호예요" "  «$c» isn't on the list"; echo
+  done
+}
+
+consult() {  # 💬 AI 와 바로 대화 — 일을 맡기지 않고 그 솔루션 폴더에서 실시간 상의
+  local p n name dir c busy
+  echo; t "어느 솔루션 이야기를 할까요? (그 폴더에서 열려 코드·작업기록을 읽고 답합니다)" "Which solution do you want to talk about? (opens in its folder and can read its code and notes)"; echo
+  for p in "${PROJECTS[@]}"; do IFS='|' read -r n name _ _ <<<"$p"; echo "  $n) $name"; done
+  echo "  Enter) $(t '뒤로' 'Back')"
+  read -rp "$(t '번호 넣고 Enter: ' 'Number, then Enter: ')" c; c="$(pick_key "$c")"
+  [ -z "$c" ] && return
+  for p in "${PROJECTS[@]}"; do
+    IFS='|' read -r n name dir _ <<<"$p"; [ "$c" = "$n" ] || continue
+    # 같은 폴더에서 일하는 작업방 — 상의 창에서 고치기로 바꾸면 둘이 같은 파일을 고칠 수 있어 알려 준다
+    busy=$(sessions_json | python3 -c '
+import json,sys
+d=json.load(sys.stdin); dir=sys.argv[1]
+print(", ".join((a.get("name") or a["id"]) for a in d if a.get("kind")=="background" and a.get("pid") and a.get("status")=="busy" and (a["cwd"]==dir or a["cwd"].startswith(dir+"/"))))' "$dir" 2>/dev/null)
+    echo
+    t "── 💬 $name 상의 창 ──" "── 💬 $name chat ──"; echo
+    t "  · 읽기만 하는 «계획 모드»로 엽니다 — 물어보고 의논하면 바로 답합니다(파일은 안 고침)." "  · Opens in read-only «plan mode» — ask and discuss, it answers right away (no file changes)."; echo
+    t "  · 고치게 하려면 Shift+Tab 으로 모드 바꾸기 · 일로 맡기려면 «이거 상황판 일로 넣어줘»" "  · To let it edit: Shift+Tab to change mode · to hand it off: «put this on the board as a task»"; echo
+    t "  · 나가기: /exit (상의 기록은 남아 다음에 claude --resume 으로 이어서)" "  · Leave: /exit (the chat is kept — continue later with claude --resume)"; echo
+    [ -n "$busy" ] && { t "  ⚠ 지금 이 폴더에서 일하는 방: $busy — 상의 창에서는 고치지 마세요(같은 파일을 둘이 고침)" "  ⚠ Working in this folder now: $busy — don't edit from this chat (two sessions on the same files)"; echo; }
+    echo
+    cd "$dir" || return
+    exec claude -n "💬 $(t 상의 chat) · $name" --permission-mode plan --append-system-prompt "$(t "이 창은 $OWNER 님과 실시간으로 상의하는 창이다(작업방 아님). 짧고 바로 답하고, 필요하면 코드·작업기록·git 기록을 읽어 근거를 댄다. 계획 모드가 풀리기 전에는 파일을 고치지 않는다. 모드가 풀려 고치게 되더라도 같은 폴더에 일하는 작업방이 있으면 먼저 알린다. 상의 끝에 «일로 맡길 것» 이 정해지면 상황판 대기열에 넣자고 제안하고, $OWNER 님이 좋다고 하면 curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:$PORT' -d '{\"project\":\"<key>\",\"task\":\"<정한 일 — 이 대화 없이도 할 수 있게>\",\"queue\":true}' http://127.0.0.1:$PORT/api/rooms 로 넣는다(key = projects.json 의 그 솔루션 key)." "This window is a live chat with $OWNER (not a task session). Answer briefly and right away; read code, notes and git history for evidence when useful. Do not edit files while plan mode is on. If edits are later allowed and another session is working in this folder, say so first. When the chat settles on work to hand off, offer to queue it on the board and, if $OWNER agrees, run curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:$PORT' -d '{\"project\":\"<key>\",\"task\":\"<the task — doable without this chat>\",\"queue\":true}' http://127.0.0.1:$PORT/api/rooms (key = the solution key).")"
+  done
+  t "없는 번호입니다." "No such number."; echo
+}
+
+BOARD_LINE="$(t '상황판(브라우저)' 'Board (browser)'): http://localhost:$PORT  — $(t '설명서' 'manual') ~/dev-server/README.md"
+# Tailscale 주소도 같이 — 상황판이 안 열릴 때 주소를 여기서 찾게
+TS_URL="$(timeout 3 tailscale serve status --json 2>/dev/null | PORT=$PORT python3 -c 'import json,sys,os
+try:
+  w=(json.load(sys.stdin) or {}).get("Web") or {}
+  for k,v in w.items():
+    if ":"+os.environ["PORT"]+"\"" in json.dumps(v): print("https://"+(k[:-4] if k.endswith(":443") else k)); break
+except Exception: pass' 2>/dev/null)"
+[ -n "$TS_URL" ] && BOARD_LINE="$BOARD_LINE
+  $(t '휴대폰(Tailscale)' 'Phone (Tailscale)'): $TS_URL"
+TITLE="── $(t 'Server 상황판' 'Server Board') ──"
+if [ "${1:-}" = "recover" ]; then exec node "$HOME/dev-server/board/auth-cli.js" recover; fi
+if [ "${1:-}" = "auth-status" ]; then exec node "$HOME/dev-server/board/auth-cli.js" status; fi
+# 접속 배너용 상황판 요약(고르기 없음)
+show_live() {  # $1=pick → 번호 붙임
+  local n=0 hidden=0 id sid cwd alive line
+  LIVE=()
+  while IFS=$'\t' read -r id sid cwd alive line; do
+    [ -z "$id" ] && continue
+    [ "$id" = "#hidden" ] && { hidden="$sid"; continue; }
+    [ "$id" = "#note" ] && { echo "  ⚠ $sid"; continue; }
+    n=$((n+1)); LIVE+=("$id"$'\t'"$sid"$'\t'"$cwd"$'\t'"$alive")
+    if [ "${1:-}" = pick ]; then printf '  %2d) %s\n' "$n" "$line"; else echo "  [$id] $line"; fi
+  done < <(rooms_tsv live)
+  [ "$n" = 0 ] && { t "  (지금 일하거나 답을 기다리는 방 없음)" "  (no session is working or waiting)"; echo; }
+  [ "$hidden" != 0 ] && { t "  · 끝난·꺼진 방 ${hidden}개는 여기 안 보임 — 다시 열려면 s) 솔루션 고르기" "  · ${hidden} finished/off sessions not shown — reopen via s) pick a solution"; echo; }
+}
+if [ "${1:-}" = "status" ]; then echo "$TITLE"; echo "  $BOARD_LINE"; show_live; exit 0; fi
+
+# 메뉴 — 위에 보이는 방은 번호로 바로 들어가고, 고를 수 없는 것은 보여 주지 않는다
+while :; do
+  echo "$TITLE"; echo "  $BOARD_LINE"; echo
+  t " 지금 방 — 번호를 넣고 Enter 하면 그 방 대화로 들어갑니다" " Sessions now — type a number and press Enter to go into that conversation"; echo
+  show_live pick
+  echo
+  t " 그 밖에" " Other"; echo
+  echo "   s) $(t '솔루션 고르기 — 새 일 시작 · 끝난 방 다시 열기' 'Pick a solution — start a new task · reopen a finished session')"
+  echo "   c) 💬 $(t 'AI 와 바로 대화 — 일 맡기지 않고 실시간 상의' 'Chat with AI now — talk it through live, no task')"
+  echo "   Enter) $(t '메뉴 닫기 — 그냥 터미널 (다시 열기: dev)' 'Close the menu — plain terminal (reopen: dev)')"
+  while :; do
+    read -rp "$(t '번호·글자 넣고 Enter: ' 'Number or letter, then Enter: ')" c || exit 0
+    c="$(pick_key "$c")"
+    [ -z "$c" ] && exit 0
+    case "$c" in
+      s) pick_project; echo; continue 2;;
+      c) consult; echo; continue 2;;
+      a) [ -x "$HOME/dev-server/kit/bin/ai-key-wait" ] && "$HOME/dev-server/kit/bin/ai-key-wait"; exec claude agents;;   # 예전 습관(목록엔 안 보임)
+    esac
+    if [[ "$c" =~ ^[0-9]+$ ]] && [ "$c" -ge 1 ] && [ "$c" -le "${#LIVE[@]}" ]; then
+      IFS=$'\t' read -r id sid cwd alive <<<"${LIVE[$((c-1))]}"
+      enter_room "$id" "$sid" "$cwd" "$alive"; echo; continue 2
+    fi
+    t "  «$c» 는 없는 번호예요 — 위 목록의 번호, s, c 중 하나 · 닫기는 그냥 Enter" "  «$c» isn't on the list — a number above, s or c · Enter to close"; echo
+  done
+done

@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# mem-slot — 서버 메모리 «자리표»: 무거운 작업(빌드·에뮬레이터·브라우저 시험)이 메모리를 나눠서 순서대로 쓰게 한다
+#
+#   왜: 프로젝트마다 대기 장치가 따로면 서로의 «들어가는 중» 을 못 봐서 빌드 둘이 겹치고, 메모리·스왑이 바닥나 서버가 멈출 수 있다.
+#
+#   하는 일 (두 겹):
+#     ① 자리 잡기 — 작업이 필요한 메모리(MB)를 적고 줄을 선다. 먼저 선 순서대로(새치기 없음),
+#        자리 잡은 상자들의 합 + 내 상자 ≤ 나눠 쓸 메모리(전체 − MEM_SLOT_RESERVE) · 지금 남은 메모리도 내 몫만큼 있고
+#        · 남은 스왑이 MEM_SLOT_SWAP_FREE_MIN 이상이고 · 서버가 메모리 때문에 멈칫거리지 않을 때(PSI full avg10 < MEM_SLOT_PSI_MAX) 들어간다.
+#        («스왑을 얼마나 쓰나» 는 보지 않는다 — 스왑은 한번 차면 메모리가 비어도 잘 안 줄어 몇 시간씩 잘못 막는다.)
+#        자리 잡은 작업이 하나도 없으면 상자가 커도 혼자 들어간다(남은 메모리는 몫의 60% 면 됨) — 큰 작업도 굶지 않는다.
+#        자리는 작업이 끝나면(강제 종료돼도) 저절로 빈다.
+#     ② 칸막이 — 들어간 작업은 cgroup 상자(systemd-run --user --scope) 안에서 돈다.
+#        상자 = min(몫×1.3, 나눠 쓸 메모리) · 상자를 넘으면 그 작업만 죽는다(스왑 512MB까지) — 서버 전체가 얼지 않게.
+#        상자를 못 만들면(사용자 systemd 없음) 남은 메모리가 몫 전부일 때만 들어가고 events.log 에 남긴다.
+#
+#   사용:
+#     mem-slot run <이름> <MB> [--wait 초] -- <명령...>   자리 잡고 상자 안에서 실행 · 끝나면 명령의 종료 코드
+#     mem-slot status [--json]                             지금 자리·줄
+#   종료: 명령의 코드 · 75 = 기다리다 시간 초과(실행 안 함, 우회하지 말 것) · 137 = 상자 한도 넘어 죽음 · 2 = 사용법
+#   우회 옵션은 두지 않는다. 기다리기 싫으면 줄에 선 작업이 끝나기를 기다린다.
+#
+#   설정(환경 변수 — 시험용): MEM_SLOT_DIR(자리표 폴더) · MEM_SLOT_RESERVE(늘 남겨 둘 MB, 기본 2400)
+#     MEM_SLOT_SWAP_FREE_MIN(남아 있어야 할 스왑 MB, 기본 1024) · MEM_SLOT_PSI_MAX(멈칫거림 상한 %, 기본 10) · MEM_SLOT_PSI_FILE(시험용) · MEM_SLOT_STEP(다시 보는 간격 초, 기본 5) · MEM_SLOT_NOBOX=1(상자 없이 — 시험용)
+set -u
+DIR=${MEM_SLOT_DIR:-$HOME/.mem-slot}
+me=""
+RESERVE=${MEM_SLOT_RESERVE:-2400}
+SWAP_FREE_MIN=${MEM_SLOT_SWAP_FREE_MIN:-1024}
+PSI_MAX=${MEM_SLOT_PSI_MAX:-10}
+PSI_FILE=${MEM_SLOT_PSI_FILE:-/proc/pressure/memory}
+BOX_SWAP=${MEM_SLOT_BOX_SWAP:-512}
+STEP=${MEM_SLOT_STEP:-5}
+LOCK=$DIR/.lock
+LOG=$DIR/events.log
+mkdir -p "$DIR"
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+
+total_mb() { awk '/MemTotal/{print int($2/1024)}' /proc/meminfo; }
+avail_mb() { awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo; }
+swap_used_mb() { awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{print int((t-f)/1024)}' /proc/meminfo; }
+swap_free_mb() { awk '/SwapTotal/{t=$2} /SwapFree/{f=$2} END{print (t>0 ? int(f/1024) : 999999)}' /proc/meminfo; }   # 스왑이 없으면 막지 않음
+psi_full() { awk '/^full/{for(i=2;i<=NF;i++) if($i ~ /^avg10=/){sub(/avg10=/,"",$i); print int($i); exit}}' "$PSI_FILE" 2>/dev/null || echo 0; }
+budget_mb() { echo $(( $(total_mb) - RESERVE )); }
+starttime() { awk '{print $22}' "/proc/$1/stat" 2>/dev/null; }
+note() { echo "$(date '+%F %T') $*" >> "$LOG"; }
+
+# 자리표 한 줄 = 파일 하나: <순번>.<pid>
+#   내용 "state name need since box unit start"
+#   state = wait(줄 섬) | run(자리 잡음) · box = 합산에 쓰는 상자 MB · unit = 상자 이름(-) · start = pid 시작 시각(번호 재사용 막기)
+sweep() {   # 끝난 작업의 자리 지우기 (잠금 안에서)
+  local f p st nm nd since box unit start
+  for f in "$DIR"/[0-9]*.[0-9]*; do
+    [ -e "$f" ] || continue
+    p=${f##*.}
+    read -r st nm nd since box unit start < "$f" || { rm -f "$f"; continue; }
+    [ -n "$start" ] && [ "$(starttime "$p")" = "$start" ] && continue
+    # 감싼 프로그램은 없어도 상자 안 작업이 살아 있으면 자리를 계속 쥔다
+    if [ -n "$unit" ] && [ "$unit" != - ] && systemctl --user is-active -q "$unit.scope" 2>/dev/null; then continue; fi
+    rm -f "$f"
+  done
+}
+next_seq() {
+  local n m
+  n=$(cat "$DIR/.seq" 2>/dev/null || echo 0)
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  m=$(ls "$DIR" | grep -E '^[0-9]+\.[0-9]+$' | sort | tail -1 | cut -d. -f1 | sed 's/^0*//')
+  [ -n "$m" ] && [ "$m" -gt "$n" ] && n=$m   # .seq 가 지워져도 새치기 없게
+  n=$((n + 1)); echo "$n" > "$DIR/.seq"; printf '%010d' "$n"
+}
+box_ok() {
+  [ "${MEM_SLOT_NOBOX:-}" != 1 ] && command -v systemd-run >/dev/null \
+    && systemd-run --user --scope -q -p MemoryMax=64M true 2>/dev/null
+}
+
+status() {
+  local json=${1:-}
+  exec 8>"$LOCK"; flock -x 8; sweep
+  local f st nm nd since box unit start used=0 rows=""
+  for f in $(ls "$DIR" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+$' | sort); do
+    read -r st nm nd since box unit start < "$DIR/$f" || continue
+    [ "$st" = run ] && used=$((used + box))
+    rows="$rows$st $nm $nd $since $box ${f##*.}"$'\n'
+  done
+  flock -u 8; exec 8>&-
+  if [ "$json" = "--json" ]; then
+    printf '{"total":%d,"reserve":%d,"budget":%d,"used":%d,"avail":%d,"swapUsed":%d,"swapFree":%d,"swapFreeMin":%d,"psiFull":%d,"psiMax":%d,"slots":[' \
+      "$(total_mb)" "$RESERVE" "$(budget_mb)" "$used" "$(avail_mb)" "$(swap_used_mb)" "$(swap_free_mb)" "$SWAP_FREE_MIN" "$(psi_full)" "$PSI_MAX"
+    local first=1
+    while read -r st nm nd since box p; do
+      [ -n "$st" ] || continue
+      [ $first = 1 ] || printf ','; first=0
+      printf '{"state":"%s","name":"%s","mb":%d,"box":%d,"since":%d,"pid":%d}' "$st" "${nm//\"/}" "$nd" "$box" "$since" "$p"
+    done <<< "$rows"
+    printf ']}\n'
+  else
+    echo "나눠 쓸 메모리 $(budget_mb)MB (전체 $(total_mb) − 늘 남김 $RESERVE) · 자리 잡은 상자 합 ${used}MB · 지금 남은 $(avail_mb)MB · 스왑 사용 $(swap_used_mb)MB(남은 $(swap_free_mb) ≥ ${SWAP_FREE_MIN}) · 멈칫거림 $(psi_full)%(< ${PSI_MAX})"
+    [ -z "$rows" ] && { echo "  (자리 잡은 작업·줄 없음)"; return 0; }
+    while read -r st nm nd since box p; do
+      [ -n "$st" ] || continue
+      printf '  %-4s %-28s 몫 %6dMB 상자 %6dMB  %s부터  pid %s\n' "$([ "$st" = run ] && echo 자리 || echo 줄)" "$nm" "$nd" "$box" "$(date -d "@$since" +%H:%M:%S)" "$p"
+    done <<< "$rows"
+  fi
+}
+
+usage() { echo "사용법: mem-slot run <이름> <MB> [--wait 초] -- <명령...>" >&2; exit 2; }
+
+run() {
+  local name=${1:-} need=${2:-} wait=3600
+  shift 2 2>/dev/null || usage
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --wait) wait=${2:-}; shift 2 2>/dev/null || usage ;;
+      --) shift; break ;;
+      *) echo "mem-slot: 모르는 옵션 $1" >&2; exit 2 ;;
+    esac
+  done
+  case "$need" in ''|*[!0-9]*) echo "mem-slot: MB 는 숫자" >&2; exit 2 ;; esac
+  case "$wait" in ''|*[!0-9]*) echo "mem-slot: --wait 는 초(숫자)" >&2; exit 2 ;; esac
+  [ -n "$name" ] && [ $# -gt 0 ] || usage
+  name=${name//[^A-Za-z0-9_.-]/_}
+
+  local budget box unit=- boxed=0
+  budget=$(budget_mb)
+  box=$(( need * 13 / 10 )); [ "$box" -gt "$budget" ] && box=$budget
+  [ "$box" -lt "$need" ] && need=$box   # 몫이 나눠 쓸 메모리보다 크면 상자 크기로 줄여 적는다
+  if box_ok; then boxed=1; unit="memslot-$name-$$"; fi
+
+  local seq waited=0 said=0 why mystart
+  mystart=$(starttime $$)
+  exec 8>"$LOCK"; flock -x 8
+  sweep
+  seq=$(next_seq)
+  me="$DIR/$seq.$$"
+  echo "wait $name $need $(date +%s) $box $unit $mystart" > "$me"
+  flock -u 8
+  trap '[ -n "$me" ] && rm -f "$me"' EXIT
+  trap 'rm -f "$me"; exit 130' INT TERM HUP
+
+  while :; do
+    flock -x 8
+    sweep
+    local f st nm nd since b u s used=0 first=""
+    for f in $(ls "$DIR" | grep -E '^[0-9]+\.[0-9]+$' | sort); do
+      read -r st nm nd since b u s < "$DIR/$f" || continue
+      if [ "$st" = run ]; then used=$((used + b))
+      elif [ -z "$first" ]; then first=$f; fi
+    done
+    local avail swapfree psi floor
+    budget=$(budget_mb); avail=$(avail_mb); swapfree=$(swap_free_mb); psi=$(psi_full)
+    floor=$need
+    [ "$used" -eq 0 ] && [ "$boxed" = 1 ] && floor=$(( need * 6 / 10 ))
+    why=""
+    if [ "$first" != "$seq.$$" ]; then
+      why="앞에 줄 선 작업이 있음 ($(cut -d' ' -f2,3 "$DIR/$first" 2>/dev/null)MB)"
+    elif [ "$used" -gt 0 ] && [ $((used + box)) -gt "$budget" ]; then
+      why="자리 잡은 상자 ${used}MB + 내 상자 ${box}MB > 나눠 쓸 메모리 ${budget}MB"
+    elif [ "$swapfree" -lt "$SWAP_FREE_MIN" ]; then
+      why="스왑이 거의 다 참 (남은 ${swapfree}MB < ${SWAP_FREE_MIN}MB) — 서버가 이미 빠듯함"
+    elif [ "$psi" -ge "$PSI_MAX" ]; then
+      why="서버가 지금 메모리 때문에 멈칫거림 (최근 10초 중 ${psi}% · 상한 ${PSI_MAX}%)"
+    elif [ "$avail" -lt "$floor" ]; then
+      why="지금 남은 메모리 ${avail}MB < 필요 ${floor}MB (자리표 밖 프로그램이 쓰는 중)"
+    fi
+    if [ -z "$why" ]; then
+      echo "run $name $need $(date +%s) $box $unit $mystart" > "$me"
+      flock -u 8
+      break
+    fi
+    flock -u 8
+    if [ $said = 0 ]; then
+      echo "[mem-slot] $name(몫 ${need}MB) — 차례를 기다린다 (${STEP}초마다 · 최대 ${wait}초): $why" >&2
+      said=1
+    fi
+    if [ "$waited" -ge "$wait" ]; then
+      echo "[mem-slot] $name — ${wait}초 기다렸는데 차례가 안 옴 → 실행하지 않음(우회하지 말 것): $why" >&2
+      note "timeout $name need=$need waited=$waited why=$why"
+      status >&2
+      exit 75
+    fi
+    sleep "$STEP"; waited=$((waited + STEP))
+  done
+  exec 8>&-
+  [ $said = 1 ] && echo "[mem-slot] $name — 차례 옴 (${waited}초 기다림)" >&2
+  note "start $name need=$need box=$box boxed=$boxed waited=$waited pid=$$"
+
+  local rc
+  if [ "$boxed" = 1 ]; then
+    systemd-run --user --scope -q --unit="$unit" \
+      -p MemoryMax="${box}M" -p MemorySwapMax="${BOX_SWAP}M" -p OOMPolicy=kill -- "$@"
+    rc=$?
+    if [ $rc = 137 ]; then
+      echo "[mem-slot] $name — 상자 한도 ${box}MB 를 넘어 이 작업만 멈춤(서버는 그대로). 몫을 늘리거나 작업의 메모리 상한을 낮춘다." >&2
+      note "boxkill $name box=$box"
+    fi
+  else
+    echo "[mem-slot] $name — 칸막이 상자를 못 만들어 자리표만으로 실행 (남은 메모리가 몫 전부일 때만 들어옴)" >&2
+    note "nobox $name need=$need"
+    "$@"; rc=$?
+  fi
+  note "end $name rc=$rc"
+  return $rc
+}
+
+case "${1:-}" in
+  run) shift; run "$@"; exit $? ;;
+  status) shift; status "${1:-}" ;;
+  *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

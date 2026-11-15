@@ -1,0 +1,23 @@
+[
+  {
+    "key": "myapp",
+    "name": "MyApp",
+    "dir": "/opt/myapp",
+    "stateFile": ".claude/session-state.md",
+    "morningCheck": false,
+    "prodLabel": null,
+    "devUrl": "https://dev.myapp.example",
+    "devLogin": false,
+    "noDevDone": true
+  },
+  {
+    "key": "server",
+    "name": "Server",
+    "dir": "/home/USER/dev-server",
+    "stateFile": "session-state.md",
+    "morningCheck": false,
+    "prodLabel": null,
+    "devUrl": "http://localhost:8800",
+    "noDevDone": true
+  }
+]

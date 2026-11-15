@@ -1,0 +1,22 @@
+name: Bug report
+description: Something in the code doesn't work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Need help installing on your own server? Use the setup request link instead. This form is for bugs in the code."
+  - type: textarea
+    id: what
+    attributes: { label: What happened, description: "What you did, what you expected, what you saw" }
+    validations: { required: true }
+  - type: textarea
+    id: verify
+    attributes: { label: Output of `bash ~/dev-server/kit/verify.sh`, render: text }
+    validations: { required: true }
+  - type: input
+    id: versions
+    attributes: { label: Versions, placeholder: "claude --version · node -v · OS" }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: "pm2 logs dev-board --lines 50 --nostream (remove anything private)", render: text }

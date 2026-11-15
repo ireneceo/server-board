@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Install it for me / setup request (paid)
+    url: https://care.wor-pro.com/inquiry.php?utm_source=github&utm_medium=docs&utm_campaign=server-board&lang=en&plan=setup&src=github-issue
+    about: We install Server Board on your server and set up AI, access and automation. 설치·구축 의뢰
+  - name: Custom deploy / backup / incident work, or monthly maintenance
+    url: https://care.wor-pro.com/inquiry.php?utm_source=github&utm_medium=docs&utm_campaign=server-board&lang=en&plan=custom&src=github-issue
+    about: Routines built for your service, or monthly checks and improvements. 맞춤 작업·월 유지관리
+  - name: Security report
+    url: mailto:help@wor-pro.com?subject=Server%20Board%20security
+    about: Please report vulnerabilities privately, not as an issue.

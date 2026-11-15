@@ -1,0 +1,34 @@
+{
+  "_comment": "Per-server values. Copy to config.json and fill in (see kit/detect.py output). config.json is not committed. Without it the board runs with defaults (lang en · UTC · port 8800). lang = board screen (en | ko). aiLang = language the AI sessions write their reports and questions in — any language, e.g. \"日本語\", \"Español\", \"Deutsch\" (empty = same as lang). docsUrl = where «First install and full guide» points (empty = the docs this board serves at /docs/INSTALL.md). ntfy = phone alerts through the free ntfy app — set it from the board («Alerts»), only one line (project · session · question title) is sent. team = who may use this board (server accounts) and how — set it from the board («⚙ Team & roles»): members [{user, name, role owner|member|viewer, projects, tailscale}], approval (member tasks need the final approver), smallDirect, memberAnswers own|project|none, deployConfirm [project keys needing «Checked» before deploy]. Empty = owner only; other server accounts cannot open the board.",
+  "owner": "Owner",
+  "lang": "en",
+  "aiLang": "",
+  "timezone": "UTC",
+  "port": 8800,
+  "devSsh": "ssh ubuntu@203.0.113.10",
+  "linkExample": "https://dev.example.com/admin/orders",
+  "hideLinkHosts": [
+    "203.0.113."
+  ],
+  "linkPaths": [
+    "admin",
+    "settings",
+    "dashboard",
+    "login",
+    "home"
+  ],
+  "ntfy": {
+    "server": "https://ntfy.sh",
+    "topic": "",
+    "on": false
+  },
+  "supportUrl": "https://care.wor-pro.com/inquiry.php",
+  "docsUrl": "",
+  "team": {
+    "members": [],
+    "approval": true,
+    "smallDirect": false,
+    "memberAnswers": "own",
+    "deployConfirm": []
+  }
+}
