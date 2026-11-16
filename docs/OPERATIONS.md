@@ -9,7 +9,9 @@
 2. ID: pick their server account if they have one; otherwise «(Tailscale only)» plus their Tailscale login (e.g. name@example.com)
 3. Name · role (member / designer / viewer / final approver) · tick their projects → **Save**
 4. On their row, **Sign-in link** → send them the address. **Single use within 24 hours.** Use the address for their route (SSH tunnel: `http://localhost:<port>/…`; Tailscale: `https://…ts.net…/…`)
-5. They open it, set a password (10+ characters) and are signed in
+5. They open it, register **their own phone's authenticator app** (QR · 6 digits), set a password (10+ characters) and are signed in — the 10 backup codes are theirs
+- **Members also use an authenticator** (⚙ Team & roles ①, on by default · server-wide): turn it off and members, designers and viewers sign in with a password only. Anyone who only set a password (e.g. the setting was turned on later) is told at sign-in to get a new link — send their row's Sign-in link again. Each row shows «authenticator ✔ / ⚠ none»
+- The app entry is named «Server Board · <server name>» (config.json `serverName`, else the host in `devSsh`). With boards on several servers, give each a different name so entries are easy to tell apart
 
 ✔ Link → password → sign-in → role shown: tested on a test board (2026-10-29) · ⚠ not yet with a real member
 
@@ -30,7 +32,7 @@
 ⚠ Steps 2–4 not yet walked through
 
 ## 4. Change my password
-Top of the board **👤 name · role** → «Change password». Other devices are signed out. The final approver also enters an authenticator code.
+Top of the board **👤 name · role** → «Change password». Other devices are signed out. Anyone with an authenticator also enters its code.
 
 ## 5. Final approver emergency recovery (server-wide · server terminal only)
 When: forgot the password · lost the phone with the authenticator (and no backup codes) · someone may have used your account.
@@ -47,8 +49,8 @@ When: forgot the password · lost the phone with the authenticator (and no backu
 ⚠ `dev recover` end to end in a real server terminal is not yet verified — rehearse once after stage 3 (OS account separation), which changes its conditions
 
 ## 6. Lost phone (authenticator)
-- With backup codes: type one in the authenticator field (each works once) → then run 5 to register the authenticator on the new phone
-- Without: 5
+- Final approver — with backup codes: type one in the authenticator field (each works once) → then run 5 to register the authenticator on the new phone · without: 5
+- Member — the final approver sends a new **Sign-in link** from their row → they register the new phone and set the password again (old authenticator, backup codes and sessions stop working). If urgent, «Sign out» first
 
 ## 7. Right after installing (server-wide)
 ✔ First setup through the SSH tunnel · phone sign-in over Tailscale with the authenticator — done on a real server (2026-10-29)

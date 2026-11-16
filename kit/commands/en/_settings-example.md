@@ -11,6 +11,7 @@
 - Dev URL: https://dev.example.com · Test accounts: (only WHERE they are written — never passwords here)
 - Key screens (check in a real browser): /, /login, …
 - Read production feedback (read-only): (e.g. a read-only query script — or none)
+- Reply path: (the established command that posts a customer reply + its dry-run flag, e.g. `node scripts/feedback-reply.js <id> <file> --dry-run` → `--apply`; or "none: {{OWNER}} replies in the admin page") · the board's "Have the session send it" uses only this path
 - Backup: (e.g. tar into `backups/dev-daily/`, keep 7 days) · DB backup command: (if any)
 - Push: on dev-done yes / no (default: no)
 - Deploy: script (e.g. `scripts/deploy.sh`) · production health URL · or "no deploy"

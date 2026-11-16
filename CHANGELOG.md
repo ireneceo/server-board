@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0]
+**Board**
+- **Inquiries box tells you what to do:** each line gets a plain "👉 To do" (send a reply · read and decide · nothing to do) and the header counts them separately. Lines with a draft get **Copy draft** and an owner-only **Have the session send it**: it queues "send this exact draft" for that project's session, which must use the project's established reply path (dry-run first), leave the status alone, and stop and ask if a fact in the draft is not true, the customer wrote again, or no reply path exists. The same draft is never queued twice; a changed draft can be handed over again
+- **Team members use their own authenticator app** (⚙ Team, on by default): sign-in link → password + own app (QR, 6 digits) + 10 backup codes; members who only have a password are asked to get a new link; lost phone = new link (old key, codes and sessions stop working)
+- `serverName` in `board/config.json`: authenticator entries read "Server Board · <serverName>", so several servers no longer show identical entries
+- "Already done" queue cards compare the fix time with the last production deploy (`prodMarker`): if the fix is newer, the card says it is not in production yet and to deploy first
+- Owner action cards (`"act":true`) label link buttons with the site name; a to-do posted by the same session for the same work replaces its in-room action card
+- Memory slots: slotted jobs run with `oom_score_adj` 500 so an out-of-memory killer picks the build, not system services
+
+**Docs**
+- New **[docs/SERVER-GUIDE.md](docs/SERVER-GUIDE.md)** (EN/KO): what differs per server and where it lives, every `projects.json` field, how sessions fill the inquiries box, what to post to the board, and a "the board shows X → do Y" table. Server and project `CLAUDE.md` templates and the dev-start command point to it
+- Project settings template: new `Reply path` line (used by "Have the session send it")
+
 ## [0.1.0] — first public release
 **Board**
 - Rooms per project, "needs you now" box, chat view with replies, queue (one editing room per project), auto-resume, schedules, pause, deploy/dev-done buttons with confirmation

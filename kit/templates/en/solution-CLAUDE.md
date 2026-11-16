@@ -17,6 +17,7 @@
 
 ## Working order
 - Start: `/dev-start` (notes, incoming feedback, next task). Scheduled checks use it too.
+- Posting inquiries to the board's "✉ Inquiries" box, what each field means, and what to do when handed "send this reply": `~/dev-server/docs/SERVER-GUIDE.md` section 3.
 - Large features (3+ new tables, several APIs, role-specific screens, integrations): `/feature-design` first → {{OWNER}} approves.
 - After building: `/verify` (run it for real, in numbers: build, API round trips, real browser) → `/dev-done` (notes, commit, backup).
 - Working sessions never ask about deploying: one line "Production: goes out with the next deploy". Deploys happen only in a `/deploy` session.

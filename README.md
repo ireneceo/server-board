@@ -2,7 +2,7 @@
 
 **Keep Claude Code working on your server while you're away, and see every agent, question and report on one private web page.**
 
-[한국어 안내 →](README.ko.md) · [Install guide](docs/INSTALL.md) · [AI setup prompt](docs/AI-SETUP-PROMPT.md) · [Services](docs/SERVICES.md) · [Security](SECURITY.md)
+[한국어 안내 →](README.ko.md) · [Install guide](docs/INSTALL.md) · [AI setup prompt](docs/AI-SETUP-PROMPT.md) · [Services](docs/SERVICES.md) · [Server guide](docs/SERVER-GUIDE.md) · [Security](SECURITY.md)
 
 > Free and open source (MIT). You install and run it yourself.
 > If you'd rather have it set up for you, on your server, with AI, access and automation configured, see **[Request setup →](https://care.wor-pro.com/inquiry.php?utm_source=github&utm_medium=docs&utm_campaign=server-board&lang=en&plan=setup&src=readme-top)**
@@ -75,6 +75,7 @@ your phone / laptop ──Tailscale · SSH tunnel──▶ server 127.0.0.1:8800
 - **Project notes.** Each project keeps a short log (`.claude/session-state.md`); the board shows its "Waiting for answer" and "Next up" sections.
 - **Open as the test role.** A "Where to check" line ending in `[as=owner ws=6]` gets an "Open as test owner" button: the page opens logged in as that role's test account, with the data the agent left for you. Each project adds one dev-only route — see `kit/DEV-LOGIN.md`.
 - Full contract (headings, first lines, API): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+- What differs per server/project and "the board shows X, do Y": [docs/SERVER-GUIDE.md](docs/SERVER-GUIDE.md), the first thing the server's Claude reads after install.
 
 ## Safety
 

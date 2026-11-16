@@ -134,6 +134,7 @@ If `~/dev-server` already exists, do **not** overwrite it. Stop this step and re
 | `timezone` | Owner's IANA timezone, e.g. `America/New_York`, `Europe/Berlin`, `Asia/Seoul` | Ask / detect |
 | `port` | Board port | `ports.boardPortSuggest` |
 | `devSsh` | `ssh <user>@<this server IP>`, shown in "open this room in a terminal" | `system.user`, `system.ips[0]` |
+| `serverName` | A short name for this server (e.g. dev, client-a), shown in authenticator apps as "Server Board · name". Use a different one per server | Ask the person (empty = the host in devSsh) |
 | `linkExample` | An example "check here" URL for reports | A project's dev URL + a main page path |
 | `hideLinkHosts` | Address prefixes never turned into link buttons (production hosts, this server's IP) | `system.ips` + owner |
 | `linkPaths` | First path words (`admin`, `dashboard`, …) that the board turns into dev-URL links | Project routes, or keep the example |
@@ -149,6 +150,7 @@ If `~/dev-server` already exists, do **not** overwrite it. Stop this step and re
 - `morningCheck: true` → target for the old crontab mode. The board's «◷ Scheduled checks» run only for projects you register there.
 - `prodLabel` → shows a **Deploy** button (owner must type the project key). `null` if the project has no deploy command.
 - `noDevDone: true` → hides the **Dev done** button. Turn buttons on only for projects that get the commands in step 4.3.
+- Other fields (board-run deploy `deploy` · production marker `prodMarker` · inquiries box `inquiries` · test login `devLogin` …) and their meaning: [SERVER-GUIDE.md](SERVER-GUIDE.md) section 2. At install time set only the basic fields above; add the rest once the project has that procedure.
 
 **`scripts/connect-mac.sh`** needs no editing; the owner passes their SSH alias.
 
@@ -161,7 +163,7 @@ Then check: `node --check ~/dev-server/board/server.js`.
 3. **Project rules and commands** (every project in the 1c plan):
    - **Project `CLAUDE.md`**: if missing, create it from `kit/templates/<lang>/solution-CLAUDE.md` and fill `{{NAME}}`, `{{ONE_LINE}}`, `{{DIR}}`, `{{OTHER_DIRS}}`, `{{DB_NAME}}`, `{{PM2_NAMES}}`, `{{PORTS}}`, `{{PROD_HOST}}`, `{{DEV_URL}}`, `{{SECRETS_WHERE}}`, `{{OWNER}}` from step 1 / 1b (unknown → "none", guesses → "(guess, please confirm)"). **If it exists, never rewrite it**: back it up and **append only the template sections it lacks** (isolation · working order · hard to undo · test roles). If a section with the same meaning exists, don't add it; report "already there".
    - copy `kit/commands/<lang>/*.md` into `<project>/.claude/commands/` **only where no file of that name exists** and fill `{{OWNER}}`. Never overwrite a project's own commands. Report the differences instead.
-   - append the "Dev command settings" section from `kit/commands/en/_settings-example.md` (Korean: `kit/commands/ko/_설정-예시.md`) to the project's `CLAUDE.md` and fill it from `detect.py`: build (`packages[].scripts.build`, with its folder), restart/logs (`pm2[].name`), health (only if `curl -s localhost:<port>/api/health` really returns 200), dev URL, deploy script (`deployScripts`, else "no deploy"). Mark guesses "(guess, please confirm)", unknown fields "none". No passwords, only where they live.
+   - append the "Dev command settings" section from `kit/commands/en/_settings-example.md` (Korean: `kit/commands/ko/_설정-예시.md`) to the project's `CLAUDE.md` and fill it from `detect.py`: build (`packages[].scripts.build`, with its folder), restart/logs (`pm2[].name`), health (only if `curl -s localhost:<port>/api/health` really returns 200), dev URL, deploy script (`deployScripts`, else "no deploy"), reading production inquiries and the reply path (only what you found, else "none"). A project with an inquiry-reading section gets its heading in `projects.json` "inquiries" (SERVER-GUIDE section 3). Mark guesses "(guess, please confirm)", unknown fields "none". No passwords, only where they live.
    - create the notes file at `stateFile` if missing (sections: In progress / Waiting for answer / Next up / Ideas).
    - in `projects.json`, turn on only the buttons whose command now exists (`kit/verify.sh` checks this).
    - Independent review command (`fable-verify` / `fable-검증`) uses the strongest model your account allows (`model: "fable"` if available, otherwise `opus`). If none is available it records "self-verified only".

@@ -79,6 +79,13 @@ Items reading `none` / `nothing to do`, or containing ✅/✔, are skipped. Mark
 | `hideLinkHosts` | `[]` | Address prefixes never turned into link buttons |
 | `linkPaths` | `[]` | Path first words turned into dev-URL links |
 | `supportUrl` | `https://care.wor-pro.com/inquiry.php` | Footer help link; `""` hides it |
+| `aiLang` | same as `lang` | Language sessions report in (any language) |
+| `serverName` | host in `devSsh` | Name in authenticator apps («Server Board · <serverName>») — different per server |
+| `docsUrl` | board's own `/docs/INSTALL.md` | Where «First install and full guide» points |
+| `pushContact` | placeholder | Contact sent with web-push alerts (`mailto:` or `https:`) |
+| `repoUrl` | the public repository | Where update checks and docs point |
+| `nginxUser` | `www-data` | Account nginx runs as (dev-site gate) |
+| `ntfy` · `team` | – | Set from the board («Alerts», «⚙ Team & roles»); `team.memberTotp` (default true) = members register their own authenticator |
 
 ## 6. What Claude Code internals it depends on
 

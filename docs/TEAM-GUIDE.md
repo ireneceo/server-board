@@ -3,10 +3,14 @@
 > For team members and designers who request work on this board. No server knowledge needed.
 
 ## Getting in
-1. Open the **sign-in link** the final approver sent you (24 hours, single use). Set a password (10+ characters) and you are in.
-2. Next time, open the board address and sign in with **ID + password**. ID = your server account name (or your Tailscale login email if you have none).
+1. Install an authenticator app on your phone (Google Authenticator or any standard app). It must be **your own phone and app** — never borrow someone else's.
+2. Open the **sign-in link** the final approver sent you (24 hours, single use). Follow the screen: app ＋ → scan the QR (on a phone, tap «Add to authenticator») → type the 6 digits of the new **«Server Board · server name»** entry → set a password (10+ characters) → write down the **10 backup codes** (password manager or paper — not photos, chat or an AI chat).
+3. Next time, open the board address and sign in with **ID + password + the 6 digits**. ID = your server account name (or your Tailscale login email if you have none).
+- **Several servers?** Each server has its own link and registration. The app shows one «Server Board · server name» entry per server — use the one for the server you are signing in to.
+- Lost your phone? A backup code (each works once) gets you in. To register a new phone, ask the final approver for a **new sign-in link** (you set the password again too).
+- If the final approver turned off «Members also use an authenticator» on a server, its link has no app step — password only.
 3. Use the route the final approver gave you (SSH tunnel or Tailscale). Any route gives the same ID and role.
-4. **👤 name · role** at the top: sign out · change password.
+4. **👤 name · role** at the top: sign out · change password · new backup codes.
 - After 48 hours idle or 7 days you sign in again.
 - 5 wrong passwords lock you out for 15 minutes. Forgot it? Ask the final approver for a new link.
 
@@ -23,4 +27,4 @@
 
 ## Don't
 - **Never put passwords, keys, customer personal data or production data in a request.** Requests are passed to an AI session as written.
-- Don't share your sign-in. Everyone gets their own.
+- Don't share your sign-in or authenticator. Everyone gets their own.

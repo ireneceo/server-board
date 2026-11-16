@@ -65,7 +65,7 @@ if (cmd === 'status') {
   console.log(L('상황판 로그인 상태', 'Board sign-in state') + (auth.recovering() ? L(' — ⚠ 비상 복구 중(로그인 막힘)', ' — ⚠ recovery in progress (sign-in closed)') : ''));
   for (const id of ids) {
     const u = auth.userInfo(id);
-    console.log('  ' + id.padEnd(24) + (u && u.pwAt ? L('비밀번호 ✔', 'password ✔') : L('비밀번호 없음', 'no password')) + (id === OWNER_ID ? ' · ' + (u && u.totp ? L('인증 앱 ✔ (예비 코드 ' + u.backupLeft + '개)', 'authenticator ✔ (' + u.backupLeft + ' backup codes)') : L('인증 앱 없음', 'no authenticator')) : '')
+    console.log('  ' + id.padEnd(24) + (u && u.pwAt ? L('비밀번호 ✔', 'password ✔') : L('비밀번호 없음', 'no password')) + ' · ' + (u && u.totp ? L('인증 앱 ✔ (예비 코드 ' + u.backupLeft + '개)', 'authenticator ✔ (' + u.backupLeft + ' backup codes)') : L('인증 앱 없음', 'no authenticator'))
       + (u && u.locked ? L(' · 잠김', ' · locked') : '') + ' · ' + L('접속 ', 'sessions ') + ss.filter((s) => s.id === id).length);
   }
   process.exit(0);

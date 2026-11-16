@@ -19,6 +19,9 @@
 4. No nginx, firewall or sudo changes: leave the command and the reason for {{OWNER}}.
 5. No heavy jobs like builds. Queue them to the project.
 
+## Per-server setup: read first
+- Everything that differs per server or project (config files, `projects.json` fields, the inquiries box, "the board shows X, what now?") is in `~/dev-server/docs/SERVER-GUIDE.md`. Before changing values, adding a project, or answering "what am I supposed to do with this?", read it and follow it. Adjust values, not code.
+
 ## Records
 - This folder is a git checkout of Server Board. Local files (`board/config.json`, `projects.json`, `CLAUDE.md`, `session-state.md`, `board/state.json`, `board/log/`) are git-ignored.
 - Notes: `~/dev-server/session-state.md` · first report line ✅/⏸/❌ · "Where to check" is `http://localhost:8800`.

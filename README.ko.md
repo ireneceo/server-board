@@ -2,7 +2,7 @@
 
 **내가 자리를 비워도 서버에서 Claude Code 가 계속 일하고, 모든 작업방의 진행·질문·보고를 웹 화면 한 장에서 봅니다.**
 
-[English →](README.md) · [설치 안내](docs/INSTALL.ko.md) · [AI 설치 프롬프트](docs/AI-SETUP-PROMPT.ko.md) · [서비스 안내](docs/SERVICES.ko.md) · [보안](SECURITY.md)
+[English →](README.md) · [설치 안내](docs/INSTALL.ko.md) · [AI 설치 프롬프트](docs/AI-SETUP-PROMPT.ko.md) · [서비스 안내](docs/SERVICES.ko.md) · [서버 맞춤 안내서](docs/SERVER-GUIDE.ko.md) · [보안](SECURITY.md)
 
 > 무료 공개판(MIT): 직접 설치해서 쓰는 기본 프로그램입니다.
 > 설치·AI 연결·접근 권한·자동화 설정까지 맡기고 싶으면 → **[설치·구축 의뢰하기](https://care.wor-pro.com/inquiry.php?utm_source=github&utm_medium=docs&utm_campaign=server-board&lang=ko&plan=setup&src=readme-top)**
@@ -75,6 +75,7 @@ Node.js 파일 하나, HTML 파일 하나입니다. **설치할 라이브러리 
 - **작업기록.** 프로젝트마다 짧은 기록(`.claude/session-state.md`)을 두고, 상황판은 «답 기다림»·«다음 확정 작업» 절을 보여 줍니다.
 - **시험 역할로 열기.** «확인할 곳» 줄 끝에 `[as=owner ws=6]` 가 있으면 «owner 시험 계정으로 열기» 버튼이 붙습니다 — 그 역할 시험 계정으로 로그인된 채, 작업방이 남겨 둔 데이터와 함께 같은 화면이 열립니다. 프로젝트마다 개발서버 전용 라우트 하나를 더합니다 — `kit/DEV-LOGIN.md`.
 - 전체 규칙(제목·첫 줄·API): [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)
+- 서버·솔루션마다 다른 값과 «상황판에 이렇게 나오면 할 일»: [docs/SERVER-GUIDE.ko.md](docs/SERVER-GUIDE.ko.md) — 설치 뒤 서버 Claude 가 먼저 읽는 곳
 
 ## 안전
 

@@ -31,6 +31,8 @@ PSI_MAX=${MEM_SLOT_PSI_MAX:-10}
 PSI_FILE=${MEM_SLOT_PSI_FILE:-/proc/pressure/memory}
 BOX_SWAP=${MEM_SLOT_BOX_SWAP:-512}
 STEP=${MEM_SLOT_STEP:-5}
+OOM_ADJ=${MEM_SLOT_OOM_ADJ:-500}
+FIRST=""; command -v choom >/dev/null 2>&1 && FIRST="choom -n $OOM_ADJ --"
 LOCK=$DIR/.lock
 LOG=$DIR/events.log
 mkdir -p "$DIR"
@@ -187,7 +189,7 @@ run() {
   local rc
   if [ "$boxed" = 1 ]; then
     systemd-run --user --scope -q --unit="$unit" \
-      -p MemoryMax="${box}M" -p MemorySwapMax="${BOX_SWAP}M" -p OOMPolicy=kill -- "$@"
+      -p MemoryMax="${box}M" -p MemorySwapMax="${BOX_SWAP}M" -p OOMPolicy=kill -- $FIRST "$@"
     rc=$?
     if [ $rc = 137 ]; then
       echo "[mem-slot] $name — 상자 한도 ${box}MB 를 넘어 이 작업만 멈춤(서버는 그대로). 몫을 늘리거나 작업의 메모리 상한을 낮춘다." >&2
@@ -196,7 +198,7 @@ run() {
   else
     echo "[mem-slot] $name — 칸막이 상자를 못 만들어 자리표만으로 실행 (남은 메모리가 몫 전부일 때만 들어옴)" >&2
     note "nobox $name need=$need"
-    "$@"; rc=$?
+    $FIRST "$@"; rc=$?
   fi
   note "end $name rc=$rc"
   return $rc

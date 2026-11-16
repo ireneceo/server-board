@@ -166,7 +166,8 @@ function useSecondFactor(rec, code) {
 /** 예비 코드 새로 받기 — 지금 인증 앱 숫자(예비 코드는 안 됨)가 맞으면 옛 예비 코드를 모두 없애고 새 10개(한 번만 보여 줌) · 틀리면 null */
 function renewBackup(id, code) {
   const u = users(); const rec = u.users[id]; if (!rec || !rec.totp) return null;
-  const s = totpCheck(rec.totp, code, rec.lastStep); if (s < 0) return null;
+  if (globalLocked() || rec.lockUntil > now()) return null;   // 틀린 숫자 맞혀 보기 막기 — reverify 와 같은 잠금
+  const s = totpCheck(rec.totp, code, rec.lastStep); if (s < 0) { noteFail(id); return null; }
   const b = newBackupCodes(); rec.lastStep = s; rec.backup = b.hashes; rec.backupAt = new Date().toISOString(); saveUsers();
   return b.codes;
 }
@@ -246,12 +247,14 @@ function recovering() { return !!users().recovering; }
 function setRecovering(on) { const u = users(); if (on) u.recovering = new Date().toISOString(); else delete u.recovering; saveUsers(); }
 /** 사용자 지우기(팀에서 뺐을 때) — 비밀번호·인증 앱·세션 모두 */
 function removeUser(id) { const u = users(); delete u.users[id]; for (const [k, r] of Object.entries(u.resets)) if (r.id === id) delete u.resets[k]; saveUsers(); return dropUserSessions(id); }
+/** 인증 앱 빼기(팀원 인증 앱을 끈 서버에서 링크로 다시 설정할 때) — 옛 키·예비 코드가 남아 로그인을 막지 않게 */
+function clearTotp(id) { const u = users(); const r = u.users[id]; if (r && (r.totp || r.backup)) { delete r.totp; delete r.backup; delete r.lastStep; saveUsers(); } }
 function resetOwnerFactors(id) { const u = users(); const r = u.users[id]; if (r) { delete r.hash; delete r.salt; delete r.totp; delete r.backup; saveUsers(); } }
 
 module.exports = {
   DIR, USERS, SESS, IDLE_MS, ABS_MS, FRESH_MS, LOCK_FAILS, LOCK_MS,
   pwProblem, setPassword, checkLogin, reverify, newTotpSecret, otpauthUri, totpCheck, totpNow, setTotp, renewBackup,
   createSession, getSession, dropSession, dropSessionKey, dropUserSessions, listSessions, isFresh,
-  makeReset, peekReset, useReset, hasUser, hasTotp, userInfo, recovering, setRecovering, removeUser, resetOwnerFactors,
+  makeReset, peekReset, useReset, hasUser, hasTotp, clearTotp, userInfo, recovering, setRecovering, removeUser, resetOwnerFactors,
   b32enc, b32dec, hotp, sha,
 };

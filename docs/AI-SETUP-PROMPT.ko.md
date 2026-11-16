@@ -134,6 +134,7 @@ test -e ~/dev-server && echo "이미 있음 — 멈추고 보고" || git clone h
 | `timezone` | 주인 시간대(IANA) 예: `Asia/Seoul`, `America/Los_Angeles` | 묻기 / 조사 |
 | `port` | 상황판 포트 | `ports.boardPortSuggest` |
 | `devSsh` | `ssh <사용자>@<이 서버 IP>`: «터미널에서 이 방 열기» 에 보임 | `system.user`·`system.ips[0]` |
+| `serverName` | 이 서버를 부를 짧은 이름(예: 개발서버·고객사A) — 인증 앱에 «Server Board · 이름» 으로 보임. 서버마다 다르게 | 사람에게 물음(없으면 비움 = devSsh 주소) |
 | `linkExample` | 보고 «확인할 곳» 예시 주소 | 프로젝트 개발 주소 + 대표 화면 경로 |
 | `hideLinkHosts` | 링크 버튼으로 만들지 않을 주소 앞부분(운영 주소·이 서버 IP) | `system.ips` + 주인 |
 | `linkPaths` | 보고 속 경로(`admin`·`dashboard` …)를 개발 주소 링크로 바꿀 첫 단어 | 프로젝트 경로, 모르면 예시 그대로 |
@@ -149,6 +150,7 @@ test -e ~/dev-server && echo "이미 있음 — 멈추고 보고" || git clone h
 - `morningCheck: true` → (옛 crontab 방식에서) 정기 점검 대상. 상황판 «◷ 정기 점검» 은 이 값과 상관없이 등록한 프로젝트만.
 - `prodLabel` → **배포** 버튼(프로젝트 키를 쳐야 열림). 배포 명령이 없으면 `null`.
 - `noDevDone: true` → **개발완료** 버튼 숨김. 4.3 에서 명령을 넣은 프로젝트만 버튼을 켠다.
+- 그 밖의 칸(배포 실행 `deploy` · 운영 표식 `prodMarker` · 문의 칸 `inquiries` · 시험 계정 `devLogin` …)과 뜻: [SERVER-GUIDE.ko.md](SERVER-GUIDE.ko.md) 2절. 설치 때는 위 기본 칸만 — 나머지는 그 솔루션에 해당 절차가 생긴 뒤.
 
 그다음: `node --check ~/dev-server/board/server.js`.
 
@@ -159,7 +161,7 @@ test -e ~/dev-server && echo "이미 있음 — 멈추고 보고" || git clone h
 3. **솔루션 규칙·명령**(1c 계획표의 솔루션마다):
    - **솔루션 `CLAUDE.md`**: 없으면 `kit/templates/<lang>/solution-CLAUDE.md` 로 만들고 `{{NAME}}`·`{{ONE_LINE}}`·`{{DIR}}`·`{{OTHER_DIRS}}`·`{{DB_NAME}}`·`{{PM2_NAMES}}`·`{{PORTS}}`·`{{PROD_HOST}}`·`{{DEV_URL}}`·`{{SECRETS_WHERE}}`·`{{OWNER}}` 를 1단계·1b 값으로 채운다(모르면 «없음», 추측은 «(추측 — 확인 필요)»). **있으면 고쳐 쓰지 않고**, 백업 뒤 그 틀에서 **빠진 절만 끝에 더한다**(격리 규칙·일하는 순서·되돌리기 어려운 것·시험 역할 — 같은 뜻의 절이 이미 있으면 더하지 않고 보고에 «이미 있음»).
    - `kit/commands/<lang>/*.md` 를 `<프로젝트>/.claude/commands/` 에 **같은 이름 파일이 없을 때만** 복사하고 `{{OWNER}}` 채우기. 그 프로젝트가 키운 명령은 절대 덮지 않는다(다른 점만 보고).
-   - `kit/commands/ko/_설정-예시.md`(영어: `kit/commands/en/_settings-example.md`)의 «개발 명령 설정» 절을 그 솔루션 `CLAUDE.md` 끝에 붙이고 `detect.py` 값으로 채운다: 빌드(`packages[].scripts.build`, 폴더 포함) · 재시작/로그(`pm2[].name`) · health(`curl -s localhost:<포트>/api/health` 가 실제로 200 일 때만) · 개발 주소 · 배포 스크립트(`deployScripts`, 없으면 «배포 없음»). 추측은 «(추측 — 확인 필요)», 모르면 «없음». 비밀번호는 쓰지 않고 위치만.
+   - `kit/commands/ko/_설정-예시.md`(영어: `kit/commands/en/_settings-example.md`)의 «개발 명령 설정» 절을 그 솔루션 `CLAUDE.md` 끝에 붙이고 `detect.py` 값으로 채운다: 빌드(`packages[].scripts.build`, 폴더 포함) · 재시작/로그(`pm2[].name`) · health(`curl -s localhost:<포트>/api/health` 가 실제로 200 일 때만) · 개발 주소 · 배포 스크립트(`deployScripts`, 없으면 «배포 없음») · 운영 문의 읽기·답글 길(찾은 것만 — 없으면 «없음»). 문의 읽기 절이 생긴 솔루션은 `projects.json` «inquiries» 에 그 절 제목(SERVER-GUIDE 3절). 추측은 «(추측 — 확인 필요)», 모르면 «없음». 비밀번호는 쓰지 않고 위치만.
    - `stateFile` 경로에 작업기록이 없으면 빈 틀(진행 중인 작업 / 답 기다림 / 다음 확정 작업 / 후속 후보).
    - `projects.json` 에서 명령이 생긴 버튼만 켠다(`kit/verify.sh` 가 맞춰 본다).
    - 독립 검증 명령(`fable-검증`)은 계정에서 쓸 수 있는 가장 강한 모델(`model: "fable"`, 없으면 `opus`)을 쓴다. 못 쓰면 «자체 검증만» 으로 기록.

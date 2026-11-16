@@ -117,7 +117,7 @@ const LOGIN_WHY = () => ({
   bad: H.K('아이디나 비밀번호가 맞지 않아요', 'Wrong ID or password'), totp: H.K('인증 앱 코드가 맞지 않아요', 'The authenticator code is wrong'),
   locked: H.K('여러 번 틀려 잠시 막혔어요 — 15분 뒤 다시', 'Too many tries — try again in 15 minutes'), off: H.K('비상 복구 중이라 로그인이 막혀 있어요', 'Sign-in is closed during emergency recovery'),
   scope: H.K('이 계정은 이 솔루션을 맡지 않았어요 — 최종 컨펌자에게 물어보세요', 'This account is not assigned to this project — ask the final approver'),
-  'totp-missing': H.K('인증 앱이 등록되지 않았어요', 'No authenticator registered'),
+  'totp-missing': H.K('인증 앱이 등록되지 않았어요 — 상황판 최종 컨펌자에게 새 로그인 링크를 받으세요', 'No authenticator registered — ask the board\'s final approver for a new sign-in link'),
 });
 function safeNext(n) { n = String(n || '/'); return /^\/(?!\/)[^\s\\]*$/.test(n) && !n.startsWith('/__gate/') && n.length < 2000 ? n : '/'; }
 async function handle(req, res, url, sock, body) {
@@ -145,7 +145,7 @@ async function handle(req, res, url, sock, body) {
   if (url === '/__gate/login') {
     const id = String(body.id || '').trim().toLowerCase();
     const p = H.personOf(id);
-    const r = await H.auth.checkLogin(p ? id : '\u0000' + id, String(body.password || ''), body.code, !!p && p.role === 'owner', 'gate');   // 잠금은 따로 셈(상황판 로그인을 못 잠그게)
+    const r = await H.auth.checkLogin(p ? id : '\u0000' + id, String(body.password || ''), body.code, H.needTotpFor ? H.needTotpFor(p) : !!p && p.role === 'owner', 'gate');   // 잠금은 따로 셈(상황판 로그인을 못 잠그게)
     if (!r.ok) { H.writeLog({ action: 'gate-login-fail', project: proj.key, user: id.slice(0, 60), why: r.why }); return send(r.why === 'locked' ? 429 : 401, { ok: false, message: LOGIN_WHY()[r.why] || LOGIN_WHY().bad }); }
     if (!H.canSee(p, proj.key)) { H.writeLog({ action: 'gate-login-fail', project: proj.key, user: id, why: 'scope' }); return send(403, { ok: false, message: LOGIN_WHY().scope }); }
     H.writeLog({ action: 'gate-login', project: proj.key, by: p.role + ':' + id, totp: r.totp });
@@ -164,7 +164,7 @@ function loginPage(proj) {
     + '<h1>' + K('개발 사이트 — 로그인', 'Development site — sign in') + '</h1><p class="mut">' + String(proj.name || proj.key).replace(/[<>&"]/g, '') + K(' 개발 사이트는 팀만 볼 수 있어요. 상황판 아이디·비밀번호로 한 번 로그인하면 이 기기에서 30일 동안 열려요.', ' development site is for the team only. Sign in once with your board ID and password; this device stays signed in for 30 days.') + '</p>'
     + '<form id=f><label for=i>' + K('아이디', 'ID') + '</label><input id=i autocomplete=username autocapitalize=none required>'
     + '<label for=p>' + K('비밀번호', 'Password') + '</label><input id=p type=password autocomplete=current-password required>'
-    + '<label for=c>' + K('인증 앱 6자리 (최종 컨펌자만)', 'Authenticator 6 digits (final approver only)') + '</label><input id=c autocomplete=one-time-code autocapitalize=none spellcheck=false>'
+    + '<label for=c>' + K('인증 앱 6자리 (등록한 사람) — 휴대폰이 없으면 예비 코드 하나', 'Authenticator 6 digits (if registered) — no phone? one backup code') + '</label><input id=c autocomplete=one-time-code autocapitalize=none spellcheck=false>'
     + '<p class=err id=e></p><button id=b>' + K('로그인', 'Sign in') + '</button></form></main><script>'
     + '(function(){var f=document.getElementById("f"),e=document.getElementById("e"),b=document.getElementById("b"),n=new URLSearchParams(location.search).get("next")||"/";'
     + 'f.onsubmit=function(ev){ev.preventDefault();b.disabled=true;e.textContent="";fetch("/__gate/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:document.getElementById("i").value,password:document.getElementById("p").value,code:document.getElementById("c").value,next:n})})'

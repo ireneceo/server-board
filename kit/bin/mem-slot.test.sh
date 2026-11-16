@@ -69,6 +69,8 @@ $M run big 99999 --wait 1 -- true 2>/dev/null; rc=$?
 ok "들어가거나(0) 남은 메모리 부족으로 기다림(75)" "$([ $rc = 0 ] || [ $rc = 75 ] && echo y)" y
 ok "상자 기록이 나눠 쓸 메모리 이하" "$(grep -c 'start big need=1000 box=1000' $T/events.log 2>/dev/null || echo 0)" "$([ $rc = 0 ] && echo 1 || echo 0)"
 
+ok "작업은 earlyoom 이 먼저 고르는 점수(oom_score_adj 500)로 돈다" "$(MEM_SLOT_NOBOX=1 MEM_SLOT_DIR=$T/adj bash "$(dirname "$0")/mem-slot" run adj 10 -- cat /proc/self/oom_score_adj 2>/dev/null)" 500
+
 ok "자리표 비어 있음" "$(ls $T | grep -cE '^[0-9]+\.[0-9]+$')" 0
 echo "통과 $pass · 실패 $fail"
 [ $fail = 0 ]
