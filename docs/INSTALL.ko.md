@@ -96,8 +96,10 @@ Host myserver
   User USER
   IdentityFile ~/.ssh/id_ed25519
   LocalForward 8800 127.0.0.1:8800
+  ExitOnForwardFailure yes
   ServerAliveInterval 30
 ```
+`8800` 은 상황판 포트입니다. 서버 여러 대에 깔면 서버마다 다른 포트(설치가 물어봄 — 예: 8800, 8801)를 쓰고, 여기 두 숫자도 그 번호로. `ExitOnForwardFailure yes` 는 포트가 이미 쓰이면 통로 없이 접속하지 않고 실패하게 합니다.
 
 이제 `ssh myserver` 한 번이면 접속되고, 그 창이 열려 있는 동안 서버 상황판이 내 컴퓨터의 http://localhost:8800 으로 이어집니다.
 상황판은 인터넷에 열리지 않습니다. 내 SSH 접속만 닿습니다.
@@ -119,7 +121,8 @@ curl -fsSL https://raw.githubusercontent.com/ireneceo/server-board/main/install.
 3. 상황판을 `~/dev-server` 로 받기(그 폴더에 다른 것이 있으면 멈춤)
 4. 기본 설정: 언어·*내* 시간대·내 이름·빈 포트
 5. PM2 로 상황판 켜기
-6. 그 자리에서 **Claude 로그인**(4b단계)과 **권한 설정**(아래 «나만 바꿀 수 있는 설정 두 개»)을 제안
+6. 그 자리에서 **Claude 로그인**(4b단계)과 **방 설정 두 가지**(아래 «나만 바꿀 수 있는 설정 두 개» — 값마다 뜻을 보여 주고 하나씩 물음)를 제안
+6b. **터미널 메뉴**(`~/bin/dev` + `~/.bashrc` 끝 몇 줄 — SSH 로 들어오면 방 목록) 를 넣을지 물음 · 나중에 넣기: `SB_MENU=1 bash ~/dev-server/install.sh`
 7. 통로 명령과 남은 일 안내
 
 다시 실행해도 됩니다 — 설정은 그대로 두고 상황판만 다시 켭니다. 끝 번호: `2` 꼭 필요한 도구 없음 · `3` `~/dev-server` 에 다른 것이 있음(아무것도 지우지 않음) · `4` 상황판이 안 켜짐(`pm2 logs dev-board --lines 30 --nostream`).
@@ -210,7 +213,7 @@ node -e 'const fs=require("fs"),p=require("path"),f=p.join(require("os").homedir
 ```
 
 - `defaultMode: auto`: 묻지 않고 해도 되는 일을 Claude Code 가 스스로 가립니다(무엇을 허용하는지는 Claude Code 권한 안내서 참고). 없으면 백그라운드 방이 허락 창마다 멈춰 기다립니다.
-- `bgIsolation: none`: 백그라운드 방이 프로젝트 폴더에서 바로 고칩니다. 상황판이 프로젝트마다 고치는 방을 **하나만** 돌립니다.
+- `bgIsolation: none`: 백그라운드 방이 프로젝트 폴더에서 바로 고칩니다. 상황판이 프로젝트마다 고치는 방을 **하나만** 돌립니다. 비워 두면 방마다 `.claude/worktrees/…` 의 별도 가지에서 일해 원본의 커밋 안 한 파일을 못 보고(같은 일을 다시 함) 결과를 따로 합쳐야 합니다 — 이때 상황판은 일을 넣을 때 커밋 안 한 변경이 있으면 경고합니다.
 
 그리고 프로젝트 폴더마다 한 번: `cd /프로젝트/폴더 && claude` → «이 폴더를 믿겠습니까» 허락 → `/exit`.
 

@@ -90,5 +90,17 @@
 - 설치 때 밖으로 복사한 틀(`~/.claude/CLAUDE.md` 규칙 · 솔루션 `.claude/commands` · 솔루션 `CLAUDE.md`)은 업데이트가 바꾸지 않습니다. 새 판이 틀을 바꿨으면 **AI 에게 반영 맡기기** 가 서버 방 대기열에 «손질한 부분은 지키며 반영» 일을 넣습니다.
 - 이번 판에는 자동 업데이트가 없습니다(서명된 판과 함께 다음 판에).
 
+## 11. 서버 여러 대 · 상황판 포트 바꾸기
+
+한 컴퓨터에서 여는 상황판은 **서버마다 포트가 달라야** 합니다 — 내 컴퓨터의 `localhost:<포트>` 는 통로 하나에만 붙어요. 두 서버가 모두 8800 이면 두 번째 `ssh -L 8800:…` 은 «Address already in use» 경고만 내고 통로 없이 접속돼, 이 서버라고 생각하며 다른 서버 상황판을 보게 됩니다. 내 컴퓨터 쪽 번호만 바꾸는 것도 안 됩니다 — 상황판은 `localhost:<자기 포트>` 만 받습니다.
+`serverName` 도 서버마다 다르게 — 상황판 머리·탭 제목·로그인 화면·인증 앱 항목에 보이고, `kit/verify.sh`·`scripts/connect-mac.sh` 가 견줘 봅니다.
+
+상황판 포트 바꾸기(그 서버에서 · 주인):
+1. `board/config.json` → `"port": <새 번호>`(서버에서 아무도 안 쓰는 번호 — `ss -ltn | grep :<새 번호>` 가 비어 있음) → `pm2 restart dev-board --update-env`
+2. kit 이 놓은 문서: `~/.claude/CLAUDE.md`·`~/dev-server/CLAUDE.md` 의 옛 번호(`localhost:<옛>`·`127.0.0.1:<옛>`)를 새 번호로 — 남은 곳은 `kit/verify.sh` 가 파일·줄로 보여 줌
+3. 내 컴퓨터: `~/.ssh/config` → `LocalForward <새> 127.0.0.1:<새>`(두 숫자 같게) · 맥 자동 통로: `bash scripts/connect-mac.sh <별명>` 다시 · 휴대폰(Termius): 포워딩 번호 바꾸기
+4. 쓰고 있으면: `sudo tailscale serve --bg <새 번호>` · 개발 사이트 관문: `kit/board-gate-install.sh` 다시(nginx 조각에 포트가 들어감)
+5. 새 주소로 다시 로그인(로그인 쿠키는 포트마다 따로) · `bash ~/dev-server/kit/verify.sh`
+
 ## 앞으로 이 문서에 더할 것 (다음 단계)
 키·비밀번호 교체 · 사고 대응(차단→중단→회수·교체→증거 보존→복구) · 백업·복원(코드 되돌리기와 DB 복원 구분, 복원 시험) · OS 계정 분리 뒤 바뀌는 점

@@ -5,14 +5,17 @@
 - Must-read docs: CLAUDE.md · DEVELOPMENT_PLAN.md · (design docs)
 - Structure overview: (e.g. `ls backend/models backend/routes frontend/src/pages`)
 - Build: (e.g. `cd frontend && npm run build`) · Memory gate: (command, if any)
-- Restart: (e.g. `pm2 restart myapp-backend`) · Logs: (e.g. `pm2 logs myapp-backend --lines 30 --nostream`)
+- Runtime: PM2 / Docker (sudo wrapper command) / systemd / none — keep only the example that fits
+  - PM2 example: restart `pm2 restart myapp-backend` · logs `pm2 logs myapp-backend --lines 30 --nostream`
+  - Docker example (no PM2 · compose only through a sudo wrapper): containers `myapp-app`, `myapp-db` · restart `sudo /usr/local/sbin/myapp restart app` · logs `sudo /usr/local/sbin/myapp logs app --tail 30` · status `sudo /usr/local/sbin/myapp ps` — never run `docker` / `docker compose` directly (anything the wrapper lacks goes to {{OWNER}})
+- Restart: (the runtime's command above) · Logs: (the runtime's command above)
 - Health check: (e.g. `curl -s localhost:3000/api/health`)
-- Automated checks: (e.g. `npm test` / `node scripts/verify-all.js` — or none)
+- Automated checks (test command): (e.g. `npm test` / `node scripts/verify-all.js` · for Docker `sudo /usr/local/sbin/myapp exec app npm test` — or none)
 - Dev URL: https://dev.example.com · Test accounts: (only WHERE they are written — never passwords here)
 - Key screens (check in a real browser): /, /login, …
 - Read production feedback (read-only): (e.g. a read-only query script — or none)
 - Reply path: (the established command that posts a customer reply + its dry-run flag, e.g. `node scripts/feedback-reply.js <id> <file> --dry-run` → `--apply`; or "none: {{OWNER}} replies in the admin page") · the board's "Have the session send it" uses only this path
 - Backup: (e.g. tar into `backups/dev-daily/`, keep 7 days) · DB backup command: (if any)
-- Push: on dev-done yes / no (default: no)
+- Push: on dev-done yes / no (default: no) · if yes, command `git push origin <branch>` (never force) · branch: (e.g. `dev` — never push straight to a protected main) · key: deploy key `~/.ssh/<name>_deploy` (set in the repo's core.sshCommand — `~/dev-server/docs/SERVER-GUIDE.md` section 7)
 - Deploy: script (e.g. `scripts/deploy.sh`) · production health URL · or "no deploy"
 - Must get independent review: money/orders/payments · production DB changes · auth/permission boundaries · new structures · (this project's protected files)

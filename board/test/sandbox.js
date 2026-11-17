@@ -11,7 +11,7 @@ const FAKE_CLAUDE = `#!/usr/bin/env node
 const a = process.argv.slice(2);
 if (a[0] === '--version') { console.log('9.9.9 (Claude Code)'); process.exit(0); }
 if (a[0] === '--help') { console.log(process.env.FAKE_HELP === 'old' ? 'Usage: claude [options]\\n  -r, --resume  Resume\\n  agents\\n  auth' : 'Usage: claude [options]\\n  --bg, --background\\n  -r, --resume [value]\\n  agents\\n  attach <id>\\n  stop|kill <id>\\n  auth'); process.exit(0); }
-if (a[0] === 'agents') { console.log('[]'); process.exit(0); }
+if (a[0] === 'agents') { console.log(process.env.FAKE_AGENTS || '[]'); process.exit(0); }   // FAKE_AGENTS — 시험이 방 목록 모양을 정함
 if (a[0] === 'auth' && a[1] === 'status') { console.log(JSON.stringify({ loggedIn: process.env.FAKE_LOGGED_IN !== '0', authMethod: 'claude.ai' })); process.exit(0); }
 if (a[0] === 'auth' && a[1] === 'login') {
   console.log('Opening browser to sign in…');
@@ -35,7 +35,9 @@ function makeSandbox({ lang = 'ko', config = {}, projects } = {}) {
   ]));
   fs.writeFileSync(path.join(bin, 'claude'), FAKE_CLAUDE, { mode: 0o755 });
   fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ projects: { [path.join(root, 'proj')]: { hasTrustDialogAccepted: true } } }));
-  return { root, dir, home, bin, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
+  const cleanup = () => fs.rmSync(root, { recursive: true, force: true });
+  process.once('exit', () => { try { cleanup(); } catch (_) {} });   // 시험 파일이 cleanup 을 안 불러도 /tmp/board-test-* 가 남지 않게
+  return { root, dir, home, bin, cleanup };
 }
 
 /** 복사본 server.js 를 불러온다 — 이 프로세스의 HOME·CLAUDE_BIN 을 바꾼 뒤 (node --test 는 파일마다 따로 프로세스) */

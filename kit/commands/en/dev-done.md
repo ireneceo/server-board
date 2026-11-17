@@ -9,7 +9,7 @@ The board finds the last **commit containing "dev-done"** in git and shows it as
 4. **CHANGELOG.md** (if present): under `[Unreleased]` add `### date` + one user-level line per change.
 5. **Rewrite the notes file** (rewrite, don't append): In progress · Waiting for answer · Done (this time) · Next up (only what {{OWNER}} asked for; otherwise "none — waiting for instructions") · Ideas. Don't bump the version (that's /deploy).
 6. Re-read the files you changed.
-7. **Commit**: `git add -A && git commit -m "chore: dev-done YYYY-MM-DD — <one-line summary>"`. Push only if the setting says yes.
+7. **Commit**: `git add -A && git commit -m "chore: dev-done YYYY-MM-DD — <one-line summary>"`. Push only if the setting says yes — exactly the setting's push command and branch (never force). If a key or permission error blocks it, do not work around it; report «push failed — one-line error» (SERVER-GUIDE section 7).
 8. **Backup** per the "Backup" setting (exclude node_modules and build output) · delete backups older than 7 days.
 9. **Report** (first line ✅/⏸/❌): what was done · docs · commit id · backup location · next up · "Where to check" links.
 Never deploy to production.

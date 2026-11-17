@@ -10,22 +10,37 @@ const { execFileSync } = require('child_process');
 const SRC = path.join(__dirname, '..');
 const up = require(path.join(SRC, 'updater.js'));
 
-const sh = (cwd, line) => execFileSync('/bin/sh', ['-c', line], { cwd, encoding: 'utf8', env: Object.assign({}, process.env, { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' }) }).trim();
+const sh = (cwd, line) => execFileSync('/bin/sh', ['-c', line], { cwd, encoding: 'utf8', timeout: 60000, env: Object.assign({}, process.env, { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' }) }).trim();
 const freePort = () => new Promise((r) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
 
 // 가짜 상황판 — /api/ping·/ 에 200 (BROKEN 파일이 있는 판은 바로 죽음)
 const GOOD_SERVER = `const fs=require('fs'),path=require('path');if(fs.existsSync(path.join(__dirname,'BROKEN')))process.exit(1);
 require('http').createServer((q,s)=>{s.writeHead(200);s.end(fs.readFileSync(path.join(__dirname,'VERSION'),'utf8'))}).listen(+process.env.PORT,'127.0.0.1');`;
 // 가짜 pm2 — stop/restart/jlist 만 · pid 는 <root>/pm2.pid
-const FAKE_PM2 = `#!/bin/sh
+const FAKE_PM2 = `#!${process.env.UPD_TEST_SH || "/bin/sh"}
 R="$FAKE_ROOT"; cmd="$1"
 stop() { [ -f "$R/pm2.pid" ] && kill "$(cat "$R/pm2.pid")" 2>/dev/null; rm -f "$R/pm2.pid"; sleep 0.2; }
 case "$cmd" in
   stop) stop; echo "$*" >> "$R/pm2.log";;
-  restart) stop; cd "$FAKE_DIR/board" && PORT="$FAKE_PORT" nohup node server.js >/dev/null 2>&1 & echo $! > "$R/pm2.pid"; echo "$*" >> "$R/pm2.log";;
+  restart) stop; cd "$FAKE_DIR/board" || exit 1
+    # 한 줄씩 — «cd && node &» 는 bash(RHEL 의 /bin/sh)에서 묶음 전체가 서브셸로 떠 시험의 출력 관을 붙잡고 $! 도 node 가 아니었다
+    PORT="$FAKE_PORT" nohup node server.js >/dev/null 2>&1 </dev/null &
+    echo $! > "$R/pm2.pid"; echo "$*" >> "$R/pm2.log";;
   jlist) P=$(cat "$R/pm2.pid" 2>/dev/null || echo 0); N=$(cat "$R/pm2.log" 2>/dev/null | wc -l); echo '[{"pm_id":7,"pid":'"$P"',"pm2_env":{"status":"online","restart_time":'"$N"',"pm_exec_path":"'"$FAKE_DIR"'/board/server.js"}}]';;
 esac
 `;
+
+/** 시험 폴더 안에서 돈 프로세스(가짜 상황판·실행기)를 pid 로 모두 끝냄 — 남으면 시험이 끝나지 않고 포트·임시 폴더가 남는다 */
+function killUnder(root) {
+  let real, all;
+  try { real = fs.realpathSync(root); all = fs.readdirSync('/proc'); } catch (_) { return; }
+  for (const pid of all.filter((x) => /^\d+$/.test(x) && +x !== process.pid)) {
+    let cwd = '', cmd = '';
+    try { cwd = fs.readlinkSync('/proc/' + pid + '/cwd'); } catch (_) {}
+    try { cmd = fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8'); } catch (_) {}
+    if (cwd === real || cwd.startsWith(real + '/') || cmd.includes(real + '/')) { try { process.kill(+pid, 'SIGKILL'); } catch (_) {} }
+  }
+}
 
 async function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'board-upd-'));
@@ -54,10 +69,11 @@ async function setup() {
     sh(work, 'git add -A && git commit -qm ' + ver + ' && git tag -a v' + ver + ' -m v' + ver + ' && git push -q ' + JSON.stringify(bare) + ' main v' + ver);
   };
   const pm = { id: '7', bin: path.join(bin, 'pm2') };
-  const runEnv = { UPDATE_TESTING: '1', UPDATE_TEST_CMD: 'test ! -f "{dir}/FAIL_TESTS"', UPDATE_HEALTH_MS: '8000', UPDATE_STABLE_MS: '1500', UPDATE_MIN_MEM_MB: '1' };
+  fs.mkdirSync(path.join(root, 'tmp'));
+  const runEnv = { TMPDIR: path.join(root, 'tmp'), UPDATE_TESTING: '1', UPDATE_TEST_CMD: 'test ! -f "{dir}/FAIL_TESTS"', UPDATE_HEALTH_MS: '8000', UPDATE_STABLE_MS: '1500', UPDATE_MIN_MEM_MB: '1' };
   const waitDone = async () => { for (let i = 0; i < 150; i++) { const r = up.readResult(inst); if (r && r.result && !up.running(inst)) return r; await new Promise((x) => setTimeout(x, 200)); } throw new Error('runner timeout'); };
   const head = () => sh(inst, 'git rev-parse HEAD');
-  const cleanup = () => { try { sh(root, '[ -f pm2.pid ] && kill $(cat pm2.pid) 2>/dev/null; true'); } catch (_) {} fs.rmSync(root, { recursive: true, force: true }); };
+  const cleanup = () => { killUnder(root); fs.rmSync(root, { recursive: true, force: true }); };
   return { root, inst, port, release, pm, runEnv, waitDone, head, cleanup };
 }
 
@@ -75,6 +91,7 @@ test('업데이트: 새 판 알림 → 받기 성공 · 기록 그대로', async
     assert.ok(s.ok, JSON.stringify(s));
     const r = await t.waitDone();
     assert.strictEqual(r.result, 'done', JSON.stringify(r));
+    assert.deepStrictEqual(fs.readdirSync(path.join(t.root, 'tmp')), []);
     assert.strictEqual(fs.readFileSync(path.join(t.inst, 'board', 'VERSION'), 'utf8').trim(), '0.2.0');
     assert.strictEqual(fs.readFileSync(path.join(t.inst, 'board', 'state.json'), 'utf8'), '{"keep":"old"}');
     assert.strictEqual(up.running(t.inst), null);
@@ -93,6 +110,7 @@ test('업데이트: 새 판 시험 실패 → 설치본 그대로(재시작도 �
     const r = await t.waitDone();
     assert.strictEqual(r.result, 'blocked'); assert.strictEqual(r.why, 'tests');
     assert.strictEqual(t.head(), before);
+    assert.deepStrictEqual(fs.readdirSync(path.join(t.root, 'tmp')), [], '새 판 시험 임시 폴더가 남음');
     assert.ok(!fs.existsSync(path.join(t.root, 'pm2.log')) || !/stop/.test(fs.readFileSync(path.join(t.root, 'pm2.log'), 'utf8').split('\n').slice(1).join('\n')));
   } finally { t.cleanup(); }
 });

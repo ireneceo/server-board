@@ -50,7 +50,8 @@ Required: `key` (lowercase, used in queue/questions) · `name` (display) · `dir
 With `inquiries` set, the project's dev-start (and the scheduled "Inquiries" step) runs its inquiry section and posts **every open inquiry**. The board only displays them; the list never opens a session or starts development by itself.
 
 ```bash
-curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/inquiries <<'EOF'
+PORT=$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/dev-server/board/config.json"))).get("port",8800))')   # board port — differs per server
+curl -s -X POST -H 'Content-Type: application/json' -H "Origin: http://localhost:$PORT" --data-binary @- http://127.0.0.1:$PORT/api/inquiries <<'EOF'
 {"project":"<key>","checkedAt":"<ISO time read>","items":[
  {"ref":"fb#12","kind":"inquiry","at":"2026-11-02","who":"signed-in user · <company>",
   "title":"How to edit the date/text of a history line","verdict":"답장만 필요",
@@ -117,7 +118,49 @@ Every write needs the header `Origin: http://localhost:<port>`. Buttons a sessio
 
 ## 6. Adding a project (server session)
 
-1. In the project folder: `CLAUDE.md` (template `kit/templates/<lang>/solution-CLAUDE.md`) · `.claude/commands/` (only missing ones) · session notes. Never overwrite existing files.
+1. In the project folder: `CLAUDE.md` (template `kit/templates/<lang>/solution-CLAUDE.md`) · `.claude/commands/` (only missing ones) · session notes (template `kit/templates/<lang>/solution-session-state.md` — fill `{{NAME}}`, `{{DATE}}`, `{{OWNER}}` and save it at the stateFile path). Never overwrite existing files.
+   - A Docker project (no PM2): use the Docker example under «Runtime» in «Dev command settings» — container names, the sudo wrapper command, the test command. projects.json is the same (the board does not look at PM2 for projects).
+   - Check that sessions work in the project folder itself: `worktree.bgIsolation` in `~/.claude/settings.json` must be `none` for sessions to see uncommitted changes (`kit/verify.sh` shows it · unset = each session works on its own branch).
 2. One entry in `projects.json` (section 2; start with `noDevDone:true`, `prodLabel:null`).
 3. Queue for that project's session: "fill the Dev command settings section (build, restart, URL, read inquiries, reply path, deploy)".
 4. Turn on only buttons whose command exists, then `kit/verify.sh`.
+
+## 7. Pushing from the dev server to GitHub (deploy key)
+
+Push with a key that works for one project repository only (a deploy key with write access) — never keep a person's account key or token on the server. One key per repository.
+
+1. **Make the key** (server session · per project): `ssh-keygen -t ed25519 -N "" -f ~/.ssh/<name>_deploy -C "<server name>-<repo>"` → fingerprint `ssh-keygen -lf ~/.ssh/<name>_deploy.pub` · public key `cat ~/.ssh/<name>_deploy.pub` (never paste the private key file anywhere)
+2. **Ask the repository admin** (the owner does it, or sends this text as is):
+   ```
+   Repository: <org>/<repo>
+   Add a deploy key — Title: <server name>-<repo>
+   Public key: ssh-ed25519 AAAA… <server name>-<repo>
+   Fingerprint: SHA256:…   (please check the key you add has this fingerprint)
+   Allow write access: on (the server pushes)
+   Protected branch: keep main protected — the server pushes only to <branch> (e.g. dev); main goes through PRs
+   ```
+   GitHub screen: repository → Settings → Deploy keys → Add deploy key
+3. **Point the project repository at the key** (applies to that repository only · absolute path):
+   ```bash
+   git -C <project folder> remote set-url origin git@github.com:<org>/<repo>.git
+   git -C <project folder> config core.sshCommand "ssh -i $HOME/.ssh/<name>_deploy -o IdentitiesOnly=yes"
+   ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts   # once — compare the fingerprint with GitHub's published ones (docs.github.com "GitHub's SSH key fingerprints") · a background session cannot answer the yes/no prompt
+   ssh -i ~/.ssh/<name>_deploy -o IdentitiesOnly=yes -T git@github.com   # «Hi <org>/<repo>! …» = key OK (exit code is 1 even then — not a failure)
+   git -C <project folder> push --dry-run origin <branch>
+   ```
+4. **Allow rule for sessions** — Claude Code's auto-mode check may block «connecting to GitHub with a deploy key» (the session stops at push). Put allow rules in that project's `<project folder>/.claude/settings.local.json` (if it exists, add to its `permissions`). First make sure that file is in `.gitignore` (add the line `.claude/settings.local.json` — `/dev-done` runs `git add -A`, so otherwise it gets committed):
+   ```json
+   {
+     "permissions": {
+       "allow": [
+         "Bash(git push origin <branch>)",
+         "Bash(git push --dry-run origin <branch>)",
+         "Bash(ssh -i ~/.ssh/<name>_deploy -o IdentitiesOnly=yes -T git@github.com)"
+       ],
+       "deny": ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push * --force*)", "Bash(git push * -f*)", "Bash(git push * +*)", "Bash(git push * main*)", "Bash(git push *:main*)", "Bash(git -C * push*)"]
+     }
+   }
+   ```
+   Allow only the agreed branch. The deny rules are only a backstop — what really protects main is the GitHub branch protection asked for in step 2. The owner adds this (a session does not widen its own permissions).
+5. **Match the push line in «Dev command settings»**: `- Push: on dev-done yes · command git push origin <branch> · branch <branch> · key: deploy key ~/.ssh/<name>_deploy (core.sshCommand)`. `/dev-done` pushes exactly that; if blocked it does not work around it and reports «push failed — one-line error».
+6. When the key changes or the server moves: ask the admin to remove the old key · delete `~/.ssh/<name>_deploy*`.

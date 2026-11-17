@@ -56,6 +56,17 @@ test('팀원 인증 앱 — 링크로 등록 → 6자리 없이는 못 들어옴
     assert.equal(li.code, 200, JSON.stringify(li.j));
     const b = await call('GET', '/api/board', 'tunnel', null, li.cookie);
     assert.equal(b.j.me.role, 'member'); assert.equal(b.j.me.totp, true, '화면이 «예비 코드 새로 받기» 를 보이게');
+    assert.match(li.cookie, /^sb_sess_8800=/);
+    const tok = decodeURIComponent(li.cookie.split('=')[1]);
+    const old = await call('GET', '/api/board', 'tunnel', null, 'sb_sess=' + encodeURIComponent(tok));
+    assert.equal(old.j.me.role, 'member', '옛 이름 쿠키로도 들어옴');
+    assert.match(old.cookie, /^sb_sess_8800=/, '새 이름으로 옮김');
+    const other = await call('GET', '/api/board', 'tunnel', null, 'sb_sess=not-this-server');
+    assert.notEqual(other.j.me && other.j.me.role, 'member'); assert.equal(other.cookie, '', '다른 서버 쿠키는 옮기지 않음');
+    const ping = await call('GET', '/api/ping', 'tunnel');
+    assert.equal(ping.j.serverName, '시험서버'); assert.equal(ping.j.port, 8800);
+    const html = await new Promise((ok) => http.get({ host: '127.0.0.1', port, path: '/', agent: false, headers: { 'x-test-sock': 'tunnel', host: 'localhost:8800', cookie: li.cookie } }, (r) => { let d = ''; r.on('data', (c) => (d += c)); r.on('end', () => ok(d)); }));
+    assert.match(html, /<title>시험서버 · /, '탭 제목에 서버 이름');
 
     // 3) 팀원 자신의 예비 코드 새로 받기 — 지금 인증 앱 숫자(다음 칸)로
     const sec = begin.j.secret;

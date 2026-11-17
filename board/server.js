@@ -195,6 +195,22 @@ function execFile(file, args, opts, cb) {
   }
   return rawExecFile(file, args, opts, cb);
 }
+function bgIsolationOf(dir) {
+  for (const f of [path.join(dir, '.claude', 'settings.local.json'), path.join(dir, '.claude', 'settings.json'), path.join(HOME, '.claude', 'settings.json')]) {
+    try { const v = (JSON.parse(fs.readFileSync(f, 'utf8')).worktree || {}).bgIsolation; if (v) return String(v); } catch (_) { /* 없음·깨짐 — 다음 */ }
+  }
+  return null;
+}
+function worktreeWarn(proj) {
+  return new Promise((resolve) => {
+    if (!proj || !proj.dir || bgIsolationOf(proj.dir) === 'none') return resolve('');
+    rawExecFile('git', ['-C', proj.dir, 'status', '--porcelain', '--untracked-files=normal'], { timeout: 8000 }, (e, o) => {
+      const n = e ? 0 : String(o || '').split('\n').filter(Boolean).length;
+      resolve(n ? K(' ⚠ 이 솔루션 폴더에 커밋 안 한 변경 ' + n + '개 — 방이 별도 가지(worktree)에서 일해 이 변경을 못 봅니다. 먼저 커밋하거나 ~/.claude/settings.json 의 worktree.bgIsolation 을 «none» 으로',
+        ' ⚠ ' + n + ' uncommitted change(s) in this project folder — sessions work on a separate branch (worktree) and will not see them. Commit first, or set worktree.bgIsolation to «none» in ~/.claude/settings.json') : '');
+    });
+  });
+}
 let agentsLastOk = null;
 function listAgents() {
   return new Promise((resolve) => {
@@ -330,7 +346,9 @@ async function claudeContract() {
   add('claude agents --json --all', l.ok && Array.isArray(l.list), l.ok ? l.list.length + K('개', ' items') : l.error);
   const list = l.ok && Array.isArray(l.list) ? l.list : [];
   if (list.length) {
-    const lack = ['id', 'sessionId', 'cwd', 'kind', 'name', 'state', 'startedAt'].filter((k) => !list.some((x) => x && k in x));
+    const bgl = list.filter((x) => x && x.kind === 'background');
+    const lack = ['sessionId', 'cwd', 'kind'].filter((k) => !list.some((x) => x && k in x))
+      .concat(bgl.length ? ['id', 'name', 'state', 'startedAt'].filter((k) => !bgl.some((x) => k in x)).map((k) => 'background.' + k) : []);
     add(K('작업방 목록 칸', 'session list fields'), !lack.length, lack.length ? K('없는 칸: ', 'missing: ') + lack.join(',') : '');
     const live = list.filter((x) => x && x.pid);
     if (live.length) add(K('켜진 방의 상태 칸(status)', 'live session status field'), live.every((x) => typeof x.status === 'string'), live.map((x) => x.status).slice(0, 5).join(','));
@@ -1849,7 +1867,7 @@ function todoBrief(projKey) {
   let st; try { st = peekState(); } catch (_) { return ''; }
   const list = Object.values((st && st.asks) || {}).filter((t) => t.kind === 'todo' && t.project === projKey).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   if (!list.length) return '';
-  const api = (p, j) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' -d '" + j + "' http://127.0.0.1:8800" + p;
+  const api = (p, j) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:" + PORT + "' -d '" + j + "' http://127.0.0.1:" + PORT + "" + p;
   const rows = list.slice(0, 15).map((t) => '  · ' + t.aid + ' — ' + t.title.slice(0, 90)).join('\n') + (list.length > 15 ? '\n  · …' + K(' 외 ' + (list.length - 15) + '장', ' +' + (list.length - 15) + ' more') : '');
   return EN
     ? '- Open owner to-do cards for this project (' + list.length + '):\n' + rows + '\n  If your work does one of them, or shows it is already done / no longer needed, remove it: ' + api('/api/todos/drop', '{"tid":"<tid>","reason":"one line: what you saw"}') + ' — if its steps/values changed, post it again with the same "tid". Before posting a new to-do, check this list (same work → reuse its tid). Do not go looking for them otherwise.\n'
@@ -1884,7 +1902,7 @@ function todoCheckRunning(st, rooms, c, now) {
   return now - Date.parse(c.at) < TODO_REVIEW_GRACE_MS;   // 대기열에서 막 빠져 방이 뜨는 중
 }
 function todoCheckTask(proj, items, mark, others) {
-  const api = (path, json) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800" + path + " <<'EOF'\n" + json + '\nEOF';
+  const api = (path, json) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:" + PORT + "' --data-binary @- http://127.0.0.1:" + PORT + "" + path + " <<'EOF'\n" + json + '\nEOF';
   const cards = items.map(({ t, why }, i) => (i + 1) + '. tid ' + t.aid + ' — ' + t.title + '\n   ' + K('올림: ', 'posted: ') + String(t.createdAt).slice(0, 10) + (t.roomName ? K(' · 올린 방 «', ' · by «') + t.roomName + '»' : '') + (t.checkedAt ? K(' · 지난 점검 ', ' · last check ') + String(t.checkedAt).slice(0, 10) + (t.checkNote ? ' (' + t.checkNote + ')' : '') : '') + K(' · 점검 이유: ', ' · why now: ') + why +
     (t.question ? '\n   ' + K('왜: ', 'why: ') + t.question.slice(0, 400) : '') +
     '\n   ' + K('순서: ', 'steps: ') + (t.steps || []).map((x, j) => (j + 1) + ') ' + x).join(' / ').slice(0, 1500) +
@@ -2738,7 +2756,7 @@ async function buildBoard0(gen) {
   const agents = await sharedAgents();
   const now = Date.now();
   const lifted = peekState().limitLifted || null;
-  const rooms = agents.list.filter((a) => !consultSids.has(a.sessionId) && !consultPids.has(a.pid)).map((a) => {   // 💬 상의 창은 방이 아님
+  const rooms = agents.list.filter((a) => a && (a.id || a.sessionId) && !consultSids.has(a.sessionId) && !consultPids.has(a.pid)).map((a) => {   // id·sessionId 둘 다 없는 줄은 다룰 수 없어 건너뜀   // 💬 상의 창은 방이 아님
     const proj = projectOf(projects, a.cwd);
     const tr0 = readTranscript(transcriptPath(a.cwd, a.sessionId));
     let tr = tr0.limit && tr0.limit.grace ? { ...tr0, limit: graceLimit(tr0.limit, peekState().lastLimit) } : tr0;
@@ -2969,7 +2987,7 @@ function renderIndex() {
     .replace(/<!--\/?(ko|en)-->/g, '')
     .replace(/__LANG__/g, LANG).replace(/__AI_LANG__/g, jsStr(AI_LANG)).replace(/__TZ_NAME__/g, jsStr(TZ_LABEL)).replace(/__TZ__/g, jsStr(TZ)).replace(/__SUPPORT_URL__/g, jsStr(SUPPORT_URL))
     .replace(/__CMD_DEVSTART__/g, jsStr(CMD.devstart)).replace(/__CMD_DEVDONE__/g, jsStr(CMD.devdone)).replace(/__CMD_DEPLOY__/g, jsStr(CMD.deploy))
-    .replace(/__DOCS_URL__/g, jsStr(DOCS_URL)).replace(/__DEV_SSH__/g, jsStr(CONFIG.devSsh || K('ssh <사용자>@<이 서버 주소>', 'ssh <user>@<this server address>')));
+    .replace(/__SERVER_NAME__/g, () => serverLabel().replace(/[&<>"'$]/g, (c) => '&#' + c.charCodeAt(0) + ';')).replace(/__DOCS_URL__/g, jsStr(DOCS_URL)).replace(/__DEV_SSH__/g, jsStr(CONFIG.devSsh || K('ssh <사용자>@<이 서버 주소>', 'ssh <user>@<this server address>')));
 }
 
 // ── 2단계: 조작 (Fable 설계 §3-5·§3-7) ───────────────────────────────────────
@@ -3112,7 +3130,8 @@ function ownerKind(pid) {
   return ssh ? 'owner' : 'agent';   // 모르는 주인 계정 프로그램(cron 등)은 AI 와 같게 — 넣기만
 }
 const whoSeen = new Map();
-const SESS_COOKIE = 'sb_sess';
+const SESS_COOKIE = 'sb_sess_' + PORT;
+const OLD_SESS_COOKIE = 'sb_sess';
 const OWNER_ID = String(unixUser(BOARD_UID)).toLowerCase();
 /** 로그인 아이디 — 서버 계정이 있으면 그 이름, 없으면(사설망만) 사설망 계정 */
 const loginIdOf = (m) => String((m && (m.user || m.tailscale)) || '').toLowerCase();
@@ -3184,7 +3203,8 @@ function decideWho(sock, sess, tsLoginHdr, roomOk) {
 function whoIs(req) {
   const sk = req.socket;
   if (TEST_SOCK || !sk._sock || sk._sockHost !== req.headers.host) { sk._sock = sockOf(req); sk._sockHost = req.headers.host; }   // 길은 접속마다 한 번(/proc 훑기) · 사람은 요청마다
-  const tok = cookieOf(req, SESS_COOKIE);
+  let tok = cookieOf(req, SESS_COOKIE);
+  if (!tok) { const old = cookieOf(req, OLD_SESS_COOKIE); if (old && auth.getSession(old)) { tok = old; req._sessMove = old; } }   // 옛 이름 쿠키 — 이 서버 것일 때만
   const sess = tok ? auth.getSession(tok) : null;
   const room = String(req.headers['x-board-room'] || '');
   const roomOk = sk._sock.kind === 'noproc' && /^[0-9a-f]{8}$/.test(room) && fs.existsSync(path.join(HOME, '.claude', 'jobs', room));
@@ -4444,8 +4464,9 @@ async function handleAction(req, res, url, who) {
       });
       writeLog({ action: 'queue-add', project: proj.key, task, priority: !!body.priority, late: body.late ? true : undefined, ref: ref || undefined });
       if (!needTitle) setTimeout(queueTick, 300);   // 제목이 필요하면 제목이 붙는 순간 시작
-      if (manualRun) return send(res, 200, { ok: true, message: limitActive() ? K('수동 모드 — 접수했습니다. Claude 한도가 풀리면 이 일부터 시작합니다', 'Manual mode — got it. This starts first when the Claude limit lifts') : K('수동 모드 — 접수했습니다. 제목을 붙여 바로 시작합니다', 'Manual mode — got it. Titling it and starting now') });
-      return send(res, 200, { ok: true, message: body.priority ? K('접수했습니다 — 제목을 붙여 바로 시작합니다', 'Got it — titling it and starting now') : K('대기열에 넣었습니다 — 일하는 방이 없으면 곧 시작합니다', 'Queued — starts soon if no session is working') });
+      const wtw = await worktreeWarn(proj);
+      if (manualRun) return send(res, 200, { ok: true, warn: wtw ? wtw.trim() : undefined, message: (limitActive() ? K('수동 모드 — 접수했습니다. Claude 한도가 풀리면 이 일부터 시작합니다', 'Manual mode — got it. This starts first when the Claude limit lifts') : K('수동 모드 — 접수했습니다. 제목을 붙여 바로 시작합니다', 'Manual mode — got it. Titling it and starting now')) + wtw });
+      return send(res, 200, { ok: true, warn: wtw ? wtw.trim() : undefined, message: (body.priority ? K('접수했습니다 — 제목을 붙여 바로 시작합니다', 'Got it — titling it and starting now') : K('대기열에 넣었습니다 — 일하는 방이 없으면 곧 시작합니다', 'Queued — starts soon if no session is working')) + wtw });
     }
     if (!task) return send(res, 400, { ok: false, message: K('할 일을 적어 주세요', 'Write the task') });
     // 방 이름 — 할 일을 읽고 짧은 제목을 뽑는다.
@@ -4491,7 +4512,8 @@ async function handleAction(req, res, url, who) {
     if (fromQueue) { startingQ.delete(fromQueue.qid); if (!(r.ok && m)) delete justWoke[proj.key]; }
     cache.at = 0;
     if (!r.ok || !m) return send(res, 500, { ok: false, message: K('시작하지 못했습니다: ', 'Could not start: ') + (r.err || r.out) });
-    return send(res, 200, { ok: true, id: m[1], message: EN ? `Started «${name}»` : `«${name}» 방을 시작했습니다` });
+    const wtw = await worktreeWarn(proj);
+    return send(res, 200, { ok: true, id: m[1], warn: wtw ? wtw.trim() : undefined, message: (EN ? `Started «${name}»` : `«${name}» 방을 시작했습니다`) + wtw });
   }
 
   // 개발완료 수동 실행 — 그 솔루션 폴더에서 «/개발완료» 방을 연다
@@ -4798,7 +4820,7 @@ async function handleAction(req, res, url, who) {
     const title = t ? t.title : stateText.slice(0, 120);
     const mark = '[todo-ask ' + Date.now().toString(36) + ']';
     const who = t ? '"tid":"' + t.aid + '"' : '"project":"' + proj.key + '","stateText":' + JSON.stringify(stateText);
-    const api = (path, extra) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800" + path + " <<'EOF'\n{" + who + extra + '}\nEOF';
+    const api = (path, extra) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:" + PORT + "' --data-binary @- http://127.0.0.1:" + PORT + "" + path + " <<'EOF'\n{" + who + extra + '}\nEOF';
     const reviewHow = EN
       ? '① No longer needed (e.g. __OWNER__ says it is unnecessary / the plan changed) → remove it:\n' + api('/api/todos/drop', ',"reason":"one line why"') + '\n' +
         '② Still needed but the steps/explanation change → post the to-do again' + (t ? ' with the same tid (the card comes back updated): POST /api/todos {"tid":"' + t.aid + '","room":"<your session id>","title":…,"steps":[…],"why":…,"then":…}' : ': edit that line in the session log (the old card disappears, the new line shows), or post it to /api/todos') + '\n' +
@@ -5579,6 +5601,7 @@ async function handleAuth(req, res, url, who) {
   }
   if (url === '/api/auth/logout') {
     const tok = cookieOf(req, SESS_COOKIE); if (tok) auth.dropSession(tok);
+    const oldTok = cookieOf(req, OLD_SESS_COOKIE); if (oldTok && auth.getSession(oldTok)) auth.dropSession(oldTok);   // 옛 이름 쿠키도(이 서버 것일 때만) — 안 그러면 다음 요청에 다시 옮겨 와 로그인됨
     setCookie(req, res, '', 0);
     writeLog({ action: 'logout', by: actorOf(who) || 'anon', via: sock.kind });
     return send(res, 200, { ok: true });
@@ -5684,7 +5707,7 @@ const VIA_NAMES = { tunnel: K('SSH 통로', 'SSH tunnel'), tailscale: 'Tailscale
 function renderLogin() {
   const T = (ko, en) => JSON.stringify(K(ko, en));
   return '<!doctype html><html lang="' + K('ko', 'en') + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">'
-    + '<title>' + K('상황판 로그인', 'Board sign-in') + '</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png">'
+    + '<title>' + serverLabel().replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';') + ' · ' + K('상황판 로그인', 'Board sign-in') + '</title><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png">'
     + '<style>:root{--bg:#f6f6fb;--card:#fff;--fg:#1a1a1a;--mut:#666;--acc:#635BFF;--bad:#c62828;--line:#ddd}'
     + '@media(prefers-color-scheme:dark){:root{--bg:#111;--card:#1c1c22;--fg:#eee;--mut:#aaa;--acc:#9b95ff;--bad:#ff8a80;--line:#333}}'
     + '*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,system-ui,"Apple SD Gothic Neo",sans-serif;padding:24px 16px}'
@@ -5702,7 +5725,7 @@ function renderLogin() {
     + 'if(s.setup)return setup(s.setup);'
     + 'if(RESET){m.innerHTML="<h1>"+h(' + T('링크가 지났어요', 'This link has expired') + ')+"</h1><p>"+h(' + T('최종 컨펌자에게 새 링크를 받으세요. 최종 컨펌자라면 서버 터미널에서 dev recover 를 실행하세요.', 'Ask the final approver for a new link. If you are the final approver, run dev recover in a server terminal.') + ')+"</p>";return;}'
     + 'login(s);}).catch(function(){m.innerHTML="<p class=err>"+h(' + T('상황판 서버에 닿지 못했어요', 'Could not reach the board') + ')+"</p>";});'
-    + 'function login(s){m.innerHTML="<h1>"+h(' + T('상황판 로그인', 'Sign in to the board') + ')+"</h1>"'
+    + 'function login(s){m.innerHTML="<h1>"+h(' + T('상황판 로그인', 'Sign in to the board') + ')+"</h1><p class=mut>"+h(' + T('서버: ', 'Server: ') + '+' + JSON.stringify(serverLabel()).replace(/</g, '\\u003c') + ')+"</p>"'
     + '+(s.recovering?"<p class=err>"+h(' + T('비상 복구 중 — 최종 컨펌자가 서버 터미널의 복구 링크로 다시 설정할 때까지 로그인이 막혀 있어요.', 'Emergency recovery in progress — sign-in is closed until the final approver finishes with the recovery link from the server terminal.') + ')+"</p>":"")'
     + '+(!s.ownerReady&&!s.recovering?(function(){var N=' + JSON.stringify({
       t: K('아직 처음 설정 전이에요 — 이 길로는 처음 설정을 할 수 없어요', 'First setup is not done yet — it cannot be done through this route'),
@@ -5802,6 +5825,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(403); return res.end('this tailscale account is not the owner of this server');
   }
   const who = whoIs(req);
+  if (req._sessMove) res.setHeader('Set-Cookie', SESS_COOKIE + '=' + req._sessMove + '; Path=/; HttpOnly; SameSite=Lax' + (tsHost && hh === tsHost ? '; Secure' : '') + '; Max-Age=' + Math.floor(auth.ABS_MS / 1000));   // 새 이름으로 옮김(옛 쿠키는 다른 서버 것일 수 있어 지우지 않음)
   if (who.role === 'stranger') {
     writeLog({ action: 'deny-stranger', by: 'stranger:' + who.user, via: who.via, url: String(req.url || '').slice(0, 80) });
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -5819,6 +5843,7 @@ async function serveReq(req, res, who) {
     }
     if (url.startsWith('/api/auth/')) return await handleAuth(req, res, url, who);
     if (who.role === 'anon') {
+      if (req.method === 'GET' && url === '/api/ping') return send(res, 200, { ok: true, serverName: serverLabel(), port: PORT });   // 로그인 전에도 «어느 서버 상황판인지» — 맥 접속 스크립트·verify
       if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
         return res.end(renderLogin());
@@ -5872,7 +5897,7 @@ async function serveReq(req, res, who) {
     }
     if (url === '/api/ping' || url === '/api/board') markFg(req);
     if (url === '/api/board') boardViewAt = Date.now();
-    if (url === '/api/ping') return send(res, 200, { ok: true });
+    if (url === '/api/ping') return send(res, 200, { ok: true, serverName: serverLabel(), port: PORT });   // 맥 접속 스크립트·verify 가 «다른 서버 상황판이 열림» 을 가려냄
     if (url === '/api/board/live') return liveStream(req, res);
     if (url === '/api/open-as') {
       const sfs = String(req.headers['sec-fetch-site'] || '');
@@ -6419,12 +6444,12 @@ function withBatch(st, proj, next, ready) {
     '[Board — batch of ' + items.length + ' small, separate tasks]',
     '- Do the tasks below in this session. Where they touch different files, keep going in the same turn; build, browser check and the Fable gate (if needed) once for the batch.',
     '- Commit per task (git commit -- <that task\'s files>). The «Where to check» section of the report is per task too.',
-    '- If one task turns out big or needs a decision (design, DB structure, …), do not touch it: put it back with POST http://127.0.0.1:8800/api/rooms {"project":"' + proj.key + '","task":"<the task text>","queue":true,"front":true} and finish the rest. Say so in the report.',
+    '- If one task turns out big or needs a decision (design, DB structure, …), do not touch it: put it back with POST http://127.0.0.1:' + PORT + '/api/rooms {"project":"' + proj.key + '","task":"<the task text>","queue":true,"front":true} and finish the rest. Say so in the report.',
   ] : [
     '[상황판 묶음 배정 — 서로 다른 작은 일 ' + items.length + '건]',
     '- 아래 일을 이 방에서 한다. 서로 다른 파일이면 같은 턴에 이어 하고, 빌드·브라우저 확인·Fable 게이트(필요하면)는 묶어서 한 번.',
     '- 커밋은 일별로 따로(git commit -- <그 일의 파일>). 보고의 «확인할 곳» 도 일별로.',
-    '- 한 건이 커지거나 결정이 필요하면(설계·DB 구조 등) 그 건은 손대지 말고 POST http://127.0.0.1:8800/api/rooms {"project":"' + proj.key + '","task":"<그 일 원문>","queue":true,"front":true} 로 대기열 앞에 되돌리고 나머지를 끝낸다. 보고에 적는다.',
+    '- 한 건이 커지거나 결정이 필요하면(설계·DB 구조 등) 그 건은 손대지 말고 POST http://127.0.0.1:' + PORT + '/api/rooms {"project":"' + proj.key + '","task":"<그 일 원문>","queue":true,"front":true} 로 대기열 앞에 되돌리고 나머지를 끝낸다. 보고에 적는다.',
   ];
   const body = items.map((q, i) => '\n### ' + (i + 1) + '. ' + (q.title || fallbackTitle(q.task)) + '\n' + checkHead(q) + q.task + planNote(proj, q)).join('\n');
   return { ...next, title: (String(next.title || fallbackTitle(next.task)).slice(0, 30) + K(' 외 ' + (items.length - 1) + '건', ' +' + (items.length - 1))), task: head.join('\n') + '\n' + body, batch: items.map((q) => ({ qid: q.qid, fromPending: q.fromPending })) };
@@ -7987,7 +8012,7 @@ function deployPrepText(proj) {
   return K('[배포 준비 — 상황판 실행기]\n' +
     '__OWNER__ 는 화면을 보고 있지 않다. 이 방은 배포 «준비» 만 한다. 배포 명령(`' + c.command + '`)은 실행하지 않는다 — 이 방이 끝나면 상황판이 직접 실행하고 운영 확인·기록까지 한다(자동 허락 검사에 막히지 않게).\n' +
     '1. 이 솔루션 `.claude/commands/배포.md` 에서 배포 명령 «전에» 준비하는 것만 한다(예: 배포 기록 파일·화면 버전 만들기) — 만든 파일만 `git commit -- <경로>`. 다른 방의 미커밋 변경은 건드리지 않는다. 버전 올리기·릴리즈노트·공지·메일은 손으로 하지 않는다(새 소식은 배포 스크립트가 스스로 하면 상황판이 그 커밋을 대기열로 넘긴다).\n' +
-    '2. 나갈 범위(운영 배포 뒤 커밋)를 읽고 반쯤 된 기능·위험한 DB 변경처럼 지금 나가면 안 되는 것이 있으면: `curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' -d \'{"project":"' + proj.key + '","room":"\'$(basename "$CLAUDE_JOB_DIR")\'","reason":"한 줄 까닭"}\' http://127.0.0.1:8800/api/deploy-hold` 하고 첫 줄 ⏸.\n' +
+    '2. 나갈 범위(운영 배포 뒤 커밋)를 읽고 반쯤 된 기능·위험한 DB 변경처럼 지금 나가면 안 되는 것이 있으면: `curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:' + PORT + '\' -d \'{"project":"' + proj.key + '","room":"\'$(basename "$CLAUDE_JOB_DIR")\'","reason":"한 줄 까닭"}\' http://127.0.0.1:' + PORT + '/api/deploy-hold` 하고 첫 줄 ⏸.\n' +
     '3. 준비가 끝나면 첫 줄 «✅ 배포 준비 끝»(앞에 다른 말 없이 보고 맨 첫 글자) + 준비한 것 한두 줄. 배포 스크립트·검사 우회(--skip-*)는 하지 않는다.',
     '[Deploy prep — board runner]\nThe owner is not watching. This session only PREPARES the deploy. Do not run the deploy command (`' + c.command + '`) — when this session ends the board runs it itself, checks production and records it.\n' +
     '1. From this project\'s deploy procedure do only what comes before the deploy command (e.g. deploy record file, frontend version) — commit only those files with `git commit -- <paths>`. Do not touch other sessions\' uncommitted changes. No manual version bump, release notes, announcements or emails (if the deploy script publishes «What\'s new» itself, the board queues its commit).\n' +
@@ -8107,4 +8132,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

@@ -71,7 +71,9 @@ function writeRec(extra) {
   rec = Object.assign(rec, extra || {});
   try { fs.writeFileSync(RESULT + '.tmp', JSON.stringify(rec, null, 2) + '\n'); fs.renameSync(RESULT + '.tmp', RESULT); } catch (e) { log('결과 파일 실패 ' + e.message); }
 }
+let TDIR = null;
 function finish(result, extra) {
+  if (TDIR) { try { fs.rmSync(TDIR, { recursive: true, force: true }); } catch (_) {} TDIR = null; }
   writeRec(Object.assign({ result, phase: 'end', at: new Date().toISOString() }, extra || {}));
   log('결과 ' + result + ' ' + JSON.stringify(extra || {}));
   try { const lk = JSON.parse(fs.readFileSync(LOCK, 'utf8')); if (lk.pid === process.pid) fs.unlinkSync(LOCK); } catch (_) {}
@@ -163,7 +165,7 @@ async function rollback(prev, snapDir, why) {
   writeRec({ prev, from, to: TAG.slice(1) });
 
   // 3 새 판 코드를 임시 폴더에 꺼내 시험 — 설치본은 그대로
-  const tdir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-update-'));
+  const tdir = TDIR = fs.mkdtempSync(path.join(os.tmpdir(), 'board-update-'));
   try {
     const ar = await run('/bin/sh', ['-c', 'git -C "$0" archive --format=tar "$1" board | tar -x -C "$2"', DIR, TAG, tdir], { timeout: 60000 });
     if (!ar.ok) return finish('blocked', { why: 'archive', err: ar.err });
@@ -175,7 +177,7 @@ async function rollback(prev, snapDir, why) {
     const pass = +((t.out.match(/^# pass (\d+)/m) || [])[1] || 0), fail = +((t.out.match(/^# fail (\d+)/m) || [])[1] || 0);
     if (!t.ok || (!TEST_CMD && (!pass || fail))) return finish('blocked', { why: 'tests', pass, fail, err: (t.err || '') + '\n' + t.out.split('\n').filter((l) => /^not ok|^# (pass|fail)/.test(l)).slice(0, 12).join('\n') });
     log('새 판 시험 통과' + (pass ? ' ' + pass + '개' : ''));
-  } finally { try { fs.rmSync(tdir, { recursive: true, force: true }); } catch (_) {} }
+  } finally { try { fs.rmSync(tdir, { recursive: true, force: true }); } catch (_) {} TDIR = null; }
 
   // 4·5 바꿔 끼우기 — 먼저 «중간» 표시
   writeRec({ phase: 'switching', snap: path.relative(DIR, RUN_DIR) });

@@ -6,7 +6,7 @@
 
 ## Working environment
 - Sessions usually run as **background rooms** (`claude --bg`). Assume {{OWNER}} is not watching the screen.
-- {{OWNER}} checks the room states (working / waiting for answer / done / off) in the `dev` menu and on the board (http://localhost:8800).
+- {{OWNER}} checks the room states (working / waiting for answer / done / off) in the `dev` menu and on the board (http://localhost:{{PORT}}).
 - Projects never share code, databases or processes. Don't touch anything outside your project folder.
 - Server memory is shared. If a heavy job (e.g. a build) is blocked for memory, **wait** (no bypassing, no killing other processes). If memory slots are on, run heavy jobs as `~/dev-server/kit/bin/mem-slot run <name> <MB> -- <command>` — an un-slotted build is blocked with the exact command to run instead; run that.
 - Only one room edits files in a project at a time.
@@ -19,7 +19,7 @@
    - **Working sessions never ask about deploying.** Do not post «Deploy now?» / «+ deploy» questions or waiting items — finish on the dev server and add one line to the report: «Production: goes out with the next deploy». Checking all finished work and deploying happens only in a **manual deploy (the board's deploy button = /deploy session)** or a **scheduled check** (deploy-time terminal commands and version questions are asked there). Exception: this task itself is /deploy or a deploy check, or {{OWNER}} explicitly ordered a deploy in this task.
 5. **Post the question to the top of the board.** {{OWNER}} only looks at "needs you now". Do it once, right before a ⏸ report (it gets this room's link and a reply box; it disappears when {{OWNER}} replies in this room):
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/asks <<JSON
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' --data-binary @- http://127.0.0.1:{{PORT}}/api/asks <<JSON
    {"room":"$(basename "$CLAUDE_JOB_DIR")","title":"one-line title","question":"what to decide · options · result of each","recommend":"recommendation"}
    JSON
    ```
@@ -27,7 +27,7 @@
 
 6. **Split off what only {{OWNER}} can do as an "{{OWNER}} to do" card and keep working on the rest.** Actions, not decisions: sudo/password commands, production access, settings in an outside service's dashboard, issuing keys or accounts, payments. Don't stop with a question (⏸) for these. If everything else is done, report ✅ with one line "{{OWNER}} to do: <title> — posted to the board":
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/todos <<JSON
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' --data-binary @- http://127.0.0.1:{{PORT}}/api/todos <<JSON
    {"room":"$(basename "$CLAUDE_JOB_DIR")","title":"one action line for {{OWNER}} (\"Do …\")","why":"why only {{OWNER}} can do it","steps":["step 1 exactly as to follow (screen, menu, value)","step 2"],"links":["https://… screen to open"],"terminal":["! command to paste"],"then":"what to do after \"Done\""}
    JSON
    ```
@@ -51,7 +51,7 @@
 - Budget: at most 2 per topic (design 1 + verification 1), bundle questions, pass facts briefly and copy the result unchanged.
 - **If limits block it**: don't skip silently. If design is blocked, don't start building. If verification is blocked, leave self-verification numbers and postpone production deploy. Add it to the board's wait list:
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/fable-wait <<JSON
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' --data-binary @- http://127.0.0.1:{{PORT}}/api/fable-wait <<JSON
    {"room":"$(basename "$CLAUDE_JOB_DIR")","kind":"design|gate|calc|ux|verify|cause|decision","title":"one-line title","need":"what the reviewer must see: doc paths, changed files, self-check numbers","resetAt":"ISO time from the limit error, if any"}
    JSON
    ```

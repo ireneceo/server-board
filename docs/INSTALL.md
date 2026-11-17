@@ -96,8 +96,10 @@ Host myserver
   User USER
   IdentityFile ~/.ssh/id_ed25519
   LocalForward 8800 127.0.0.1:8800
+  ExitOnForwardFailure yes
   ServerAliveInterval 30
 ```
+`8800` is the board port. With boards on several servers, each server gets its own port (install asks — e.g. 8800, 8801); use that number on both sides here. `ExitOnForwardFailure yes` makes `ssh` fail instead of logging you in without a tunnel when the port is taken.
 
 Now `ssh myserver` logs you in **and** forwards the board to your computer's http://localhost:8800 for as long as that window is open.
 The board itself is never exposed to the internet; only your SSH connection can reach it.
@@ -119,7 +121,7 @@ What it does, in order (it **asks before every install or settings change**; not
 3. downloads the board to `~/dev-server` (stops if that folder already holds something else);
 4. writes default settings: language, *your* timezone, your name, a free port;
 5. starts the board with PM2;
-6. offers the **Claude login** right there (step 4b) and the **permission settings** ("The two settings only you can change" below);
+6. offers the **Claude login** right there (step 4b) and the **two session settings** ("The two settings only you can change" below — asked one by one, with what each value means); then offers the **terminal menu** (`~/bin/dev` + a few lines at the end of `~/.bashrc` — the session list when you SSH in; add it later with `SB_MENU=1 bash ~/dev-server/install.sh`);
 7. prints the tunnel line and what's left.
 
 Run it again any time: it keeps your settings and restarts the board. Exit codes: `2` a required tool is missing, `3` `~/dev-server` holds something else (nothing is deleted), `4` the board did not start (`pm2 logs dev-board --lines 30 --nostream`).
@@ -210,7 +212,7 @@ node -e 'const fs=require("fs"),p=require("path"),f=p.join(require("os").homedir
 ```
 
 - `defaultMode: auto` lets Claude Code decide which actions run without asking (see Claude Code's permission docs for exactly what it allows). Without it, background agents stop at every permission prompt and wait for you.
-- `bgIsolation: none` — background agents edit the project folder directly. The board makes sure only **one** editing agent runs per project.
+- `bgIsolation: none` — background agents edit the project folder directly. The board makes sure only **one** editing agent runs per project. Left unset, each session works on its own branch under `.claude/worktrees/…`, cannot see uncommitted files in the folder (and redoes work), and its result must be merged by hand — the board then warns when you queue a task while the folder has uncommitted changes.
 
 And once per project folder: `cd /path/to/project && claude` → answer "Yes, I trust this folder" → `/exit`.
 

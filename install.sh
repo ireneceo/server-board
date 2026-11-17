@@ -4,9 +4,11 @@
 #   (safer: curl -fsSLo install.sh https://raw.githubusercontent.com/ireneceo/server-board/main/install.sh && less install.sh && bash install.sh)
 # What it does: checks this server → (asks first) installs missing Node/PM2/Claude Code in YOUR account, no root →
 #   puts the board in ~/dev-server → writes default settings → starts it with PM2 → (asks first) Claude login and
-#   permission settings → prints how to open the board. Safe to run again: it keeps your settings.
+#   the two session settings (asked one by one) → (asks first) the terminal menu → prints how to open the board. Safe to run again: it keeps your settings.
 # No sudo. No telemetry. Nothing is changed before you answer yes (except the board itself in ~/dev-server).
-# Env (optional): SB_LANG=en|ko SB_PORT SB_TZ SB_OWNER SB_REPO SB_YES=1 (accept defaults, install nothing, never touch settings.json)
+# Env (optional): SB_LANG=en|ko SB_PORT SB_NAME (server name) SB_OTHER_PORTS ("8800 8801": boards you already open from your computer)
+#   SB_TZ SB_OWNER SB_REPO SB_MENU=1 (add the terminal menu without asking)
+#   SB_YES=1 (accept defaults, install nothing, never touch settings.json or ~/.bashrc)
 # Exit: 0 ok · 2 a required tool missing (and not installed) · 3 ~/dev-server is something else · 4 the board did not start
 set -u
 
@@ -103,7 +105,27 @@ if [ -f "$DIR/kit/check-host.sh" ]; then
 fi
 
 # 7–8. defaults (only when missing — a re-run keeps yours)
-free_port() { for p in ${SB_PORT:-} 8800 8801 8802 8810 8820 8890; do node -e 'const s=require("net").createServer();s.on("error",()=>process.exit(1));s.listen(+process.argv[1],"127.0.0.1",()=>s.close(()=>process.exit(0)))' "$p" 2>/dev/null && { echo "$p"; return; }; done; echo 8800; }
+# 서버 여러 대: 맥 한 대에서 localhost:<포트> 는 통로 하나에만 붙는다 — 포트가 같으면 다른 서버 상황판이 열린다.
+#   그래서 포트는 «이 맥에서 보는 다른 서버 상황판들» 과 겹치지 않게, 서버에서 이미 쓰는 번호도 아니게 고른다. serverName 은 빈 값 금지.
+port_busy() { node -e 'const s=require("net").createServer();s.on("error",()=>process.exit(0));s.listen(+process.argv[1],"127.0.0.1",()=>s.close(()=>process.exit(1)))' "$1" 2>/dev/null; }
+port_ok() {  # port_ok N "others" → 0 = 쓸 수 있음 (이유는 WHY)
+  WHY=""
+  case "$1" in ''|*[!0-9]*) WHY=$(t '숫자가 아님' 'not a number'); return 1;; esac
+  [ "$1" -ge 1024 ] && [ "$1" -le 65535 ] || { WHY=$(t '1024–65535 사이로' 'use 1024–65535'); return 1; }
+  for o in $2; do [ "$o" = "$1" ] && { WHY=$(t '이 맥에서 보는 다른 서버 상황판과 같은 포트' 'same port as another board you open from this computer'); return 1; }; done
+  port_busy "$1" && { WHY=$(t '이 서버에서 이미 쓰는 포트' 'already in use on this server')$(command -v ss >/dev/null && ss -ltnpH "sport = :$1" 2>/dev/null | head -1 | awk '{print " — "$4" "$6}'); return 1; }
+  return 0
+}
+free_port() { for p in ${SB_PORT:-} 8800 8801 8802 8803 8804 8805 8810 8820 8890; do port_ok "$p" "${1:-}" && { echo "$p"; return; }; done; echo ""; }
+ask_server_name() {  # 기본 = 호스트 이름 · 빈 값이면 다시
+  local d="${SB_NAME:-$(hostname -s 2>/dev/null || hostname 2>/dev/null)}" n
+  say "$(t '서버 이름 — 상황판 머리·탭 제목·인증 앱 항목(«Server Board · 이름»)에 보임. 상황판을 깐 다른 서버와 다르게.' 'Server name — shown in the board header, tab title and authenticator entry («Server Board · name»). Make it different from your other servers.')" >&2
+  while :; do
+    n=$(prompt "$(t '서버 이름' 'Server name')" "$d" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write([...d.replace(/[:\u0000-\u001f]/g," ").replace(/\s+/g," ").trim()].slice(0,40).join("")))')   # 글자 단위로 40자(한글이 바이트 중간에서 잘리지 않게)
+    [ -n "$n" ] && { printf '%s' "$n"; return; }
+    say "✘ $(t '빈 값은 안 됩니다' 'cannot be empty')" >&2; [ -n "$YES" ] && { printf '%s' "server-$(hostname 2>/dev/null | cut -c1-20)"; return; }
+  done
+}
 CFG="$DIR/board/config.json"
 if [ ! -f "$CFG" ]; then
   [ -z "${SB_LANG:-}" ] && L=$(prompt "$(t '상황판 언어 en/ko' 'Board language en/ko')" "$L"); [ "$L" = ko ] || L=en
@@ -111,19 +133,36 @@ if [ ! -f "$CFG" ]; then
   TZ1=$(prompt "$(t '내 시간대(서버가 아니라 내가 사는 곳 · 예 Asia/Seoul)' 'Your timezone (where you live, not the server · e.g. America/New_York)')" "${TZ0:-UTC}")
   node -e 'new Intl.DateTimeFormat("en-US",{timeZone:process.argv[1]})' "$TZ1" 2>/dev/null || { say "△ $(t "알 수 없는 시간대 $TZ1 → UTC" "unknown timezone $TZ1 → UTC")"; TZ1=UTC; }
   OWNER=$(prompt "$(t '상황판에 보일 내 이름' 'Your name on the board')" "${SB_OWNER:-$USER}")
-  PORT=$(free_port); IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | grep -v ':' | head -1)
-  node - "$DIR/board/config.example.json" "$CFG" "$OWNER" "$L" "$TZ1" "$PORT" "$USER" "${IP:-}" <<'JS' || die 4 "config.json"
-const fs=require('fs');const [ex,out,owner,lang,tz,port,user,ip]=process.argv.slice(2);
+  SNAME=$(ask_server_name)
+  say "$(t '상황판 포트 — 내 컴퓨터(맥·휴대폰)는 localhost:<포트> 하나에 통로 하나만 붙어요. 같은 컴퓨터로 다른 서버 상황판도 보면 그 서버들과 다른 번호여야 합니다.' 'Board port — your computer (Mac/phone) maps localhost:<port> to one tunnel only. If you also open other servers'"'"' boards from it, this one needs a different number.')"
+  OTHERS=$(prompt "$(t '이 컴퓨터에서 보는 다른 서버 상황판 포트(빈칸 = 없음 · 예: 8800 8801)' 'Ports of other boards you open from this computer (empty = none · e.g. 8800 8801)')" "${SB_OTHER_PORTS:-}" | tr ',' ' ')
+  if [ -n "${SB_PORT:-}" ] && ! port_ok "$SB_PORT" "$OTHERS"; then say "✘ SB_PORT $SB_PORT — $WHY"; [ -n "$YES" ] && die 4 "SB_PORT $SB_PORT"; fi
+  PORT0=$(free_port "$OTHERS"); [ -n "$PORT0" ] || PORT0=8899
+  while :; do
+    PORT=$(prompt "$(t '이 서버 상황판 포트' 'Port for this board')" "$PORT0")
+    port_ok "$PORT" "$OTHERS" && break
+    say "✘ $PORT — $WHY"; [ -n "$YES" ] && die 4 "$(t "포트 $PORT 을(를) 쓸 수 없음 — SB_PORT 로 다른 번호" "cannot use port $PORT — pick another with SB_PORT")"
+  done
+  IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | grep -v ':' | head -1)
+  node - "$DIR/board/config.example.json" "$CFG" "$OWNER" "$L" "$TZ1" "$PORT" "$USER" "${IP:-}" "$SNAME" <<'JS' || die 4 "config.json"
+const fs=require('fs');const [ex,out,owner,lang,tz,port,user,ip,serverName]=process.argv.slice(2);
 const c=JSON.parse(fs.readFileSync(ex,'utf8'));delete c._comment;
-Object.assign(c,{owner,lang,timezone:tz,port:+port,devSsh:ip?`ssh ${user}@${ip}`:'',hideLinkHosts:ip?[ip.split('.').slice(0,3).join('.')+'.']:[]});
+Object.assign(c,{owner,lang,timezone:tz,port:+port,serverName,devSsh:ip?`ssh ${user}@${ip}`:'',hideLinkHosts:ip?[ip.split('.').slice(0,3).join('.')+'.']:[]});
 fs.writeFileSync(out+'.tmp',JSON.stringify(c,null,2)+'\n');fs.renameSync(out+'.tmp',out);
 JS
-  say "✔ board/config.json ($(t '언어' 'lang') $L · $TZ1 · $(t '포트' 'port') $PORT)"
-  [ "$PORT" != 8800 ] && say "△ $(t "8800 이 쓰는 중이라 $PORT 로 — 통로 명령도 $PORT" "8800 is busy, using $PORT — use $PORT in the tunnel line too")"
+  say "✔ board/config.json ($SNAME · $(t '언어' 'lang') $L · $TZ1 · $(t '포트' 'port') $PORT)"
+  [ "$PORT" != 8800 ] && say "   $(t "통로·주소도 $PORT — ssh -L $PORT:127.0.0.1:$PORT … · http://localhost:$PORT" "use $PORT in the tunnel and address too — ssh -L $PORT:127.0.0.1:$PORT … · http://localhost:$PORT")"
 else
   L=$(node -e 'try{const c=require(process.argv[1]);process.stdout.write(c.lang==="ko"?"ko":"en")}catch(e){process.stdout.write("en")}' "$CFG")
-  say "✔ board/config.json $(t '그대로' 'kept')"
+  say "✔ board/config.json $(t '그대로(포트는 바꾸지 않음)' 'kept (port unchanged)')"
+  # 이미 깔린 서버 — 서버 이름이 비어 있으면 지금 채움(포트는 그대로 · 바꾸려면 docs/OPERATIONS 의 «포트 바꾸기»)
+  if [ -z "$(node -e 'try{process.stdout.write(String(require(process.argv[1]).serverName||"").trim())}catch(e){}' "$CFG")" ]; then
+    SNAME=$(ask_server_name)
+    node -e 'const fs=require("fs");const [f,n]=process.argv.slice(1);const c=JSON.parse(fs.readFileSync(f,"utf8"));c.serverName=n;fs.writeFileSync(f+".tmp",JSON.stringify(c,null,2)+"\n");fs.renameSync(f+".tmp",f)' "$CFG" "$SNAME" \
+      && say "✔ serverName = $SNAME"
+  fi
 fi
+SNAME=$(node -e 'try{process.stdout.write(String(require(process.argv[1]).serverName||""))}catch(e){}' "$CFG")
 PORT=$(node -e 'try{process.stdout.write(String(require(process.argv[1]).port||8800))}catch(e){process.stdout.write("8800")}' "$CFG")
 if [ ! -f "$DIR/projects.json" ]; then
   node -e 'const fs=require("fs");const [f,d,p]=process.argv.slice(1);fs.writeFileSync(f,JSON.stringify([{key:"server",name:"Server",dir:d,stateFile:"session-state.md",noDevDone:true,devUrl:"http://localhost:"+p}],null,2)+"\n")' "$DIR/projects.json" "$DIR" "$PORT"
@@ -149,27 +188,60 @@ if command -v claude >/dev/null; then
   else LOGIN=no; fi
 fi
 
-# 12. permission settings (your choice — background sessions stop at every prompt without it)
+# 12. room settings — two values in ~/.claude/settings.json, asked one by one with what each means (your choice)
 SETTINGS_CHANGED=false
 S="$HOME/.claude/settings.json"
 cur=$(node -e 'try{const d=require(process.argv[1]);process.stdout.write(((d.permissions||{}).defaultMode||"")+"|"+((d.worktree||{}).bgIsolation||""))}catch(e){process.stdout.write("|")}' "$S")
-if [ "$cur" = "auto|none" ]; then say "✔ $(t '권한 설정 됨' 'permission settings already set')"
-elif [ -z "${SB_YES:-}" ] && [ -t 0 ] && ask "$(t "백그라운드 작업방이 허락 창마다 멈추지 않게 할까요? ~/.claude/settings.json 에 permissions.defaultMode=auto · worktree.bgIsolation=none (원본은 settings.json.bak-$(date +%Y%m%d)). auto 가 무엇을 허용하는지는 Claude Code 권한 안내서 참고. 나중에 상황판에서 해도 됩니다" "Let background sessions run without stopping at every permission prompt? Sets permissions.defaultMode=auto and worktree.bgIsolation=none in ~/.claude/settings.json (backup settings.json.bak-$(date +%Y%m%d)). See Claude Code's permission docs for what auto allows. You can also do this later from the board")" n; then
-  mkdir -p "$HOME/.claude"
-  node - "$S" <<'JS' && SETTINGS_CHANGED=true && say "✔ settings.json" || say "△ $(t 'settings.json 을 읽지 못해 그대로 둠' 'could not read settings.json — left untouched')"
-const fs=require('fs');const f=process.argv[2];let d={};
+CUR_MODE="${cur%%|*}"; CUR_ISO="${cur#*|}"; SET_MODE=""; SET_ISO=""
+if [ "$cur" = "auto|none" ]; then say "✔ $(t '방 설정 됨 (권한 모드 auto · 원본 폴더 작업 none)' 'session settings already set (permission mode auto · bgIsolation none)')"
+elif [ -z "${SB_YES:-}" ] && [ -t 0 ]; then
+  say "$(t '작업방(백그라운드 Claude) 설정 두 가지 — ~/.claude/settings.json (원본은 settings.json.bak-날짜 로 백업 · 나중에 상황판에서 바꿔도 됨)' 'Two settings for background sessions — ~/.claude/settings.json (backup settings.json.bak-DATE · you can change them later from the board)')"
+  if [ "$CUR_MODE" != auto ]; then
+    say "  · $(t "권한 모드(permissions.defaultMode) 지금: ${CUR_MODE:-없음}" "Permission mode (permissions.defaultMode) now: ${CUR_MODE:-unset}")"
+    say "    $(t 'auto — 방이 허락 창마다 멈추지 않음(위험한 명령은 Claude Code 가 따로 막음 · Claude Code 권한 안내서). 안 넣으면 방이 첫 허락 창에서 멈추고 터미널에서만 답할 수 있음' 'auto — sessions do not stop at every permission prompt (Claude Code still blocks risky actions · see its permission docs). Without it a session stops at its first prompt and only a terminal can answer')"
+    ask "    $(t 'auto 로 넣을까요?' 'Set it to auto?')" y && SET_MODE=auto
+  fi
+  if [ "$CUR_ISO" != none ]; then
+    say "  · $(t "원본 폴더 작업(worktree.bgIsolation) 지금: ${CUR_ISO:-없음 — 기본은 worktree}" "Work in the project folder (worktree.bgIsolation) now: ${CUR_ISO:-unset — default is worktree}")"
+    say "    $(t 'none — 방이 원본 폴더에서 바로 일함(커밋 안 한 파일도 봄). 한 솔루션에 방 둘이 동시에 고치면 부딪힘 — 상황판이 같은 솔루션은 한 방씩 돌림. 안 넣으면 방마다 .claude/worktrees 의 별도 가지에서 일해 원본의 커밋 안 한 변경을 못 보고, 결과를 따로 합쳐야 함' 'none — sessions work right in the project folder (they see uncommitted files). Two sessions editing one project at once would clash — the board runs one session per project. Without it each session works on its own branch under .claude/worktrees, cannot see uncommitted changes in the folder, and its result must be merged by hand')"
+    ask "    $(t 'none 으로 넣을까요?' 'Set it to none?')" y && SET_ISO=none
+  fi
+  if [ -n "$SET_MODE$SET_ISO" ]; then
+    mkdir -p "$HOME/.claude"
+    node - "$S" "$SET_MODE" "$SET_ISO" <<'JS' && SETTINGS_CHANGED=true && say "✔ settings.json" || say "△ $(t 'settings.json 을 읽지 못해 그대로 둠' 'could not read settings.json — left untouched')"
+const fs=require('fs');const [f,mode,iso]=process.argv.slice(2);let d={};
 if(fs.existsSync(f)){d=JSON.parse(fs.readFileSync(f,'utf8'));const day=new Date().toISOString().slice(0,10).replace(/-/g,'');fs.copyFileSync(f,f+'.bak-'+day);}
-d.permissions=Object.assign({},d.permissions,{defaultMode:'auto'});d.worktree=Object.assign({},d.worktree,{bgIsolation:'none'});
+if(mode)d.permissions=Object.assign({},d.permissions,{defaultMode:mode});if(iso)d.worktree=Object.assign({},d.worktree,{bgIsolation:iso});
 fs.writeFileSync(f+'.tmp',JSON.stringify(d,null,2)+'\n');fs.renameSync(f+'.tmp',f);
 JS
+  fi
+fi
+cur=$(node -e 'try{const d=require(process.argv[1]);process.stdout.write(((d.permissions||{}).defaultMode||"")+"|"+((d.worktree||{}).bgIsolation||""))}catch(e){process.stdout.write("|")}' "$S")
+CUR_MODE="${cur%%|*}"; CUR_ISO="${cur#*|}"
+
+# 13. terminal menu — ~/bin/dev + a block at the end of ~/.bashrc (shows the session list when you SSH in)
+MENU=no
+if [ -x "$HOME/bin/dev" ] && grep -q "dev-menu" "$HOME/.bashrc" 2>/dev/null; then MENU=yes
+  if ! cmp -s "$DIR/kit/bin/dev" "$HOME/bin/dev"; then
+    cp "$HOME/bin/dev" "$HOME/bin/dev.bak-$(date +%Y%m%d)" && cp "$DIR/kit/bin/dev" "$HOME/bin/dev" && chmod +x "$HOME/bin/dev" \
+      && say "   $(t '~/bin/dev 를 새 판으로 바꿈 (이전: ~/bin/dev.bak-날짜)' 'updated ~/bin/dev (previous: ~/bin/dev.bak-DATE)')"
+  fi
+  say "✔ $(t '터미널 메뉴 (~/bin/dev)' 'terminal menu (~/bin/dev)')"
+elif [ -f "$DIR/kit/bin/dev" ] && { [ -n "${SB_MENU:-}" ] || { [ -z "${SB_YES:-}" ] && [ -t 0 ] && ask "$(t '터미널 메뉴를 넣을까요? SSH 로 접속하면 작업방 목록이 뜨고 번호로 들어감 — ~/bin/dev 와 ~/.bashrc 끝 몇 줄(원본은 .bashrc.bak-날짜) · 끄기: touch ~/.dev-menu-off' 'Add the terminal menu? When you SSH in it lists sessions and opens one by number — ~/bin/dev plus a few lines at the end of ~/.bashrc (backup .bashrc.bak-DATE) · turn off: touch ~/.dev-menu-off')" y; }; }; then
+  mkdir -p "$HOME/bin" && cp "$DIR/kit/bin/dev" "$HOME/bin/dev" && chmod +x "$HOME/bin/dev"
+  if ! grep -q "dev-menu" "$HOME/.bashrc" 2>/dev/null; then
+    [ -f "$HOME/.bashrc" ] && cp "$HOME/.bashrc" "$HOME/.bashrc.bak-$(date +%Y%m%d)"
+    { printf '\n'; cat "$DIR/kit/templates/bashrc-block.sh"; } >> "$HOME/.bashrc"
+  fi
+  MENU=yes; say "✔ $(t '터미널 메뉴 (~/bin/dev · ~/.bashrc) — 다음 SSH 접속부터' 'terminal menu (~/bin/dev · ~/.bashrc) — from your next SSH login')"
 fi
 
 # 9. install-info.json (the board reads it for the checklist)
 VER=$(git -C "$DIR" describe --tags --always 2>/dev/null || echo dev)
 PREV=$(node -e 'try{process.stdout.write(String((require(process.argv[1]).rerun||0)+1))}catch(e){process.stdout.write("0")}' "$DIR/install-info.json")
 [ "$RERUN" = 1 ] || PREV=0
-node -e 'const fs=require("fs");const a=process.argv.slice(1);fs.writeFileSync(a[0],JSON.stringify({at:new Date().toISOString(),version:a[1],by:"install.sh",lang:a[2],port:+a[3],node:a[4],pm2:a[5],claude:a[6],login:a[7],settingsChanged:a[8]==="true",rerun:+a[9]},null,2)+"\n")' \
-  "$DIR/install-info.json" "$VER" "$L" "$PORT" "$NODE_FROM" "$PM2_NEW" "$CLAUDE_STATE" "$LOGIN" "$SETTINGS_CHANGED" "$PREV"
+node -e 'const fs=require("fs");const a=process.argv.slice(1);fs.writeFileSync(a[0],JSON.stringify({at:new Date().toISOString(),version:a[1],by:"install.sh",lang:a[2],port:+a[3],node:a[4],pm2:a[5],claude:a[6],login:a[7],settingsChanged:a[8]==="true",rerun:+a[9],serverName:a[10]},null,2)+"\n")' \
+  "$DIR/install-info.json" "$VER" "$L" "$PORT" "$NODE_FROM" "$PM2_NEW" "$CLAUDE_STATE" "$LOGIN" "$SETTINGS_CHANGED" "$PREV" "$SNAME"
 
 # 14. what next
 IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | grep -v ':' | head -1)
@@ -180,7 +252,8 @@ say "   $(t '자세히(~/.ssh/config·휴대폰):' 'More (~/.ssh/config, phone):
 say "$(t "2) 브라우저: http://localhost:$PORT  → 맨 위 «처음 설정» 칸이 남은 일을 알려 줍니다" "2) Browser: http://localhost:$PORT  → the «First setup» box at the top shows what's left")"
 say "$(t '3) 마지막에 «AI 로 설치 마무리 ▶» — 프로젝트·규칙·명령·정기 점검을 AI 가 묻고 설정합니다' '3) Then «Finish setup with AI ▶» — the AI asks about your projects and sets up rules, commands and schedules')"
 [ "$LOGIN" = yes ] || say "   △ $(t 'Claude 로그인 아직 — 상황판 안내대로 (claude auth login)' 'Claude not logged in yet — follow the board (claude auth login)')"
-[ "$cur" = "auto|none" ] || [ "$SETTINGS_CHANGED" = true ] || say "   △ $(t '권한 설정 아직 — 상황판 안내대로' 'permission settings not set yet — follow the board')"
+[ "$cur" = "auto|none" ] || say "   △ $(t "방 설정 아직(권한 모드 ${CUR_MODE:-없음} · 원본 폴더 작업 ${CUR_ISO:-없음}) — auto·none 권고 · 다시 묻기: bash $DIR/install.sh" "session settings not done (mode ${CUR_MODE:-unset} · bgIsolation ${CUR_ISO:-unset}) — auto and none recommended · ask again: bash $DIR/install.sh")"
+[ "$MENU" = yes ] || say "   △ $(t "터미널 메뉴 없음 — 넣기: SB_MENU=1 bash $DIR/install.sh (또는 mkdir -p ~/bin && cp $DIR/kit/bin/dev ~/bin/dev && cat $DIR/kit/templates/bashrc-block.sh >> ~/.bashrc)" "no terminal menu — add it: SB_MENU=1 bash $DIR/install.sh (or mkdir -p ~/bin && cp $DIR/kit/bin/dev ~/bin/dev && cat $DIR/kit/templates/bashrc-block.sh >> ~/.bashrc)")"
 say "$(t '재부팅 뒤에도 켜지게: pm2 startup → 나오는 sudo 한 줄 붙여 넣기(선택)' 'To start after a reboot: pm2 startup → paste the sudo line it prints (optional)')"
 say "$(t '다시 실행해도 됩니다 — 설정은 그대로 둡니다.' 'You can run this again any time — it keeps your settings.')"
 exit 0

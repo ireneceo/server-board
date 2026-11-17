@@ -156,20 +156,20 @@ test -e ~/dev-server && echo "이미 있음 — 멈추고 보고" || git clone h
 
 ## 4. 설치
 
-1. **공용 규칙** `~/.claude/CLAUDE.md`: 없으면 `kit/templates/<lang>/global-CLAUDE.md` 를 복사해 `{{OWNER}}`·`{{DATE}}`·`{{LANG}}` 을 채운다. 있으면 백업(S2) 뒤 **빠진 절만 끝에 더한다**(«멈춰야 할 때»·«보고»·«권한 거부»·«독립 검증»). 이 규칙이 상황판을 움직인다: 방이 질문을 상황판에 올리고, 보고를 상태 첫 줄(`✅ 완료` / `⏸ 답 필요` / `❌ 막힘` / `🕓 나중에`)로 끝낸다.
-2. **서버 작업방 규칙**: `~/dev-server/CLAUDE.md` ← `kit/templates/<lang>/server-CLAUDE.md` · `~/dev-server/session-state.md` ← `kit/templates/<lang>/session-state.md`. `{{DATE}}`·`{{OWNER}}`·`{{SERVER_IP}}`(이 서버 IP)·`{{PROJECT_DIRS}}`(projects.json 의 프로젝트 폴더들)를 채운다.
+1. **공용 규칙** `~/.claude/CLAUDE.md`: 없으면 `kit/templates/<lang>/global-CLAUDE.md` 를 복사해 `{{OWNER}}`·`{{DATE}}`·`{{LANG}}`·`{{PORT}}`(상황판 포트 — `board/config.json` 의 `port`, 8800 이라고 가정하지 않는다)를 채운다. 있으면 백업(S2) 뒤 **빠진 절만 끝에 더한다**(«멈춰야 할 때»·«보고»·«권한 거부»·«독립 검증»). 이 규칙이 상황판을 움직인다: 방이 질문을 상황판에 올리고, 보고를 상태 첫 줄(`✅ 완료` / `⏸ 답 필요` / `❌ 막힘` / `🕓 나중에`)로 끝낸다.
+2. **서버 작업방 규칙**: `~/dev-server/CLAUDE.md` ← `kit/templates/<lang>/server-CLAUDE.md` · `~/dev-server/session-state.md` ← `kit/templates/<lang>/session-state.md`. `{{DATE}}`·`{{OWNER}}`·`{{SERVER_IP}}`(이 서버 IP)·`{{PORT}}`(`board/config.json` 의 상황판 포트)·`{{PROJECT_DIRS}}`(projects.json 의 프로젝트 폴더들)를 채운다.
 3. **솔루션 규칙·명령**(1c 계획표의 솔루션마다):
    - **솔루션 `CLAUDE.md`**: 없으면 `kit/templates/<lang>/solution-CLAUDE.md` 로 만들고 `{{NAME}}`·`{{ONE_LINE}}`·`{{DIR}}`·`{{OTHER_DIRS}}`·`{{DB_NAME}}`·`{{PM2_NAMES}}`·`{{PORTS}}`·`{{PROD_HOST}}`·`{{DEV_URL}}`·`{{SECRETS_WHERE}}`·`{{OWNER}}` 를 1단계·1b 값으로 채운다(모르면 «없음», 추측은 «(추측 — 확인 필요)»). **있으면 고쳐 쓰지 않고**, 백업 뒤 그 틀에서 **빠진 절만 끝에 더한다**(격리 규칙·일하는 순서·되돌리기 어려운 것·시험 역할 — 같은 뜻의 절이 이미 있으면 더하지 않고 보고에 «이미 있음»).
    - `kit/commands/<lang>/*.md` 를 `<프로젝트>/.claude/commands/` 에 **같은 이름 파일이 없을 때만** 복사하고 `{{OWNER}}` 채우기. 그 프로젝트가 키운 명령은 절대 덮지 않는다(다른 점만 보고).
-   - `kit/commands/ko/_설정-예시.md`(영어: `kit/commands/en/_settings-example.md`)의 «개발 명령 설정» 절을 그 솔루션 `CLAUDE.md` 끝에 붙이고 `detect.py` 값으로 채운다: 빌드(`packages[].scripts.build`, 폴더 포함) · 재시작/로그(`pm2[].name`) · health(`curl -s localhost:<포트>/api/health` 가 실제로 200 일 때만) · 개발 주소 · 배포 스크립트(`deployScripts`, 없으면 «배포 없음») · 운영 문의 읽기·답글 길(찾은 것만 — 없으면 «없음»). 문의 읽기 절이 생긴 솔루션은 `projects.json` «inquiries» 에 그 절 제목(SERVER-GUIDE 3절). 추측은 «(추측 — 확인 필요)», 모르면 «없음». 비밀번호는 쓰지 않고 위치만.
-   - `stateFile` 경로에 작업기록이 없으면 빈 틀(진행 중인 작업 / 답 기다림 / 다음 확정 작업 / 후속 후보).
+   - `kit/commands/ko/_설정-예시.md`(영어: `kit/commands/en/_settings-example.md`)의 «개발 명령 설정» 절을 그 솔루션 `CLAUDE.md` 끝에 붙이고 `detect.py` 값으로 채운다: 빌드(`packages[].scripts.build`, 폴더 포함) · 재시작/로그(`pm2[].name` · PM2 가 없고 Docker 를 sudo 묶음 명령으로 다루면 Docker 예시 — 컨테이너 이름·묶음 명령·시험 명령, `{{PM2_NAMES}}` 에는 컨테이너·서비스 이름) · health(`curl -s localhost:<포트>/api/health` 가 실제로 200 일 때만) · 개발 주소 · 배포 스크립트(`deployScripts`, 없으면 «배포 없음») · 운영 문의 읽기·답글 길(찾은 것만 — 없으면 «없음»). 문의 읽기 절이 생긴 솔루션은 `projects.json` «inquiries» 에 그 절 제목(SERVER-GUIDE 3절). 추측은 «(추측 — 확인 필요)», 모르면 «없음». 비밀번호는 쓰지 않고 위치만.
+   - `stateFile` 경로에 작업기록이 없으면 `kit/templates/<lang>/solution-session-state.md` 로 만든다(`{{NAME}}`·`{{DATE}}`·`{{OWNER}}` 채움).
    - `projects.json` 에서 명령이 생긴 버튼만 켠다(`kit/verify.sh` 가 맞춰 본다).
    - 독립 검증 명령(`fable-검증`)은 계정에서 쓸 수 있는 가장 강한 모델(`model: "fable"`, 없으면 `opus`)을 쓴다. 못 쓰면 «자체 검증만» 으로 기록.
 3b. **새 솔루션 만들기**(B0 에서 새로 시작하기로 한 것만 — 앱 코드는 만들지 않는다, 그릇만):
    - 폴더: `mkdir -p /opt/<키>` — 권한이 없으면 «주인이 할 일» 에 `sudo mkdir -p /opt/<키> && sudo chown $USER:$USER /opt/<키>` 를 남기고 그 솔루션은 폴더가 생긴 뒤로 미룬다(나머지는 계속).
    - `git init` · `CLAUDE.md`(solution 틀) · `.claude/commands/`(9개) · `.claude/session-state.md`(빈 틀 + «다음 확정 작업: 첫 설계 — `/기능설계`») · `docs/` 빈 폴더.
    - `projects.json` 에 한 줄(`devUrl` 은 아직 없으면 빈 값 · `prodLabel` null · 개발완료 버튼 켬). DB·PM2·도메인은 만들지 않는다 — 첫 설계 방이 정한다.
-4. **터미널 메뉴**: `mkdir -p ~/bin && cp ~/dev-server/kit/bin/dev ~/bin/dev && chmod +x ~/bin/dev` · `~/.bashrc` 백업 뒤 `kit/templates/bashrc-block.sh` 를 끝에 더하기(이미 있으면 건너뜀).
+4. **터미널 메뉴**(`install.sh` 가 이미 넣었으면 건너뜀 — `kit/verify.sh` 의 «터미널 메뉴 ~/bin/dev»): `mkdir -p ~/bin && cp ~/dev-server/kit/bin/dev ~/bin/dev && chmod +x ~/bin/dev` · `~/.bashrc` 백업 뒤 `kit/templates/bashrc-block.sh` 를 끝에 더하기(이미 있으면 건너뜀).
 5. **상황판 켜기**: `cd ~/dev-server/board && pm2 start server.js --name dev-board --no-treekill && pm2 save` · `pm2 startup` 은 sudo 라 «주인이 할 일» 로.
 6. **정기 점검**(C1): 상황판이 켜진 뒤 고른 프로젝트마다 정기 점검을 등록한다 — crontab 줄을 더하지 않는다(crontab 에 옛 morning-check.sh 줄이 있으면 상황판이 켜지 않는다 → 주인에게 알림):
    ```bash

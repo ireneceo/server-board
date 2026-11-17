@@ -6,7 +6,8 @@
 
 ## 🔒 Isolation (top priority)
 - Edit this project's code and docs **only inside `{{DIR}}`**. Never open or edit other project folders ({{OTHER_DIRS}}).
-- DB: `{{DB_NAME}}` only · PM2: restart only `{{PM2_NAMES}}` · ports: {{PORTS}}. Never touch other projects' processes or databases.
+- DB: `{{DB_NAME}}` only · restart only `{{PM2_NAMES}}` (PM2 names · for Docker, container/service names — the runtime is in «Dev command settings» at the end) · ports: {{PORTS}}. Never touch other projects' processes, containers or databases.
+- If this project's Docker is handled only through a sudo wrapper command (e.g. `sudo /usr/local/sbin/<name> restart <service>`), use only that command — never run `docker` / `docker compose` directly; anything the wrapper does not offer (removing volumes, pruning images, editing the compose file) is left to {{OWNER}}.
 - Never connect to the production server ({{PROD_HOST}}) directly. Production changes go only through the board's Deploy button (= `/deploy` session).
 
 ## Dev environment

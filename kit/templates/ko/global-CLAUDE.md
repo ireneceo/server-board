@@ -6,7 +6,7 @@
 
 ## 일하는 환경
 - 세션은 대개 **백그라운드 작업방**(`claude --bg`)에서 돈다. {{OWNER}} 는 화면을 보고 있지 않다고 가정한다.
-- {{OWNER}} 는 접속 시 `dev` 메뉴와 상황판(http://localhost:8800)으로 각 작업방 상태(일하는 중 / 답 기다림 / 끝남 / 꺼짐)를 본다.
+- {{OWNER}} 는 접속 시 `dev` 메뉴와 상황판(http://localhost:{{PORT}})으로 각 작업방 상태(일하는 중 / 답 기다림 / 끝남 / 꺼짐)를 본다.
 - 솔루션끼리 코드·DB·프로세스를 섞지 않는다. 내 솔루션 폴더 밖은 건드리지 않는다.
 - 서버 메모리는 공유다. 빌드 등 무거운 작업이 메모리 때문에 막히면 **기다린다**(우회·강제 종료 금지). 메모리 자리표를 켠 서버면 무거운 작업은 `~/dev-server/kit/bin/mem-slot run <이름> <MB> -- <명령>` 으로 — 자리표 없이 치면 검사가 막고 다시 칠 명령을 알려 준다, 그대로 따른다.
 - 한 솔루션에서 동시에 파일을 고치는 작업방은 하나만.
@@ -20,7 +20,7 @@
    - **일하는 방은 운영 배포를 묻지 않는다.** «배포할까요?»·«+ 배포» 질문·답 기다림을 만들지 않는다 — 개발서버에서 끝내고 보고에 «운영 반영: 다음 배포 때» 한 줄만. 처리된 일 전체를 확인해 배포하는 것은 **수동 배포(상황판 배포 버튼)** 와 **정기 점검** 두 곳뿐이다 — 배포 명령이 등록된 솔루션은 상황판이 직접 실행하고, AI 방은 배포 «준비»·«막기»(`/api/deploy-hold`)만 하며 배포 명령을 실행하지 않는다. 예외: 이 일 자체가 /배포·배포 확인이거나, {{OWNER}} 가 이 일에서 배포를 직접 지시했을 때.
 5. **상황판 맨 위에 질문을 올린다** — {{OWNER}} 는 상황판 맨 위 «답하거나 볼 것» 만 본다. ⏸ 보고 직전에 한 번(이 방 링크·«답하기» 가 붙고, 이 방에 답하면 저절로 빠진다):
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' --data-binary @- http://127.0.0.1:{{PORT}}/api/asks <<EOF
    {"room":"$(basename "$CLAUDE_JOB_DIR")","title":"한 줄 제목","question":"무엇을 정해야 하는지·선택지·각 결과","recommend":"권고"}
    EOF
    ```
@@ -28,7 +28,7 @@
 
 6. **{{OWNER}} 만 할 수 있는 행동도, 진행 중인 이 방 일에 필요한 것이면 따로 빼지 않고 이 방에서 안내하고 이 방에서 마무리한다** — **우리 서버·우리 서비스 안에서 바로 하는 짧은 «행동»** 만: 터미널·서버 창에 붙여 넣는 명령(«!»·sudo 같은 비밀번호 명령·운영 접속)·우리 솔루션 관리자 화면 설정·이 방이 기다리는 값 한 줄 답하기. **우리 서비스도 우리 서버도 아닌 곳(Google·Meta·앱 스토어·결제·외부 계정/키 발급 등 외부 서비스 화면)에서 {{OWNER}} 가 시간을 따로 내서 하는 일은 아래 «따로 카드» 로 뺀다** — 그 앞까지 이 방 일을 끝내고 ✅. ① 그 행동에 막히지 않는 일을 먼저 끝까지 한다 ② 보고는 ⏸ — 할 순서(화면·버튼·넣을 값 / 붙여 넣을 명령)와 굵은 질문 «**…하고 «했어요» 라고 답해 주실래요?**» ③ 상황판 맨 위에 `"act":true` 질문으로 올린다(«👉 할 일 · 이 방» 카드 + «✓ 했어요» 가 이 방 같은 대화로 감) ④ {{OWNER}} 가 «했어요»(또는 «!» 명령 결과)로 답하면 먼저 실제로 됐는지 읽기로 확인하고 같은 대화에서 끝까지 한다 — 안 됐으면 빠진 것을 새 ⏸ 로:
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' --data-binary @- http://127.0.0.1:{{PORT}}/api/asks <<EOF
    {"room":"$(basename "$CLAUDE_JOB_DIR")","act":true,"title":"{{OWNER}} 가 할 행동 한 줄(«…하기»)","question":"왜 {{OWNER}} 만 할 수 있는지 + 굵은 질문","steps":["그대로 따라 할 1단계(화면·메뉴·넣을 값)","2단계"],"links":["https://… 열 화면"],"terminal":["! 붙여 넣을 명령"]}
    EOF
    ```
@@ -52,7 +52,7 @@
 - 아끼기: 한 사안 최대 2번(설계 1 + 검증 1) · 묶어서 한 번 · 사실만 짧게 넘기고 결과는 그대로 옮긴다.
 - **한도·토큰 부족으로 못 부르면**: 조용히 넘어가지 않는다 — 설계가 막혔으면 구현을 시작하지 않고, 검증이 막혔으면 자체 검증 숫자를 남기고 운영 배포는 미룬다. 배포 때(정기 점검·/배포 방)는 막는 것이 이것뿐이면 건마다 자체 검증 숫자를 붙여 __OWNER__ 에게 «자체 검증만으로 배포할까요?» 를 묻고, «예» 일 때만 배포. 그리고 상황판 Fable 대기 목록에 올린다:
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/fable-wait <<EOF
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' --data-binary @- http://127.0.0.1:{{PORT}}/api/fable-wait <<EOF
    {"room":"$(basename "$CLAUDE_JOB_DIR")","kind":"design|gate|calc|ux|verify|cause|decision","title":"한 줄 제목","need":"Fable 이 볼 것 — 문서 경로·바뀐 파일·자체 검증 숫자","resetAt":"오류에 풀리는 시각이 있으면 ISO 시각"}
    EOF
    ```

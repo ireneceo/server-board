@@ -112,6 +112,42 @@ test('Claude Code 점검 — 그대로면 통과 · 명령이 없어지면 실�
   assert.equal(back.ok, true); assert.equal(back.okVersion, '9.9.9');
 });
 
+test('방 목록 — id 없는 터미널 창 줄: 점검 통과 · 방 목록에 sessionId 로 보임 · 둘 다 없는 줄은 건너뜀', async () => {
+  const cwd = path.join(sb.root, 'proj');
+  process.env.FAKE_AGENTS = JSON.stringify([
+    { kind: 'interactive', sessionId: 'aaaa0001-0000-0000-0000-000000000000', cwd, startedAt: Date.now() },
+    { kind: 'interactive', cwd },
+  ]);
+  try {
+    board.resetAgentsCache();
+    const c = await board.claudeContract();
+    assert.equal(c.ok, true, JSON.stringify(c.checks.filter((x) => !x.ok)));
+    board.resetAgentsCache();
+    const b = await board.buildBoard();
+    const t = b.rooms.filter((r) => r.kind === 'interactive');
+    assert.equal(t.length, 1); assert.equal(t[0].id, null); assert.equal(t[0].sessionId, 'aaaa0001-0000-0000-0000-000000000000'); assert.equal(t[0].attach, null);
+    process.env.FAKE_AGENTS = JSON.stringify([{ kind: 'background', sessionId: 'bbbb0001-0000-0000-0000-000000000000', cwd, name: 'x', state: 'done', startedAt: 1 }]);
+    const c2 = await board.claudeContract();
+    assert.ok(c2.checks.some((x) => !x.ok && /background\.id/.test(x.detail)), '작업방 줄에 id 가 없으면 잡음');
+  } finally { delete process.env.FAKE_AGENTS; board.resetAgentsCache(); }
+});
+
+test('원본 폴더 작업이 none 이 아니고 커밋 안 한 변경이 있으면 일 넣을 때 경고', async () => {
+  const { execFileSync } = require('child_process');
+  const dir = path.join(sb.root, 'wtproj'); fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  execFileSync('git', ['init', '-q', dir]);
+  const proj = { key: 'wt', dir };
+  fs.writeFileSync(path.join(sb.home, '.claude', 'settings.json'), JSON.stringify({ worktree: { bgIsolation: 'none' } }));
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'x');
+  assert.equal(await board.worktreeWarn(proj), '');   // none — 원본에서 일함
+  fs.writeFileSync(path.join(sb.home, '.claude', 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'auto' } }));
+  assert.match(await board.worktreeWarn(proj), /커밋 안 한 변경 1개/);   // 비어 있음 = worktree
+  fs.writeFileSync(path.join(dir, '.claude', 'settings.local.json'), JSON.stringify({ worktree: { bgIsolation: 'none' } }));
+  assert.equal(board.bgIsolationOf(dir), 'none');   // 솔루션 설정이 우선
+  assert.equal(await board.worktreeWarn(proj), '');
+  fs.rmSync(path.join(sb.home, '.claude', 'settings.json'));
+});
+
 test('보고 뒤 마무리 검사(Stop 훅)에 막혀 덧붙인 말 — 앞 보고(✅)를 이 방의 보고로', () => {
   const cwd = path.join(sb.root, 'hookproj'), sid = 'bead0001-0000-0000-0000-000000000000';
   const file = board.transcriptPath(cwd, sid);

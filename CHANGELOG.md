@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.0]
+Fixes found while installing on another server (RHEL 8 · Claude Code 2.1.311 · a Docker project).
+
+**Fixes**
+- Room list: terminal (`interactive`) entries from `claude agents --json` may have no `id` — the board and `kit/verify.sh` now read them by `sessionId` and require `id` only on background entries (verify used to fail twice with "missing field: id" and "could not read claude agents --json")
+- Self-tests no longer hang where `/bin/sh` is bash (RHEL, Fedora…): the update test's fake PM2 kept the test's output pipe open; every process a test starts is now stopped by pid and its temp folder removed
+- The update runner left a `/tmp/board-update-*` folder behind on every blocked or finished update — now removed
+- `kit/verify.sh`: self-tests have a time limit (180s, `VERIFY_TEST_TIMEOUT`) — on timeout one ✘ line "self-tests hung" instead of a check that never ends
+
+**Several servers**
+- Boards on several servers no longer get mixed up on one computer: `install.sh` asks for a **server name** (required, default the host name; different per server) and a **board port** — it asks which ports the boards you already open from this computer use, suggests a free one and refuses ports already in use on the server. Both go to `board/config.json` and `install-info.json`. An already-installed server keeps its port; a re-run only fills an empty server name
+- Sign-in cookies are per port (`sb_sess_<port>`), so signing in to one board no longer signs you out of another; the old `sb_sess` cookie is moved over once if it belongs to this board (updating keeps you signed in)
+- The server name shows in the board header, the tab title and the sign-in page; `/api/ping` returns it
+- No more fixed `8800`: room instructions, scheduled checks and the kit templates (`{{PORT}}`) use the configured port
+- `scripts/connect-mac.sh` reads the port and name from the server, refuses a Mac-only port change, stops if the port on the Mac or a `LocalForward` in `~/.ssh/config` already belongs to another board, and checks the opened board's name. The `~/.ssh/config` sample adds `ExitOnForwardFailure yes`
+- `kit/verify.sh`: ✘ when `serverName` is empty or the board answers with another name · ✘ with file:line when placed docs/commands still point to another port · △ hint on the default 8800. How to change a port: [OPERATIONS](docs/OPERATIONS.md) section 11
+
+**Install**
+- `install.sh` asks the two session settings one by one and says what each means: `permissions.defaultMode=auto` (sessions do not stop at every permission prompt) and `worktree.bgIsolation=none` (sessions work in the project folder itself; unset = each session works on its own branch and cannot see uncommitted changes). `verify.sh` shows the same explanation
+- When `bgIsolation` is not `none` and the project folder has uncommitted changes, queuing or starting a task shows a warning
+- `install.sh` offers the terminal menu (`~/bin/dev` + `.bashrc` block, with backup); `SB_MENU=1` adds it without asking
+- New session-notes template for projects: `kit/templates/<lang>/solution-session-state.md`
+
+**Docs / templates**
+- Project rules and "Dev command settings" cover Docker projects handled only through a sudo wrapper command (no PM2: container names, wrapper commands, test command)
+- [SERVER-GUIDE](docs/SERVER-GUIDE.md) section 7: pushing from the dev server to GitHub with a deploy key — the request to send the repository admin, `core.sshCommand`, allow rules for sessions, and the matching `push:` line; `/dev-done` pushes exactly that line and never works around a refusal
+
 ## [0.3.0]
 **Board**
 - **📎 Attachments** in "New task" and "💬 Ask the AI": add photos and files with the button, paste a screenshot, or drag and drop (25MB per file, up to 8 per send; only an allow-list of photo, document, text, archive and video types — programs such as .exe are refused). Files are stored per project in `<project>/.claude/attach-tmp/<date>/` (its own `.gitignore` is `*`, so nothing enters git). Only the owner or a member assigned to that project can upload; AI sessions and viewers cannot

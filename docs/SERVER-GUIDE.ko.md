@@ -49,7 +49,8 @@
 `projects.json` 에 `inquiries` 가 있으면 그 솔루션 개발시작(과 정기 점검 «문의 가져오기»)이 문의 읽기 절을 돌고, **열린 문의 전부**를 상황판에 올린다. 상황판은 보여 주기만 한다 — 이 목록 때문에 방이 열리거나 개발이 시작되지 않는다.
 
 ```bash
-curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' --data-binary @- http://127.0.0.1:8800/api/inquiries <<'EOF'
+PORT=$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/dev-server/board/config.json"))).get("port",8800))')   # 상황판 포트 — 서버마다 다름
+curl -s -X POST -H 'Content-Type: application/json' -H "Origin: http://localhost:$PORT" --data-binary @- http://127.0.0.1:$PORT/api/inquiries <<'EOF'
 {"project":"<키>","checkedAt":"<읽은 시각 ISO>","items":[
  {"ref":"fb#12","kind":"inquiry","at":"2026-11-02","who":"로그인 사용자 · <회사>",
   "title":"기록 줄의 날짜·내용을 고치는 방법 문의","verdict":"답장만 필요",
@@ -116,7 +117,49 @@ EOF
 
 ## 6. 새 솔루션을 더할 때 (서버 방)
 
-1. 솔루션 폴더에 `CLAUDE.md`(틀: `kit/templates/<lang>/solution-CLAUDE.md`) · `.claude/commands/`(없는 것만) · 작업기록 — 이미 있는 것은 덮지 않는다.
+1. 솔루션 폴더에 `CLAUDE.md`(틀: `kit/templates/<lang>/solution-CLAUDE.md`) · `.claude/commands/`(없는 것만) · 작업기록(틀: `kit/templates/<lang>/solution-session-state.md` — `{{NAME}}`·`{{DATE}}`·`{{OWNER}}` 채워 stateFile 경로에) — 이미 있는 것은 덮지 않는다.
+   - Docker 솔루션(PM2 없음)은 «개발 명령 설정» 의 «실행 방식» 을 Docker 예시로 — 컨테이너 이름·sudo 묶음 명령·시험 명령. projects.json 은 같다(상황판은 PM2 를 보지 않음).
+   - 방이 원본 폴더에서 일하는지 확인: `~/.claude/settings.json` 의 `worktree.bgIsolation` 이 `none` 이어야 원본의 커밋 안 한 변경을 방이 본다(`kit/verify.sh` 가 보여 줌 · 비어 있으면 방마다 별도 가지에서 일함).
 2. `projects.json` 에 한 줄(2절 — 처음엔 `noDevDone:true`, `prodLabel:null`).
 3. 그 솔루션 방에 «개발 명령 설정 절 채우기(빌드·재시작·주소·문의 읽기·답글 길·배포)» 를 대기열로.
 4. 명령이 생긴 버튼만 켜고 `kit/verify.sh`.
+
+## 7. 개발 서버 → GitHub 올리기 (배포 키)
+
+솔루션 저장소 하나에만 쓰는 열쇠(Deploy key, 쓰기 권한)로 올린다 — 사람 계정 열쇠·토큰을 서버에 두지 않는다. 저장소마다 열쇠 하나.
+
+1. **열쇠 만들기**(서버 방 · 솔루션마다): `ssh-keygen -t ed25519 -N "" -f ~/.ssh/<이름>_deploy -C "<서버 이름>-<저장소>"` → 지문 `ssh-keygen -lf ~/.ssh/<이름>_deploy.pub` · 공개키 `cat ~/.ssh/<이름>_deploy.pub` (비밀키 파일은 어디에도 붙이지 않는다)
+2. **저장소 관리자에게 요청**(주인이 직접 하거나 관리자에게 보낼 글 — 이 틀 그대로):
+   ```
+   저장소: <조직>/<저장소>
+   Deploy key 추가 — Title: <서버 이름>-<저장소>
+   공개키: ssh-ed25519 AAAA… <서버 이름>-<저장소>
+   공개키 지문: SHA256:…   (받은 키가 이 지문인지 확인 부탁)
+   Allow write access: 체크 (서버가 올리는 쪽)
+   보호 브랜치: main 은 보호 유지 — 서버는 <브랜치>(예: dev) 에만 올리고 main 은 PR 로
+   ```
+   GitHub 화면: 저장소 → Settings → Deploy keys → Add deploy key
+3. **솔루션 저장소에 열쇠 지정**(그 저장소에만 적용 · 경로는 절대 경로):
+   ```bash
+   git -C <솔루션 폴더> remote set-url origin git@github.com:<조직>/<저장소>.git
+   git -C <솔루션 폴더> config core.sshCommand "ssh -i $HOME/.ssh/<이름>_deploy -o IdentitiesOnly=yes"
+   ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts   # 처음 한 번 — 나온 지문을 GitHub 공개 지문과 비교(docs.github.com «GitHub's SSH key fingerprints») · 백그라운드 방은 «yes/no» 질문에 답할 수 없음
+   ssh -i ~/.ssh/<이름>_deploy -o IdentitiesOnly=yes -T git@github.com   # «Hi <조직>/<저장소>! …» 면 열쇠 OK (이때도 끝 번호는 1 — 실패 아님)
+   git -C <솔루션 폴더> push --dry-run origin <브랜치>
+   ```
+4. **작업방 허락 규칙** — Claude Code auto 모드의 자동 판정은 «배포 키로 GitHub 에 붙는 것» 을 막을 수 있다(방이 push 에서 멈춤). 그 솔루션의 `<솔루션 폴더>/.claude/settings.local.json`(git 에 안 올라감 · 이미 있으면 `permissions` 에 더하기)에 허락 규칙을 넣는다. 그 파일이 `.gitignore` 에 들어 있는지 먼저 확인(없으면 `.claude/settings.local.json` 한 줄 더하기 — `/개발완료` 는 `git add -A` 라 안 그러면 올라감):
+   ```json
+   {
+     "permissions": {
+       "allow": [
+         "Bash(git push origin <브랜치>)",
+         "Bash(git push --dry-run origin <브랜치>)",
+         "Bash(ssh -i ~/.ssh/<이름>_deploy -o IdentitiesOnly=yes -T git@github.com)"
+       ],
+       "deny": ["Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push * --force*)", "Bash(git push * -f*)", "Bash(git push * +*)", "Bash(git push * main*)", "Bash(git push *:main*)", "Bash(git -C * push*)"]
+     }
+   }
+   ```
+   허락은 정해진 브랜치 push 만. 금지 규칙은 «한 번 더 막는 것» 일 뿐 — main 을 지키는 진짜 장치는 2단계에서 요청한 GitHub 보호 브랜치다. 주인이 직접 넣는다(방이 자기 허락 규칙을 넓히지 않는다).
+5. **«개발 명령 설정» 의 push 줄을 맞춘다**: `- push: 개발완료 때 push 함 · 명령 git push origin <브랜치> · 올리는 브랜치 <브랜치> · 열쇠 배포 키 ~/.ssh/<이름>_deploy (core.sshCommand)`. `/개발완료` 가 이 줄대로 올리고, 막히면 우회하지 않고 보고에 «push 안 됨 — 오류 한 줄».
+6. 열쇠를 바꾸거나 서버를 옮기면: 관리자에게 옛 키 지우기 요청 · `~/.ssh/<이름>_deploy*` 지우기.

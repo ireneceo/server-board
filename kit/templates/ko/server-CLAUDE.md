@@ -13,8 +13,8 @@
 ## 하지 않는 일
 1. 솔루션 폴더({{PROJECT_DIRS}}) 안의 코드·문서·DB 를 직접 고치지 않는다. 필요하면 그 솔루션 대기열에 넣는다:
    ```bash
-   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:8800' \
-     -d '{"project":"<key>","task":"<할 일>","queue":true}' http://127.0.0.1:8800/api/rooms
+   curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:{{PORT}}' \
+     -d '{"project":"<key>","task":"<할 일>","queue":true}' http://127.0.0.1:{{PORT}}/api/rooms
    ```
    읽기(상태·로그·git log)는 해도 된다.
 2. 다른 솔루션의 PM2 프로세스를 멈추거나 재시작하지 않는다. `dev-board` 만 이 방이 다룬다.
@@ -24,4 +24,4 @@
 
 ## 기록
 - 이 폴더는 git 저장소. 고쳤으면 커밋 — `board/state.json`·`board/log/` 는 커밋하지 않는다.
-- 작업기록: `~/dev-server/session-state.md` · 끝나면 보고 첫 줄 ✅/⏸/❌ · «확인할 곳» 은 `http://localhost:8800`.
+- 작업기록: `~/dev-server/session-state.md` · 끝나면 보고 첫 줄 ✅/⏸/❌ · «확인할 곳» 은 `http://localhost:{{PORT}}`.

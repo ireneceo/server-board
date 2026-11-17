@@ -90,5 +90,17 @@ The board and sessions run without root. These are one-time steps for the server
 - Templates copied out at install (`~/.claude/CLAUDE.md` rules, project `.claude/commands`, project `CLAUDE.md`) are not changed by an update. When a release changes them, **Ask the AI to apply them** queues a server-session task that merges the change and keeps your edits.
 - No automatic updates in this version (planned together with signed releases).
 
+## 11. Several servers · Change the board port
+
+Each board you open from one computer needs **its own port** — your computer maps `localhost:<port>` to one tunnel only. If two servers both use 8800, a second `ssh -L 8800:…` only warns "Address already in use" and stays connected without a tunnel, and you end up looking at the other server's board. Using a different number only on your computer does not work either: the board accepts `localhost:<its own port>` only.
+Give every server a different `serverName` too — it shows in the board header, the tab title, the sign-in page and the authenticator entry, and `kit/verify.sh` / `scripts/connect-mac.sh` compare it.
+
+To change a board's port (on that server, owner):
+1. `board/config.json` → `"port": <new>` (a number nobody uses on the server: `ss -ltn | grep :<new>` prints nothing) → `pm2 restart dev-board --update-env`
+2. Docs the kit placed: replace the old number in `~/.claude/CLAUDE.md` and `~/dev-server/CLAUDE.md` (`localhost:<old>` and `127.0.0.1:<old>` → new) — `kit/verify.sh` lists any leftover with file and line
+3. Your computer: `~/.ssh/config` → `LocalForward <new> 127.0.0.1:<new>` (both numbers the same) · Mac auto tunnel: run `bash scripts/connect-mac.sh <alias>` again · phone (Termius): change the forward
+4. If used: `sudo tailscale serve --bg <new>` · dev-site gate: re-run `kit/board-gate-install.sh` (the nginx snippet carries the port)
+5. Sign in again on the new address (sign-in cookies are per port) · `bash ~/dev-server/kit/verify.sh`
+
 ## To be added (next stages)
 Key and password rotation · incident response (block → stop → revoke/rotate → keep evidence → restore) · backup and restore (code rollback vs database restore, restore drills) · what changes after OS account separation

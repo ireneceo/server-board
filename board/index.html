@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--></title>
+<title>__SERVER_NAME__ · <!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--></title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%23635BFF'/><text x='32' y='44' text-anchor='middle' font-family='Arial,Helvetica,sans-serif' font-size='36' font-weight='700' fill='white'>S</text></svg>">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -582,6 +582,7 @@
   .tools button[aria-expanded="true"] { border-color: var(--link); }
   .tools .lbl-short { display: none; }
   .head { margin: 0 0 14px; }
+  .head .srvname { font-size: .62em; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; opacity: .75; vertical-align: middle; white-space: nowrap; }
   .head .head-t { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .head h1 { margin: 0; min-width: 0; white-space: nowrap; }
   .head .sub { margin: 2px 0 0; word-break: keep-all; }
@@ -691,7 +692,7 @@
 <button id="totop" type="button"><!--ko-->↑ 맨 위로<!--/ko--><!--en-->↑ Top<!--/en--></button>
 <main>
   <!-- 갱신 시각은 제목 바로 아래 -->
-  <div class="head"><div class="head-t"><h1><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--></h1><span id="pauseslot"></span></div><div class="sub" id="sub"><!--ko-->불러오는 중…<!--/ko--><!--en-->Loading…<!--/en--></div></div>
+  <div class="head"><div class="head-t"><h1><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--> <span class="srvname" title="<!--ko-->이 상황판이 도는 서버<!--/ko--><!--en-->The server this board runs on<!--/en-->">__SERVER_NAME__</span></h1><span id="pauseslot"></span></div><div class="sub" id="sub"><!--ko-->불러오는 중…<!--/ko--><!--en-->Loading…<!--/en--></div></div>
   <div id="err"></div>
   <div id="outbox" hidden></div>
   <div class="tools" id="tools">
@@ -5230,7 +5231,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     Array.prototype.forEach.call(document.querySelectorAll('.js-user'), function (x) { x.textContent = user; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-lh'), function (x) { x.href = 'http://localhost:' + PORT_NO; x.textContent = 'http://localhost:' + PORT_NO; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-sshcfg'), function (x) {
-      x.textContent = 'Host myserver\n  HostName ' + host + '\n  User ' + user + '\n  LocalForward ' + PORT_NO + ' 127.0.0.1:' + PORT_NO;
+      x.textContent = 'Host myserver\n  HostName ' + host + '\n  User ' + user + '\n  LocalForward ' + PORT_NO + ' 127.0.0.1:' + PORT_NO + '\n  ExitOnForwardFailure yes';
     });
     Array.prototype.forEach.call(document.querySelectorAll('.js-docs'), function (x) { x.href = DOCS_URL; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-tunlabel'), function (x) { x.textContent = 'com.serverboard.tunnel.myserver'; });
