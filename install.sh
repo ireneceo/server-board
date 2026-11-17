@@ -143,7 +143,10 @@ if [ ! -f "$CFG" ]; then
     port_ok "$PORT" "$OTHERS" && break
     say "✘ $PORT — $WHY"; [ -n "$YES" ] && die 4 "$(t "포트 $PORT 을(를) 쓸 수 없음 — SB_PORT 로 다른 번호" "cannot use port $PORT — pick another with SB_PORT")"
   done
-  IP=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | grep -v ':' | head -1)
+  # 접속 주소 — 공인 주소 먼저(사설·도커·Tailscale 100.64/10 은 뒤로) · 처음 설정 «서버 창 열기» 의 ssh 줄에 그대로 쓰임
+  IPS=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^127\.' | grep -v ':' | grep -v '^$')
+  IP=$(printf '%s\n' "$IPS" | grep -Ev '^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.|169\.254\.)' | head -1)
+  [ -n "$IP" ] || IP=$(printf '%s\n' "$IPS" | head -1)
   node - "$DIR/board/config.example.json" "$CFG" "$OWNER" "$L" "$TZ1" "$PORT" "$USER" "${IP:-}" "$SNAME" <<'JS' || die 4 "config.json"
 const fs=require('fs');const [ex,out,owner,lang,tz,port,user,ip,serverName]=process.argv.slice(2);
 const c=JSON.parse(fs.readFileSync(ex,'utf8'));delete c._comment;

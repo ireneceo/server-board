@@ -177,7 +177,7 @@ The board has **personal sign-in — everyone uses their own ID and password**. 
 
 Open the board (step 6 has every device), e.g. `ssh -L 8800:127.0.0.1:8800 you@server` → http://localhost:8800.
 
-1. The **First setup** box at the top lists what's left: Claude Code installed · Claude logged in · permission settings · folder trusted · start at boot (optional). Each missing item shows the command to copy; it turns ✔ by itself once done (or press **Recheck**).
+1. The **First setup** box at the top lists what's left: Claude Code installed · Claude logged in · permission settings · folder trusted · start at boot (optional). «First — open a server window» at the top has the `ssh` line with this server's address, and each missing item has numbered commands to copy — Copy → paste into the server window → Enter. Login also works with **Log in here (no terminal)**. Items turn ✔ by themselves once done (or press **Recheck**).
 2. Press **Finish setup with AI ▶**. A "Setup" session starts in the server room and reads [AI-SETUP-PROMPT.md](AI-SETUP-PROMPT.md). It inspects the server and posts **one question card** at the top of the board: your projects and how to divide them, dev URLs, deploys, what's hard to undo, schedules, devices. The values it found are filled in and recommended ones are marked; reply "OK" or list what to change.
 3. It sets up the projects (rules, commands, notes files, schedules), posts anything only you can do as **to-do cards** (with commands to copy), and ends with the `kit/verify.sh` result. **Run checks** in the box runs it again any time.
 
@@ -233,7 +233,7 @@ The **terminal** (server commands, opening a session) goes through SSH either wa
 
 | Device | App | Set up once | Every day |
 |---|---|---|---|
-| **Mac** | Terminal / iTerm | Steps 1–3. Optional always-on tunnel: `ssh myserver cat dev-server/scripts/connect-mac.sh > /tmp/connect-mac.sh && bash /tmp/connect-mac.sh myserver` (the script lives on the server) (reconnects after sleep/reboot) | `ssh myserver` → http://localhost:8800 (with the always-on tunnel, just open the bookmark) |
+| **Mac** | Terminal / iTerm | Steps 1–3. Optional always-on tunnel: in the board, «Open on other devices» → «Mac — always open (automatic tunnel)» shows 4 short steps with this server's values (or by hand: `S=$(ssh myserver cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac myserver` — the script lives on the server) (reconnects after sleep/reboot) | `ssh myserver` → http://localhost:8800 (with the always-on tunnel, just open the bookmark) |
 | **Windows 10/11** | PowerShell (OpenSSH built in) · or PuTTY | Steps 1–3 (config file `C:\Users\<you>\.ssh\config`, no extension). PuTTY: Connection → SSH → Tunnels → source `8800`, destination `127.0.0.1:8800` → Add → save the session | `ssh myserver` (or tunnel only: `ssh -N myserver`) → http://localhost:8800 |
 | **Linux desktop** | Terminal | Steps 1–3, same as Mac | `ssh myserver` → http://localhost:8800 |
 | **iPhone / iPad** | Termius (free) | See below | Open Termius, connect, then the home-screen icon |

@@ -98,7 +98,7 @@
 상황판 포트 바꾸기(그 서버에서 · 주인):
 1. `board/config.json` → `"port": <새 번호>`(서버에서 아무도 안 쓰는 번호 — `ss -ltn | grep :<새 번호>` 가 비어 있음) → `pm2 restart dev-board --update-env`
 2. kit 이 놓은 문서: `~/.claude/CLAUDE.md`·`~/dev-server/CLAUDE.md` 의 옛 번호(`localhost:<옛>`·`127.0.0.1:<옛>`)를 새 번호로 — 남은 곳은 `kit/verify.sh` 가 파일·줄로 보여 줌
-3. 내 컴퓨터: `~/.ssh/config` → `LocalForward <새> 127.0.0.1:<새>`(두 숫자 같게) · 맥 자동 통로: `bash scripts/connect-mac.sh <별명>` 다시 · 휴대폰(Termius): 포워딩 번호 바꾸기
+3. 내 컴퓨터: `~/.ssh/config` → `LocalForward <새> 127.0.0.1:<새>`(두 숫자 같게) · 맥 자동 통로: 상황판 «맥 — 늘 열어 두기(자동 통로)» 칸으로 다시 깔기(별명에 포트가 들어 있어 새 포트는 새 통로 · 옛 통로는 스크립트가 알려 준 «되돌리기» 줄로 지움) · 휴대폰(Termius): 포워딩 번호 바꾸기
 4. 쓰고 있으면: `sudo tailscale serve --bg <새 번호>` · 개발 사이트 관문: `kit/board-gate-install.sh` 다시(nginx 조각에 포트가 들어감)
 5. 새 주소로 다시 로그인(로그인 쿠키는 포트마다 따로) · `bash ~/dev-server/kit/verify.sh`
 

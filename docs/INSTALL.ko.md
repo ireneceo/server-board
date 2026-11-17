@@ -178,7 +178,7 @@ API 키를 환경변수로 쓰려면: 서버 사용자 `~/.bashrc` 에 `export A
 
 상황판을 엽니다(기기별은 6단계). 예: `ssh -L 8800:127.0.0.1:8800 사용자@서버` → http://localhost:8800
 
-1. 맨 위 **처음 설정** 칸이 남은 일을 보여 줍니다: Claude Code 설치 · Claude 로그인 · 권한 설정 · 폴더 허락 · 재부팅 때 자동 시작(선택). 빠진 것마다 복사할 명령이 있고, 하고 나면 저절로 ✔ 가 됩니다(또는 **다시 확인**).
+1. 맨 위 **처음 설정** 칸이 남은 일을 보여 줍니다: Claude Code 설치 · Claude 로그인 · 권한 설정 · 폴더 허락 · 재부팅 때 자동 시작(선택). 맨 위 «먼저 — 서버 창 열기» 에 이 서버 주소가 든 `ssh` 한 줄이 있고, 빠진 것마다 번호 순서대로 복사할 명령이 있습니다 — 복사 → 서버 창에 붙여 넣기 → Enter. 로그인은 **여기서 로그인(터미널 없이)** 버튼으로도 됩니다. 하고 나면 저절로 ✔ 가 됩니다(또는 **다시 확인**).
 2. **AI 로 설치 마무리 ▶** 를 누릅니다. 서버 방에 «처음 설정» 방이 열려 [AI-SETUP-PROMPT.ko.md](AI-SETUP-PROMPT.ko.md) 를 읽고, 서버를 살펴본 뒤 상황판 맨 위에 **질문 카드 하나**를 올립니다: 프로젝트와 나누는 법·개발 주소·배포·되돌리기 어려운 것·정기 점검·기기. 찾은 값이 채워져 있고 권고값에 표시가 있습니다 — «좋아요» 또는 바꿀 번호만 답하면 됩니다.
 3. 프로젝트마다 규칙·명령·작업기록·정기 점검을 설정하고, 내가 직접 해야 할 일은 **할 일 카드**(복사할 명령 포함)로 올리고, `kit/verify.sh` 결과로 끝냅니다. 칸의 **점검 돌리기** 로 언제든 다시 확인합니다.
 
@@ -234,7 +234,7 @@ node -e 'const fs=require("fs"),p=require("path"),f=p.join(require("os").homedir
 
 | 기기 | 앱 | 처음 한 번 | 매일 |
 |---|---|---|---|
-| **맥** | 터미널 / iTerm | 1~3단계. 선택: 항상 켜진 통로 `ssh myserver cat dev-server/scripts/connect-mac.sh > /tmp/connect-mac.sh && bash /tmp/connect-mac.sh myserver`(스크립트는 서버에 있음)(잠자기·재부팅 뒤 다시 붙음) | `ssh myserver` → http://localhost:8800 (항상 켜진 통로면 즐겨찾기만 열기) |
+| **맥** | 터미널 / iTerm | 1~3단계. 선택: 항상 켜진 통로 — 상황판 «다른 기기에서 열기» → «맥 — 늘 열어 두기(자동 통로)» 에 이 서버 값이 든 4단계가 나옴(손으로: `S=$(ssh myserver cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac myserver` — 스크립트는 서버에 있음)(잠자기·재부팅 뒤 다시 붙음) | `ssh myserver` → http://localhost:8800 (항상 켜진 통로면 즐겨찾기만 열기) |
 | **윈도우 10/11** | PowerShell(OpenSSH 기본) · 또는 PuTTY | 1~3단계(설정 파일 `C:\Users\<이름>\.ssh\config`, 확장자 없음). PuTTY: Connection → SSH → Tunnels → Source `8800`, Destination `127.0.0.1:8800` → Add → 세션 저장 | `ssh myserver`(통로만: `ssh -N myserver`) → http://localhost:8800 |
 | **리눅스 데스크톱** | 터미널 | 1~3단계(맥과 같음) | `ssh myserver` → http://localhost:8800 |
 | **아이폰·아이패드** | Termius(무료) | 아래 | Termius 열어 접속 → 홈 화면 아이콘 |

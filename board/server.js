@@ -226,7 +226,8 @@ let authCache = { at: 0, v: null, busy: false };
 function authAsk(cb) {
   execFile(claudeBin(), ['auth', 'status', '--json'], { timeout: 60000, maxBuffer: 256 * 1024 }, (err, out) => {
     let v = null;
-    try { const d = JSON.parse(String(out || '')); v = { loggedIn: !!d.loggedIn, method: d.authMethod || null, plan: d.subscriptionType || null }; }
+    const txt = String(out || ''), a = txt.indexOf('{'), b = txt.lastIndexOf('}');
+    try { const d = JSON.parse(a >= 0 && b > a ? txt.slice(a, b + 1) : txt); v = { loggedIn: !!d.loggedIn, method: d.authMethod || null, plan: d.subscriptionType || null }; }
     catch (_) { v = err && err.code === 'ENOENT' ? { loggedIn: false, missing: true } : null; }   // 읽지 못하면 모름(null) — 빨강은 확실히 끊겼을 때만
     cb(v);
   });
@@ -2983,10 +2984,15 @@ const jsStr = (v) => String(v).replace(/['\\<]/g, (c) => c === '<' ? '\\x3c' : '
 /** 화면 파일에 서버별 값 채우기 — 주인 이름·터미널 접속 명령·언어·시간대·의뢰 링크 (config.json)
  *  <!--ko-->…<!--/ko--> · <!--en-->…<!--/en--> 는 다른 언어 쪽을 지운다 */
 const indexGz = { src: null, gz: null };
+/**
+ *  화면의 <!--tunL-->…<!--/tunL-->(옛)·<!--tunC-->…<!--/tunC-->(공개판) 중 맞지 않는 쪽을 지운다 */
+const MAC_TUN = !fs.existsSync(path.join(__dirname, '..', 'scripts', 'connect-mac.sh')) && fs.existsSync(path.join(__dirname, '..', 'mac-setup.sh')) ? 'legacy' : 'connect';
 function renderIndex() {
   return T(fs.readFileSync(INDEX, 'utf8'))
     .replace(EN ? /<!--ko-->[\s\S]*?<!--\/ko-->/g : /<!--en-->[\s\S]*?<!--\/en-->/g, '')
     .replace(/<!--\/?(ko|en)-->/g, '')
+    .replace(MAC_TUN === 'legacy' ? /<!--tunC-->[\s\S]*?<!--\/tunC-->/g : /<!--tunL-->[\s\S]*?<!--\/tunL-->/g, '')
+    .replace(/<!--\/?tun[LC]-->/g, '').replace(/__MAC_TUN__/g, MAC_TUN).replace(/__BOARD_PORT__/g, String(PORT))
     .replace(/__LANG__/g, LANG).replace(/__AI_LANG__/g, jsStr(AI_LANG)).replace(/__TZ_NAME__/g, jsStr(TZ_LABEL)).replace(/__TZ__/g, jsStr(TZ)).replace(/__SUPPORT_URL__/g, jsStr(SUPPORT_URL))
     .replace(/__CMD_DEVSTART__/g, jsStr(CMD.devstart)).replace(/__CMD_DEVDONE__/g, jsStr(CMD.devdone)).replace(/__CMD_DEPLOY__/g, jsStr(CMD.deploy))
     .replace(/__SERVER_NAME__/g, () => serverLabel().replace(/[&<>"'$]/g, (c) => '&#' + c.charCodeAt(0) + ';')).replace(/__DOCS_URL__/g, jsStr(DOCS_URL)).replace(/__DEV_SSH__/g, jsStr(CONFIG.devSsh || K('ssh <사용자>@<이 서버 주소>', 'ssh <user>@<this server address>')));
@@ -3150,8 +3156,9 @@ function personOf(id) {
 const needTotpFor = (p) => !!p && (p.role === 'owner' || TEAM.memberTotp);
 /** 인증 앱에 보일 이 서버 이름 — 상황판을 여러 서버에 깔면 앱 항목이 서버마다 따로 보여야 한다(이름이 같으면 어느 서버 숫자인지 모르고, «지우세요» 안내가 다른 서버 항목까지 지우게 함)
  *  config.serverName → devSsh 의 주소 → 컴퓨터 이름 */
+const cleanName = (x) => Array.from(String(x || '').replace(/[:\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, 40).join('').trim();   // «:» 는 앱 항목 이름(발급자:계정)을 가르므로 뺌 · 글자 단위 40자
 function serverLabel() {
-  const clean = (x) => String(x || '').replace(/[:\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);   // «:» 는 앱 항목 이름(발급자:계정)을 가르므로 뺌
+  const clean = cleanName;
   const n = clean(CONFIG.serverName); if (n) return n;
   const m = String(CONFIG.devSsh || '').match(/@([^\s:]+)/);
   return clean(m ? m[1] : os.hostname()) || 'server';
@@ -5016,8 +5023,8 @@ async function handleAction(req, res, url, who) {
     return send(res, 200, { ok: true });
   }
   if (url === '/api/setup/recheck') {
-    authCache.at = 0; authStatus(); setupCache.at = 0;
-    await new Promise((r) => setTimeout(r, 1500)); await setupRefresh(); cache.at = 0;
+    setupCache.at = 0;
+    await Promise.all([new Promise((r) => authAsk((v) => { if (v) authCache = { at: Date.now(), v, busy: false }; r(); })), setupRefresh()]); cache.at = 0;
     return send(res, 200, { ok: true, message: K('다시 확인했어요', 'Checked again') });
   }
   if (url === '/api/setup/start') {
@@ -5667,6 +5674,22 @@ async function handleAuth(req, res, url, who) {
     writeLog({ action: 'logout', by: actorOf(who) || 'anon', via: sock.kind });
     return send(res, 200, { ok: true });
   }
+  // 처음 설정 — 서버 이름이 비어 있으면 인증 앱 항목이 «Server Board · <IP>» 로 남는다 → 키를 넣기 전에 이름부터 (처음 설정을 열 수 있는 사람만 = 실행 계정 SSH 통로)
+  if (url === '/api/auth/setup-name') {
+    if (!firstSetupOpen(sock)) return send(res, 403, { ok: false, message: K('처음 설정 중에만 바꿀 수 있어요', 'Only during first setup') });
+    const name = cleanName(body.name);
+    if (!name) return send(res, 400, { ok: false, message: K('서버 이름을 넣어 주세요', 'Enter a server name') });
+    if (/[$`\\"<>\u007f-\u009f\u2028\u2029]/.test(name)) return send(res, 400, { ok: false, message: K('$ ` \\ " < > 는 쓸 수 없어요', '$ ` \\ " < > are not allowed') });
+    const cf = path.join(__dirname, 'config.json');
+    let cur = {};
+    try { cur = JSON.parse(fs.readFileSync(cf, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') return send(res, 500, { ok: false, message: 'config.json: ' + e.message }); }
+    if (cleanName(cur.serverName)) { CONFIG.serverName = cur.serverName; pageVerCache.m = -1; return send(res, 409, { ok: false, message: K('서버 이름이 이미 있어요 — 화면을 새로 고쳐 주세요', 'The server already has a name — reload the page') }); }
+    cur.serverName = name;
+    fs.writeFileSync(cf + '.tmp', JSON.stringify(cur, null, 2) + '\n'); fs.renameSync(cf + '.tmp', cf);
+    CONFIG.serverName = name; pageVerCache.m = -1;   // 머리·탭·인증 앱 항목이 새 이름으로(다시 켤 필요 없음)
+    writeLog({ action: 'server-name', name, via: sock.kind });
+    return send(res, 200, { ok: true, name });
+  }
   if (url === '/api/auth/setup-begin' || url === '/api/auth/setup') {
     const resetTok = String(body.reset || '');
     const tgt = setupTarget(req, sock, resetTok);
@@ -5683,7 +5706,7 @@ async function handleAuth(req, res, url, who) {
       const secret = pend.secret;
       const issuer = AUTH_ISSUER + ' · ' + serverLabel();   // 서버마다 다른 앱 항목 이름
       const uri = secret ? auth.otpauthUri(secret, tgt.id, issuer) : null;
-      return send(res, 200, { ok: true, nonce, id: tgt.id, role: tgt.role, kind: tgt.kind, needTotp, secret, uri, qr: uri ? qrSvg(uri) : null, issuer, server: serverLabel() });
+      return send(res, 200, { ok: true, nonce, id: tgt.id, role: tgt.role, kind: tgt.kind, needTotp, secret, uri, qr: uri ? qrSvg(uri) : null, issuer, server: serverLabel(), nameEmpty: tgt.kind === 'first' && !cleanName(CONFIG.serverName) });
     }
     const pend = setupPending.get(String(body.nonce || ''));
     if (!pend || pend.id !== tgt.id || pend.exp < Date.now()) return send(res, 400, { ok: false, message: K('설정 시간이 지났어요 — 화면을 새로 고치면 새 키가 나와요. 앱의 예전 «Server Board» 는 지우고 새 키로 넣으세요', 'Setup expired — reload for a new key; delete the old «Server Board» entry in your app and add the new key') });
@@ -5780,7 +5803,7 @@ function renderLogin() {
     + '(function(){var m=document.getElementById("m"),Q=new URLSearchParams(location.search),RESET=Q.get("reset")||"";'
     + 'function h(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c];});}'
     + 'function post(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(function(r){return r.json();});}'
-    + 'function home(){location.replace("/");}'
+    + 'function home(){if(/^#autotunnel=[\\w.-]{1,64}$/.test(location.hash))location.reload();else location.replace("/");}'
     + 'fetch("/api/auth/state"+(RESET?"?reset="+encodeURIComponent(RESET):""),{cache:"no-store"}).then(function(r){return r.json();}).then(function(s){'
     + 'if(s.me&&!RESET)return home();'
     + 'if(s.setup)return setup(s.setup);'
@@ -5843,10 +5866,18 @@ function renderLogin() {
         + '<br><b>Where to keep them</b> A password manager or on paper at home. Not in your photo roll, chat, mail or an AI chat — you would lose them with the phone, or they get copied around.'
         + '<br><b>Security</b> A backup code alone is not enough — the password is needed too. Still, do not keep them next to the password. If they may have leaked, tap your name at the top → «New backup codes»; the old ones stop working.'),
       bkGo: K('다 적었어요 — 상황판 열기', 'Saved — open the board'),
+      nm: K('먼저 — 이 서버 이름 정하기', 'First — name this server'),
+      nmS: K('서버 이름이 비어 있어서 인증 앱 항목이 «{iss}» 로 들어가요. 서버가 여러 대면 어느 서버 숫자인지 헷갈려요 — 지금 정하면 앱 항목·상황판 머리·탭 제목에 이 이름이 보여요(나중에 바꾸면 인증 앱을 다시 넣어야 해요).', 'The server name is empty, so the authenticator entry would be «{iss}». With several servers you cannot tell them apart — name it now and the app entry, board header and tab title show it (changing it later means re-adding the authenticator).'),
+      nmPh: K('예: 회사 개발', 'e.g. Company dev'), nmBtn: K('이 이름으로', 'Use this name'), nmSkip: K('이름 없이 계속', 'Continue without a name'),
     }) + ';'
     + 'var mob=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1),id=h(j.id),sec=j.secret?j.secret.replace(/(.{4})/g,"$1 ").trim():"";'
     + 'Object.keys(S).forEach(function(k){S[k]=String(S[k]).split("{iss}").join(j.issuer||"Server Board");});'
-    + 'var html="<h1>"+h(t.kind==="first"?S.first:S.reset)+"</h1><p class=mut>"+(t.kind==="first"?h(S.who).replace("{id}","<b>"+id+"</b>"):h(S.whoL).replace("{id}","<b>"+id+"</b>").replace("{srv}",h(j.server||""))+(j.needTotp?S.whoT:""))+"</p><form id=f>";var n=0;'
+    + 'var html="<h1>"+h(t.kind==="first"?S.first:S.reset)+"</h1><p class=mut>"+(t.kind==="first"?h(S.who).replace("{id}","<b>"+id+"</b>"):h(S.whoL).replace("{id}","<b>"+id+"</b>").replace("{srv}",h(j.server||""))+(j.needTotp?S.whoT:""))+"</p>";'
+    // 서버 이름이 비었으면 키를 넣기 전에 이름부터 — «이름 없이 계속» 을 누르면 이 화면에서는 다시 묻지 않음
+    + 'if(j.nameEmpty&&!window.__nmSkip){html+="<section class=nmq><h2>"+h(S.nm)+"</h2><p>"+h(S.nmS)+"</p><input id=nm maxlength=40 placeholder=\\""+h(S.nmPh)+"\\" aria-label=\\""+h(S.nm)+"\\"><p class=err id=nme></p><button type=button id=nmb>"+h(S.nmBtn)+"</button> <button type=button class=sub id=nms>"+h(S.nmSkip)+"</button></section>";m.innerHTML=html;'
+    + 'document.getElementById("nms").onclick=function(){window.__nmSkip=1;setup(t);};'
+    + 'document.getElementById("nmb").onclick=function(){var b=this,v=document.getElementById("nm").value.trim(),ne=document.getElementById("nme");if(!v){ne.textContent=S.nmPh;return;}b.disabled=true;post("/api/auth/setup-name",{name:v}).then(function(r){if(!r.ok){b.disabled=false;ne.textContent=r.message||"error";return;}document.title=r.name+" · "+document.title.replace(/^.*? · /,"");setup(t);},function(){b.disabled=false;ne.textContent="network";});};return;}'
+    + 'html+="<form id=f>";var n=0;'
     + 'if(j.needTotp){'
     + 'html+="<section><h2><span class=n>"+(++n)+"</span>"+h(S.s1)+"</h2><p>"+h(S.s1a)+" <a target=_blank rel=noopener href=\\"https://apps.apple.com/app/google-authenticator/id388497605\\">iPhone</a> · <a target=_blank rel=noopener href=\\"https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2\\">Android</a></p><p><b>"+h(S.s1b)+"</b></p></section>";'
     + 'html+="<section><h2><span class=n>"+(++n)+"</span>"+h(S.s2)+"</h2>";'
@@ -5862,6 +5893,8 @@ function renderLogin() {
     + 'document.getElementById("f").onsubmit=function(ev){ev.preventDefault();var b=document.getElementById("b"),e=document.getElementById("e"),p=document.getElementById("p").value,ce=document.getElementById("c"),c=ce?ce.value.replace(/\\s/g,""):"";e.textContent="";'
     + 'if(ce&&!/^\\d{6}$/.test(c)){e.textContent=S.six;ce.focus();return;}if(p.length<10){e.textContent=S.short;return;}if(p!==document.getElementById("p2").value){e.textContent=S.differ;return;}b.disabled=true;'
     + 'post("/api/auth/setup",{reset:RESET,nonce:j.nonce,password:p,code:c}).then(function(r){if(!r.ok){b.disabled=false;e.textContent=(ce&&/코드|code/i.test(r.message||"")&&!/시간이 지났|expired/i.test(r.message||""))?S.bad:(r.message||"error");if(ce){ce.value="";ce.focus();}return;}'
+    // 처음 설정을 SSH 통로로 막 끝냄 — 상황판이 «이 창이 열려 있는 동안만 보여요 → 늘 열어 두기» 카드를 한 번 띄움
+    + 'if(t.kind==="first"){try{localStorage.setItem("board.justSetup",String(Date.now()));}catch(_){}}'
     + 'if(!r.backupCodes)return home();m.innerHTML="<h1>"+h(S.bk)+"</h1><p class=bkx>"+S.bkS+"</p><div class=codes>"+r.backupCodes.map(function(c){return "<div>"+h(c)+"</div>";}).join("")+"</div><button id=g>"+h(S.bkGo)+"</button>";document.getElementById("g").onclick=home;},function(){b.disabled=false;e.textContent="network";});};});}'
     
     + '})();</script>'
@@ -6228,44 +6261,105 @@ let setupCache = { at: 0, v: null, busy: false };
 function execText(cmd, args, ms) {
   return new Promise((resolve) => execFile(cmd, args, { timeout: ms || 15000, maxBuffer: 512 * 1024 }, (err, out, er) => resolve({ err, out: String(out || '').trim(), errOut: String(er || '').trim() })));
 }
+// 이 서버에 들어오는 접속 명령 — config.devSsh(install.sh 가 넣음) · 없으면 실행 계정@이 서버 주소(공인 주소 먼저 · 도커·Tailscale 주소는 뺌)
+//   처음 설정 칸 맨 위 «서버 창 열기» 에 그대로 복사되게
+function sshGuess() {
+  if (CONFIG.devSsh) return String(CONFIG.devSsh);
+  const all = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces() || {})) {
+    if (/^(docker|br-|veth|tailscale|lo)/.test(name)) continue;
+    for (const x of list || []) if (x.family === 'IPv4' || x.family === 4) if (!x.internal) all.push(x.address);
+  }
+  const priv = (ip) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|169\.254\.)/.test(ip);
+  const ip = all.find((x) => !priv(x)) || all[0];
+  return ip ? 'ssh ' + (os.userInfo().username || 'user') + '@' + ip : '';
+}
+// 접속 줄의 주소가 사설 주소인가 — 클라우드(NAT)에선 밖에서 안 닿을 수 있어 안내를 붙인다
+function sshPrivate(cmd) {
+  const m = String(cmd || '').match(/@([\d.]+)/);
+  return !!(m && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(m[1]));
+}
+// 재부팅 자동 시작 sudo 한 줄 — pm2 startup 이 보여 주는 줄을 미리 만들어 바로 복사(출력에서 골라 복사하는 단계를 없앰)
+async function bootLine() {
+  // pm2 위치 — 상황판이 도는 PATH·node 폴더에서 먼저(로그인 셸은 nvm 이 PATH 를 못 넣는 배포판이 있음), 없으면 로그인 셸 · «/» 로 시작하는 실제 파일만
+  let pm2 = '';
+  for (const d of String(process.env.PATH || '').split(':').concat(path.dirname(process.execPath))) {
+    if (!d) continue; const c = path.join(d, 'pm2');
+    try { fs.accessSync(c, fs.constants.X_OK); pm2 = c; break; } catch (_) {}
+  }
+  if (!pm2) { const w = await execText('bash', ['-lc', 'command -v pm2'], 8000); const c = (w.out.split('\n').pop() || '').trim(); if (c.startsWith('/') && fs.existsSync(c)) pm2 = c; }
+  try { if (pm2) pm2 = fs.realpathSync(pm2); } catch (_) {}
+  if (!pm2 || /[\s'"$`\\;&|]/.test(pm2)) return '';
+  return 'sudo env PATH=$PATH:' + path.dirname(process.execPath) + ' ' + pm2 + ' startup systemd -u ' + os.userInfo().username + ' --hp ' + HOME;
+}
+// 로그인 여부 — claude auth status 를 못 읽었을 때, 열쇠가 하나도 없으면 «안 됨» 은 확실하다(있으면 모름 그대로)
+function loginGuess() {
+  if (process.env.ANTHROPIC_API_KEY) return null;
+  try { if (fs.statSync(path.join(HOME, '.claude', '.credentials.json')).size > 2) return null; } catch (_) {}
+  const cj = readJson(path.join(HOME, '.claude.json'));
+  if (cj && (cj.oauthAccount || cj.primaryApiKey)) return null;
+  return false;
+}
 async function setupRefresh() {
   if (setupCache.busy) return; setupCache.busy = true;
   try {
     const items = [];
+    const S = (t, cmd) => (cmd ? { t, cmd } : { t });
     const ver = await execText(claudeBin(), ['--version'], 15000);
     const cOk = !ver.err ? true : ver.err.code === 'ENOENT' ? false : null;
     items.push({ key: 'claude', ok: cOk, need: true, detail: cOk ? ver.out.split('\n')[0] : '',
       title: K('Claude Code 설치', 'Install Claude Code'), why: K('작업방은 이 서버의 Claude Code 로 일합니다', 'Sessions work through Claude Code on this server'),
-      cmds: ['npm install -g @anthropic-ai/claude-code'], where: 'shell' });
-    const au = authCache.v;
-    items.push({ key: 'login', ok: au ? !!au.loggedIn : cOk === false ? false : null, need: true,
-      detail: au && au.loggedIn ? [au.method, au.plan].filter(Boolean).join(' · ') : '',
-      title: K('Claude 로그인', 'Log in to Claude'), why: K('구독(Pro·Max·Team)이면 첫 줄, API 키(사용량 과금)면 둘째 줄 — 나온 주소를 아무 브라우저에서 열어 로그인하고 코드를 터미널에 붙여 넣기', 'Subscription (Pro · Max · Team): first line · API key (usage billing): second line — open the printed link in any browser, sign in, paste the code back'),
-      cmds: ['claude auth login', 'claude auth login --console'], where: 'shell' });
+      cmds: ['curl -fsSL https://claude.ai/install.sh | bash'], where: 'shell',
+      steps: [S(K('서버 창에 붙여 넣고 Enter — 설치가 끝나면 «claude» 명령이 생깁니다', 'Paste into the server window and press Enter — when it finishes the «claude» command exists'), 'curl -fsSL https://claude.ai/install.sh | bash'),
+        S(K('설치 뒤 «claude: command not found» 가 나오면 서버 창을 닫고 위 «서버 창 열기» 로 다시 접속', 'If «claude: command not found» appears afterwards, close the server window and connect again with «Open a server window» above'))] });
+    items.push({ key: 'login', ok: null, need: true, detail: '', board: true,
+      title: K('Claude 로그인', 'Log in to Claude'), why: K('작업방이 이 계정으로 일합니다', 'Sessions work under this account'),
+      cmds: ['claude auth login', 'claude auth login --console'], where: 'shell',
+      steps: [{ t: K('서버 창에 붙여 넣고 Enter — 둘 중 내 요금 방식 한 줄만', 'Paste into the server window and press Enter — only the one line for how you pay'),
+          or: [{ t: K('구독(Pro·Max·Team)', 'Subscription (Pro · Max · Team)'), cmd: 'claude auth login' }, { t: K('API 키(사용량 과금)', 'API key (usage billing)'), cmd: 'claude auth login --console' }] },
+        S(K('화면에 나온 https://… 주소를 브라우저에서 열어 로그인 → 마지막 화면의 코드를 복사 → 서버 창 «Paste code here» 뒤에 붙여 넣고 Enter → «Login successful» 이 나오면 끝', 'Open the https://… link it prints in a browser and sign in → copy the code on the last screen → paste it after «Paste code here» in the server window and press Enter → done when it says «Login successful»'))] });
     const sj = readJson(SETTINGS_FILE) || {};
     const mode = (sj.permissions || {}).defaultMode || null, iso = (sj.worktree || {}).bgIsolation || null;
     items.push({ key: 'permissions', ok: mode === 'auto' && iso === 'none', need: true, detail: 'defaultMode=' + (mode || '-') + ' · bgIsolation=' + (iso || '-'),
       title: K('작업방 권한 설정', 'Session permission settings'),
-      why: K('auto 가 아니면 백그라운드 방이 첫 허락 창에서 멈추고(터미널에서만 답할 수 있음), bgIsolation 이 none 이 아니면 고친 내용이 ~/dev-server 가 아닌 사본 폴더에 남습니다. 무엇을 묻지 않고 허용하는지는 Claude Code 권한 안내서 참고. 아래 명령은 기존 파일을 백업하고 이 두 값만 바꿉니다',
-        'Without auto, background sessions stop at their first permission prompt (answerable only in a terminal); without bgIsolation none, edits land in a copy folder instead of ~/dev-server. See Claude Code\'s permission docs for what auto allows. The command backs up the file and changes only these two values'),
-      cmds: [PERM_CMD], where: 'shell' });
+      why: K('AI 방이 하나하나 허락을 묻지 않고 일하고(auto), 고친 내용이 원래 폴더에 바로 남게(bgIsolation none) 하는 설정입니다. 지금 값: ', 'Lets AI sessions work without asking for each permission (auto) and keeps their edits in the real folder (bgIsolation none). Now: ') + 'defaultMode=' + (mode || '-') + ' · bgIsolation=' + (iso || '-'),
+      cmds: [PERM_CMD], where: 'shell',
+      steps: [S(K('긴 한 줄이지만 «복사» 로 통째로 — 서버 창에 붙여 넣고 Enter → «ok» 가 나오면 끝(원래 설정 파일은 날짜 붙여 백업, 이 두 값만 바뀜)', 'It is one long line — use «Copy», paste into the server window, press Enter → done when it prints «ok» (the old settings file is backed up; only these two values change)'), PERM_CMD)] });
     const cj = readJson(path.join(HOME, '.claude.json'));
     const tp = cj && cj.projects ? cj.projects[path.join(HOME, 'dev-server')] : undefined;
     items.push({ key: 'trust', ok: cj ? !!(tp && tp.hasTrustDialogAccepted) : null, need: false, detail: '',
-      title: K('설치 폴더 허락', 'Trust the install folder'), why: K('처음 여는 폴더는 «이 폴더를 믿겠습니까» 를 한 번 허락해야 방이 시작됩니다 — 이 서버 창에서 열고 «믿기» → /exit', 'A folder opened for the first time must be trusted once before sessions can start — open it in a server window, choose «Trust», then /exit'),
-      cmds: ['cd ~/dev-server && claude'], where: 'shell' });
+      title: K('설치 폴더 허락', 'Trust the install folder'), why: K('처음 여는 폴더는 «이 폴더를 믿겠습니까» 를 한 번 허락해야 방이 시작됩니다', 'A folder opened for the first time must be trusted once before sessions can start'),
+      cmds: ['cd ~/dev-server && claude'], where: 'shell',
+      steps: [S(K('서버 창에 붙여 넣고 Enter', 'Paste into the server window and press Enter'), 'cd ~/dev-server && claude'),
+        S(K('«Yes, I trust this folder» 가 골라진 채로 Enter (다른 질문이 더 나오면 그대로 Enter)', 'With «Yes, I trust this folder» selected, press Enter (press Enter on any other first-run question too)')),
+        S(K('입력칸이 나오면 이 글자를 치고 Enter 로 빠져나오기', 'When the input box appears, type this and press Enter to leave'), '/exit')] });
     const bt = await execText('systemctl', ['is-enabled', 'pm2-' + (os.userInfo().username || '')], 8000);
-    const btOk = bt.out === 'enabled' ? true : /^(disabled|not-found|masked)/.test(bt.out) || /not-found|No such file/.test(bt.errOut) ? false : null;
-    items.push({ key: 'boot', ok: btOk, need: false, detail: bt.out || '',
-      title: K('재부팅 뒤 자동 시작', 'Start after reboot'), why: K('pm2 startup 이 보여 주는 sudo 한 줄을 서버 창에 붙여 넣기 — sudo 를 못 쓰면 crontab 에 @reboot pm2 resurrect', 'Paste the sudo line that pm2 startup prints into a server window — without sudo, add @reboot pm2 resurrect to your crontab'),
-      cmds: ['pm2 startup'], where: 'shell' });
+    const ct = await execText('bash', ['-c', 'crontab -l 2>/dev/null'], 8000);
+    const cronOk = /^\s*@reboot\b.*pm2 resurrect/m.test(ct.out);   // sudo 없이 crontab 으로 한 경우도 됨
+    const btOk = bt.out === 'enabled' || cronOk ? true : /^(disabled|not-found|masked)/.test(bt.out) || /not-found|No such file/.test(bt.errOut) || (bt.err && bt.err.code === 'ENOENT') ? false : null;
+    const noSystemd = bt.err && bt.err.code === 'ENOENT';
+    const bl = noSystemd ? '' : await bootLine();
+    const cronLine = '(crontab -l 2>/dev/null | grep -v "pm2 resurrect"; echo "@reboot PATH=' + path.dirname(process.execPath) + ':$PATH pm2 resurrect") | crontab - && pm2 save';
+    const cronStep = (t) => ({ t, or: [{ t: 'crontab', cmd: cronLine }] });
+    items.push({ key: 'boot', ok: btOk, need: false, detail: cronOk && bt.out !== 'enabled' ? 'crontab @reboot' : (bt.out || ''),
+      title: K('재부팅 뒤 자동 시작', 'Start after reboot'), why: K('서버를 다시 켜도 상황판이 저절로 켜지게 합니다', 'Starts the board again by itself after the server reboots'),
+      cmds: noSystemd ? [cronLine] : bl ? [bl, 'pm2 save'] : ['pm2 startup', 'pm2 save'], where: 'shell',
+      steps: noSystemd ? [cronStep(K('이 서버에는 systemd 가 없어 crontab 으로 — 서버 창에 붙여 넣고 Enter', 'No systemd on this server, so use crontab — paste into the server window and press Enter'))]
+        : [bl ? S(K('서버 창에 붙여 넣고 Enter — 비밀번호를 물으면 이 서버 계정 비밀번호(치는 동안 안 보이는 게 정상)', 'Paste into the server window and press Enter — if it asks for a password, type this server account\'s password (nothing shows while typing; that is normal)'), bl)
+              : S(K('서버 창에 붙여 넣고 Enter → 맨 끝에 나오는 «sudo env PATH=…» 한 줄을 통째로 복사해 다시 붙여 넣고 Enter(비밀번호를 물으면 이 서버 계정 비밀번호)', 'Paste into the server window and press Enter → copy the whole «sudo env PATH=…» line it prints at the end, paste it and press Enter (password = this server account\'s)'), 'pm2 startup'),
+          S(K('이어서 지금 켜진 목록을 저장', 'Then save what is running now'), 'pm2 save'),
+          cronStep(K('위 sudo 줄에서 «not in the sudoers» 가 나오면(sudo 못 쓰는 계정) 대신 이 줄 하나로 끝', 'If the sudo line above says «not in the sudoers» (this account cannot use sudo), this one line instead'))] });
     setupCache = { at: Date.now(), v: items, busy: false };
   } catch (e) { setupCache.busy = false; writeLog({ action: 'setup-refresh-error', err: String(e.message || e).slice(0, 200) }); }
 }
 function setupItems() {
   const open = setupOpen();
   if (!setupCache.busy && Date.now() - setupCache.at > (open ? 60e3 : 10 * 60e3)) setupRefresh();
-  return setupCache.v;
+  if (!setupCache.v) return null;
+  const au = authCache.v, cOk = (setupCache.v.find((x) => x.key === 'claude') || {}).ok;
+  return setupCache.v.map((x) => x.key !== 'login' ? x : { ...x,
+    ok: au ? !!au.loggedIn : cOk === false ? false : loginGuess(),
+    detail: au && au.loggedIn ? [au.method, au.plan].filter(Boolean).join(' · ') : '' });
 }
 function setupRoomOf(rooms, st) {
   const s = st.setup || {};
@@ -6277,7 +6371,7 @@ function setupBoard(st, rooms) {
   const items = setupItems();
   const info = readJson(INSTALL_INFO);
   const base = { done: !!s.doneAt, doneAt: s.doneAt || null, doneBy: s.doneBy || null, items: items || [], checking: !items, verify: s.verify || null,
-    installer: info ? { at: info.at || null, version: info.version || null, by: info.by || null } : null };
+    installer: info ? { at: info.at || null, version: info.version || null, by: info.by || null } : null, ssh: sshGuess(), sshPrivate: sshPrivate(sshGuess()) };
   const r = setupRoomOf(rooms, st);
   const queued = (st.queue || []).some((q) => q.setup);
   let ai;

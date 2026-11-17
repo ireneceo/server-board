@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0]
+**Mac: keep the board open without a terminal window**
+- «Open on other devices» → **Mac — always open (automatic tunnel)** is now one box with the four steps in order — key, login without a password, alias, install — each with a check line, how to read it, and a copy button. The install line fetches the script from the server, so the Mac needs no copy of this repository: `S=$(ssh user@server cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac <alias> user@server`
+- The alias is per server (`sb-<server name>-<port>`, e.g. `sb-office-8801`), so two servers' boards no longer share `Host myserver`, the LaunchAgent name or the log file. The SSH-tunnel steps, `~/.ssh/config` sample and the reconnect checks use the same alias
+- `scripts/connect-mac.sh` adds the alias to `~/.ssh/config` when it is missing (old file backed up as `~/.ssh/config.bak-serverboard`), stops if the alias already points to another server, speaks the board's language, works when piped from the server, and at the end opens the board with a marker so the board knows this Mac has the tunnel
+- Right after first setup through an SSH tunnel, the board shows a card: the board is visible only while that terminal window is open → **keep it open (automatic tunnel)** / **phone too? Tailscale**. On later visits through a hand-opened tunnel it shows a one-line hint (hide it once; it comes back if this device drops twice in 7 days)
+- «Could not reach the board server» on a Mac now shows, right there, one line to paste into Terminal that says what is wrong (no tunnel · stuck tunnel · automatic tunnel failing · key login), plus the install line
+- The SSH instructions show the board's own port even when the page is opened through Tailscale (they used the Tailscale port)
+
+**Also**
+- A newer board version shows a **Update x.y.z** badge next to the server name; tapping it scrolls to the update box
+- First setup asks for a server name first when `serverName` is empty — otherwise the authenticator entry would be «Server Board · <IP address>» (you can continue without one)
+- First setup box (the «Claude Code» checklist): opens with a one-line `ssh` command for this server, numbered steps with copy buttons, sign-in without a terminal, the exact `sudo` line for start-on-reboot; the AI sign-in check no longer shows «?» when `claude auth status` prints extra lines
+- First setup box: Claude Code install now uses the native installer (`curl -fsSL https://claude.ai/install.sh | bash`) instead of `npm install -g`; start-on-reboot also counts a `@reboot pm2 resurrect` crontab line as done, and its fallback line sets PATH; a private address in the `ssh` line gets a note
+- `install.sh` suggests the public address first
+
 ## [0.5.0]
 **New**
 - Deploy connection: a project with no production server registered shows a **"Deploy · not connected"** button. The owner can connect a deploy script that is already in the project (one-line command, saving = approving it), change or disconnect it later (**⚙ Connection** on the deploy line), or — with no script yet — queue "write a deploy script" for that project's session. The board never takes or stores production addresses, accounts or keys. See [SERVER-GUIDE](docs/SERVER-GUIDE.md) section 2

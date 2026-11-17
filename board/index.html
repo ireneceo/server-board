@@ -179,6 +179,11 @@
   .setup-opt, .setup-det { font-size: 12px; color: var(--muted); }
   .setup-why, .setup-where { font-size: 13px; color: var(--muted); margin-top: 4px; overflow-wrap: anywhere; }
   .setup-box .ask-bar { flex-wrap: wrap; align-items: center; }
+  .setup-step { margin-top: 8px; } .setup-st { font-size: 13px; }
+  .setup-cmd { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  .setup-cmd code { flex: 1 1 auto; min-width: 0; overflow-x: auto; white-space: pre; padding: 6px 9px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+  .setup-open { border-width: 2px; }
+  .setup-or { margin: 6px 0 0 14px; } .setup-orl { font-size: 12px; font-weight: 600; color: var(--muted); }
   .setup-verify pre { white-space: pre-wrap; font-size: 12px; max-height: 260px; overflow: auto; }
   .todo-cmd { margin-top: 6px; display: flex; gap: 8px; align-items: center; }
   .todo-cmds { margin-top: 8px; }
@@ -533,6 +538,7 @@
   .connect .rc-line pre { flex: 1; min-width: 0; margin: 0; }
   .connect .cx-steps .rc-line { margin-top: 6px; }
   .connect #reconnect.flash { animation: rcflash 2s ease-out; border-radius: 6px; }
+  #updbox.flash, #cx-mactun.flash, #connect.flash { animation: rcflash 2s ease-out; }
   @media (max-width: 760px) {
     .panel { padding: 12px 14px; }
     .connect .cx-ways { grid-template-columns: 1fr; }
@@ -594,9 +600,22 @@
   .tools button[aria-expanded="true"] { border-color: var(--link); }
   .tools .lbl-short { display: none; }
   .head { margin: 0 0 14px; }
+  .head .updbadge { font-size: .5em; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 0; background: var(--amber, #c77700); color: #fff; vertical-align: middle; cursor: pointer; white-space: nowrap; }
+  .tunhint { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .tunhint .th-t { flex: 1 1 260px; min-width: 0; }
+  .tunhint .btn { flex: none; }
+  .conn-mac { margin-top: 10px; color: var(--text); }
+  .conn-mac .rc-line { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 8px; }
+  .conn-mac pre { flex: 1; min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  .connect .tun-steps { padding-left: 20px; margin: 8px 0 0; }
+  .connect .tun-steps li { margin: 8px 0; overflow-wrap: anywhere; }
+  .connect .tun-steps .rc-line { margin: 4px 0; }
   .head .srvname { font-size: .62em; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; opacity: .75; vertical-align: middle; white-space: nowrap; }
   .head .head-t { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .head .head-t h1 { flex: 1 1 auto; min-width: 0; }   /* 좁은 화면 — 서버 이름·새 판 배지가 오른쪽 버튼 밑으로 숨지 않고 줄을 바꿈 */
+  .head .head-t #pauseslot { flex: 0 1 auto; }
   .head h1 { margin: 0; min-width: 0; white-space: nowrap; }
+  .head .head-t h1 { white-space: normal; }   /* 서버 이름·배지는 각자 nowrap — 넘치면 그 덩어리째 다음 줄로 */
   .head .sub { margin: 2px 0 0; word-break: keep-all; }
   .head #pauseslot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
   .head #pauseslot .btn { font-size: 12px; padding: 5px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
@@ -704,7 +723,7 @@
 <button id="totop" type="button"><!--ko-->↑ 맨 위로<!--/ko--><!--en-->↑ Top<!--/en--></button>
 <main>
   <!-- 갱신 시각은 제목 바로 아래 -->
-  <div class="head"><div class="head-t"><h1><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--> <span class="srvname" title="<!--ko-->이 상황판이 도는 서버<!--/ko--><!--en-->The server this board runs on<!--/en-->">__SERVER_NAME__</span></h1><span id="pauseslot"></span></div><div class="sub" id="sub"><!--ko-->불러오는 중…<!--/ko--><!--en-->Loading…<!--/en--></div></div>
+  <div class="head"><div class="head-t"><h1><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--> <span class="srvname" title="<!--ko-->이 상황판이 도는 서버<!--/ko--><!--en-->The server this board runs on<!--/en-->">__SERVER_NAME__</span> <button type="button" id="updbadge" class="updbadge" hidden></button></h1><span id="pauseslot"></span></div><div class="sub" id="sub"><!--ko-->불러오는 중…<!--/ko--><!--en-->Loading…<!--/en--></div></div>
   <div id="err"></div>
   <div id="outbox" hidden></div>
   <div class="tools" id="tools">
@@ -847,7 +866,13 @@
       <li><b>브라우저로 위 주소 열기</b> — 즐겨찾기</li>
       <li><b>아이디 · 비밀번호 · 6자리</b> — 아이폰과 같음</li>
     </ol>
-    <div class="cx-note cx-mactun"><b>맥 — Tailscale 없이 늘 열어 두기(자동 통로)</b>: 맥 터미널에 아래 한 줄을 <b>한 번만</b> 붙여 넣으면, 맥을 켤 때마다 통로가 저절로 열리고 끊겨도 다시 붙어요(1분마다 확인). 그 뒤엔 브라우저에서 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> 즐겨찾기 — 터미널을 따로 열어 둘 필요 없어요. 이미 깐 맥은 다시 안 해도 돼요(다시 해도 안전).<pre class="js-rc">bash scripts/connect-mac.sh myserver <span class="js-port">8800</span></pre></div>
+        <!--tunC--><div class="cx-note cx-mactun" id="cx-mactun"><b>맥 — Tailscale 없이 늘 열어 두기(자동 통로)</b> — 터미널 창(<code>ssh -L …</code>)으로 연 통로는 그 창을 닫으면 상황판도 안 열려요. 아래를 <b>한 번</b> 해 두면 맥을 켤 때마다 통로가 저절로 열리고, 끊겨도 15초 뒤 다시 붙어요. 맥의 <b>터미널</b>(Spotlight 에서 «터미널»)에서 차례로 — 이미 된 단계는 확인 줄만 보고 건너뛰세요.
+      <ol class="tun-steps">
+        <li><b>열쇠</b> — 확인:<pre class="js-rc">ls ~/.ssh/id_ed25519.pub</pre>파일 이름이 나오면 건너뛰기 · <code>No such file</code> 이면 만들기(Enter 세 번):<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
+        <li><b>비밀번호 없이 접속</b> — 확인:<pre class="js-rc">ssh -o BatchMode=yes <span class="js-sshtgt">user@server</span> echo ok</pre><code>ok</code> → 건너뛰기 · <code>Permission denied</code> → 이 맥의 열쇠가 서버에 없음: <code>cat ~/.ssh/id_ed25519.pub</code> 가 보여 주는 한 줄을 서버의 <code>~/.ssh/authorized_keys</code> 끝에 붙이기(열려 있는 서버 창에서, 또는 서버 관리자에게) · 열쇠에 암호를 걸었으면 <code>ssh-add --apple-use-keychain ~/.ssh/id_ed25519</code> · <code>timed out</code> → 맥 인터넷·서버 주소</li>
+        <li><b>별명 <code class="js-alias">myserver</code></b> — 할 것 없음: 다음 줄이 <code>~/.ssh/config</code> 에 없으면 넣어요(원래 파일은 <code>~/.ssh/config.bak-serverboard</code> 로 백업). 서버마다 이름이 달라 다른 서버 상황판과 겹치지 않아요.</li>
+        <li><b>자동 통로 깔기</b> — 먼저 <code>ssh -L</code> 로 연 터미널 창을 닫고(같은 번호를 쥐고 있으면 멈춤), 이 한 줄:<pre class="js-rc js-tuninst"></pre><code>✅ Done</code> 이 나오면 끝 — 브라우저가 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> 를 열어요(즐겨찾기). 터미널을 닫아도, 맥을 다시 켜도 열려요. <code>✋</code> 줄이 나오면 그 줄이 할 일을 알려 줘요. 다시 해도 안전해요.</li>
+      </ol></div><!--/tunC-->
     <p class="cx-note">아이폰 홈 화면 앱은 Safari 와 로그인이 따로예요 — 홈 화면 앱으로 처음 열 때 한 번 더 로그인합니다.</p>
     <div class="cx-fix" id="cx-fix"><b>안 열릴 때</b>
       <ol>
@@ -894,9 +919,9 @@
         <li>열쇠 만들기 — 처음 한 번만. Enter 를 세 번 누르면 됩니다.<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
         <li>공개 열쇠 한 줄을 서버에 등록 — 아래 명령이 보여 주는 한 줄을 서버 <code>~/.ssh/authorized_keys</code> 맨 끝에 붙입니다(서버를 관리하는 사람에게 보내도 됩니다).<pre class="js-rc">cat ~/.ssh/id_ed25519.pub</pre></li>
         <li>접속 설정 — <code>~/.ssh/config</code> 파일(없으면 새로)에 아래 4줄을 붙여 넣습니다. 마지막 줄이 상황판 통로입니다.<pre class="js-rc js-sshcfg"></pre></li>
-        <li>접속 — 이 창을 켜 둔 동안 통로가 열려 있습니다.<pre class="js-rc">ssh myserver</pre></li>
+        <li>접속 — 이 창을 켜 둔 동안 통로가 열려 있습니다.<pre class="js-rc">ssh <span class="js-alias">myserver</span></pre></li>
         <li>브라우저에서 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> → 즐겨찾기.</li>
-        <li class="cx-note">창을 닫으면 상황판도 닫힙니다. 맥을 켤 때마다 저절로 열리게 하려면 <a class="js-docs" target="_blank" rel="noopener">설치 안내</a>의 «항상 켜진 통로». 끊기면 아래 «연결이 끊겼을 때».</li>
+        <li class="cx-note">창을 닫으면 상황판도 닫힙니다. 맥을 켤 때마다 저절로 열리게 하려면 위 «맥 — 늘 열어 두기(자동 통로)». 끊기면 아래 «연결이 끊겼을 때».</li>
       </ol>
       <!-- SSH 통로 · 윈도우 -->
       <ol class="cx-steps" data-for="ssh-win">
@@ -904,7 +929,7 @@
         <li>열쇠 만들기 — 처음 한 번만. Enter 를 세 번.<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
         <li>공개 열쇠 한 줄을 서버에 등록 — 아래 명령이 보여 주는 한 줄을 서버 <code>~/.ssh/authorized_keys</code> 맨 끝에 붙입니다(서버 관리자에게 보내도 됩니다).<pre class="js-rc">type $env:USERPROFILE\.ssh\id_ed25519.pub</pre></li>
         <li>접속 설정 — 메모장으로 <code>C:\Users\&lt;내 이름&gt;\.ssh\config</code> 를 만들고(확장자 없음 — 저장할 때 «모든 파일») 아래 4줄을 붙여 넣습니다.<pre class="js-rc js-sshcfg"></pre></li>
-        <li>통로 열기 — 이 창을 켜 둔 동안 열려 있습니다(아무것도 안 나오는 것이 정상).<pre class="js-rc">ssh -N myserver</pre></li>
+        <li>통로 열기 — 이 창을 켜 둔 동안 열려 있습니다(아무것도 안 나오는 것이 정상).<pre class="js-rc">ssh -N <span class="js-alias">myserver</span></pre></li>
         <li>브라우저에서 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> → 즐겨찾기.</li>
       </ol>
       <!-- SSH 통로 · 휴대폰 (Termius) -->
@@ -945,16 +970,16 @@
           <li><b>Tailscale</b> — 그 기기의 Tailscale 앱이 켜져 있고(Connected) 서버와 <b>같은 계정</b>인지 → 상황판 새로 고침. 앱 기기 목록에 이 서버가 안 보이면 계정이 다른 것입니다.</li>
           <li><b>맥 — 한 번에 진단</b>(어느 길이든) 맥 터미널에 통째로 붙여 넣으면 ①~⑥ 이 나옵니다. 읽는 법:<pre class="js-rc">echo "① 상황판 응답(200=됨 · 000=안 됨): $(curl -s -m 3 -o /dev/null -w '%{http_code}' http://localhost:<span class="js-port">8800</span>/api/ping)"
 echo "② <span class="js-port">8800</span> 번을 쥔 프로그램(비면 통로 없음):"; lsof -nP -iTCP:<span class="js-port">8800</span> -sTCP:LISTEN | tail -n +2
-echo "③ 자동 통로:"; launchctl print gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel.myserver</span> 2&gt;&amp;1 | grep -E 'state =|last exit code|Could not find' | head -3
+echo "③ 자동 통로:"; launchctl print gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel</span> 2&gt;&amp;1 | grep -E 'state =|last exit code|Could not find' | head -3
 echo "④ 열쇠 접속:"; ssh -o BatchMode=yes -o ConnectTimeout=8 <span class="js-userhost">user@server</span> echo 됨 2&gt;&amp;1 | tail -1
-echo "⑤ 통로 기록:"; tail -6 ~/Library/Logs/serverboard-tunnel-myserver.log 2&gt;&amp;1
-echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale status 2&gt;&amp;1 | head -2</pre><div class="rc-step">① <code>200</code> → 연결돼 있음: 주소창이 정확히 <code>http://localhost:<span class="js-port">8800</span></code>(https 아님)인지 보고 새로 고침.</div><div class="rc-step">② 비어 있음 → 이 맥에 통로가 아예 없음(③·④ 로) · <code>ssh</code> 가 있는데 ① 이 <code>000</code> → 멈춘 통로: 그 터미널 창을 닫거나 아래 «자동 통로» ②.</div><div class="rc-step">③ <code>Could not find service</code> → <b>이 맥에는 자동 통로가 안 깔려 있음</b> — 아래 «자동 통로» 명령은 이 맥에서 안 먹습니다. ④ 가 «됨» 이면 <code>bash scripts/connect-mac.sh myserver <span class="js-port">8800</span></code> 한 번으로 깔고, 아니면 Tailscale 로(맨 아래). <code>last exit code = 255</code> → 통로가 계속 실패 중 — ④·⑤ 가 까닭.</div><div class="rc-step">④ <code>됨</code> → 열쇠 접속 정상 · <code>Permission denied (publickey)</code> → <b>이 맥의 열쇠가 서버에 등록돼 있지 않음</b>(이 서버는 비밀번호 접속이 꺼져 있음 — 다른 컴퓨터에서 연 서버 창으로 이 맥의 <code>cat ~/.ssh/id_ed25519.pub</code> 한 줄을 <code>~/.ssh/authorized_keys</code> 끝에 붙여야 함) · <code>timed out</code>·<code>Could not resolve</code> → 맥 인터넷.</div><div class="rc-step">⑥ <code>no such file</code> → 이 맥에 Tailscale 앱이 없음 · <code>Logged out</code>·<code>stopped</code> → 앱을 켜고 서버와 같은 계정으로 로그인. Tailscale 이면 주소는 <code>localhost</code> 가 아니라 <code>https://…ts.net</code>.</div></li>
-          <li><b>맥 — 자동 통로</b>(<code>scripts/connect-mac.sh</code> 로 깐 경우) 맥 터미널에서 차례로:
+echo "⑤ 통로 기록:"; tail -6 <span class="js-tunlog">~/Library/Logs/serverboard-tunnel.log</span> 2&gt;&amp;1
+echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale status 2&gt;&amp;1 | head -2</pre><div class="rc-step">① <code>200</code> → 연결돼 있음: 주소창이 정확히 <code>http://localhost:<span class="js-port">8800</span></code>(https 아님)인지 보고 새로 고침.</div><div class="rc-step">② 비어 있음 → 이 맥에 통로가 아예 없음(③·④ 로) · <code>ssh</code> 가 있는데 ① 이 <code>000</code> → 멈춘 통로: 그 터미널 창을 닫거나 아래 «자동 통로» ②.</div><div class="rc-step">③ <code>Could not find service</code> → <b>이 맥에는 자동 통로가 안 깔려 있음</b> — 아래 «자동 통로» 명령은 이 맥에서 안 먹습니다. ④ 가 «됨» 이면 위 «맥 — 늘 열어 두기(자동 통로)» 칸 순서로 깔고, 아니면 Tailscale 로(맨 아래). <code>last exit code = 255</code> → 통로가 계속 실패 중 — ④·⑤ 가 까닭.</div><div class="rc-step">④ <code>됨</code> → 열쇠 접속 정상 · <code>Permission denied (publickey)</code> → <b>이 맥의 열쇠가 서버에 등록돼 있지 않음</b>(이 서버는 비밀번호 접속이 꺼져 있음 — 다른 컴퓨터에서 연 서버 창으로 이 맥의 <code>cat ~/.ssh/id_ed25519.pub</code> 한 줄을 <code>~/.ssh/authorized_keys</code> 끝에 붙여야 함) · <code>timed out</code>·<code>Could not resolve</code> → 맥 인터넷.</div><div class="rc-step">⑥ <code>no such file</code> → 이 맥에 Tailscale 앱이 없음 · <code>Logged out</code>·<code>stopped</code> → 앱을 켜고 서버와 같은 계정으로 로그인. Tailscale 이면 주소는 <code>localhost</code> 가 아니라 <code>https://…ts.net</code>.</div></li>
+          <li><b>맥 — 자동 통로</b>(깐 경우) 맥 터미널에서 차례로:
             <div class="rc-step">① 연결 확인 — <code>200</code> 이면 연결됨(상황판 새로 고침만), <code>000</code> 이면 끊김<pre class="js-rc">curl -s -m 3 -o /dev/null -w '%{http_code}\n' http://localhost:<span class="js-port">8800</span>/api/ping</pre></div>
-            <div class="rc-step">② 통로 다시 켜기 — 5초 뒤 ① 을 다시<pre class="js-rc">launchctl kickstart -k gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel.myserver</span></pre></div>
-            <div class="rc-step">③ 그래도 <code>000</code> 이면 원인 보기 — <code>Address already in use</code> = 다른 터미널 창의 <code>ssh</code> 가 같은 번호를 쓰는 중(그 창을 닫고 ②) · <code>Permission denied</code> = 열쇠 접속이 안 됨(열쇠에 암호가 걸렸거나 서버에서 빠짐) · <code>Could not resolve</code>·<code>timed out</code> = 맥 인터넷·와이파이 · <code>Broken pipe</code>·<code>Timeout, server … not responding</code> = 길이 끊김(맥 잠자기·와이파이) — 15초 뒤 저절로 다시 붙음 · <code>Network is unreachable</code>·<code>Can't assign requested address</code> = 그 순간 맥에 인터넷이 없었음(잠자기·와이파이 끊김). 새 설정의 맥은 «통로 시작» 줄에 시각이 붙어 언제 끊겼는지 보입니다<pre class="js-rc">tail -10 ~/Library/Logs/serverboard-tunnel-myserver.log</pre></div>
-            맥이 잠자기에서 깨거나 와이파이가 바뀐 뒤 통로가 «살아 있는 척» 멈춰 있는 경우가 많습니다 — ② 로 풀립니다. 자동 통로를 (다시) 깔기 — 서버에서 받은 이 저장소 폴더에서, 맥 터미널로:<pre class="js-rc">bash scripts/connect-mac.sh myserver <span class="js-port">8800</span></pre>통로는 상황판이 있는 이 서버 주소로만 엽니다 — 다른 서버(예: 운영서버) 주소로 바꾸면 상황판이 없어 열리지 않습니다.</li>
-          <li><b>맥·리눅스 — 터미널로 연 통로</b>(<code>ssh myserver</code>) — 그 창이 닫혔거나 멈췄으면 창을 닫고 다시 <code>ssh myserver</code>. <b>윈도우</b> — <code>ssh -N myserver</code> 창을 다시 켭니다.</li>
+            <div class="rc-step">② 통로 다시 켜기 — 5초 뒤 ① 을 다시<pre class="js-rc">launchctl kickstart -k gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel</span></pre></div>
+            <div class="rc-step">③ 그래도 <code>000</code> 이면 원인 보기 — <code>Address already in use</code> = 다른 터미널 창의 <code>ssh</code> 가 같은 번호를 쓰는 중(그 창을 닫고 ②) · <code>Permission denied</code> = 열쇠 접속이 안 됨(열쇠에 암호가 걸렸거나 서버에서 빠짐) · <code>Could not resolve</code>·<code>timed out</code> = 맥 인터넷·와이파이 · <code>Broken pipe</code>·<code>Timeout, server … not responding</code> = 길이 끊김(맥 잠자기·와이파이) — 15초 뒤 저절로 다시 붙음 · <code>Network is unreachable</code>·<code>Can't assign requested address</code> = 그 순간 맥에 인터넷이 없었음(잠자기·와이파이 끊김). 새 설정의 맥은 «통로 시작» 줄에 시각이 붙어 언제 끊겼는지 보입니다<pre class="js-rc">tail -10 <span class="js-tunlog">~/Library/Logs/serverboard-tunnel.log</span></pre></div>
+            맥이 잠자기에서 깨거나 와이파이가 바뀐 뒤 통로가 «살아 있는 척» 멈춰 있는 경우가 많습니다 — ② 로 풀립니다. <!--tunC-->다시 깔아도 안전해요 — 위 «늘 열어 두기» 칸 ④ 한 줄.<!--/tunC--> 통로는 상황판이 있는 이 서버 주소로만 엽니다 — 다른 서버(예: 운영서버) 주소로 바꾸면 상황판이 없어 열리지 않습니다.</li>
+          <li><b>맥·리눅스 — 터미널로 연 통로</b>(<code>ssh <span class="js-alias">myserver</span></code>) — 그 창이 닫혔거나 멈췄으면 창을 닫고 다시 <code>ssh <span class="js-alias">myserver</span></code>. <b>윈도우</b> — <code>ssh -N <span class="js-alias">myserver</span></code> 창을 다시 켭니다.</li>
           <li><b>휴대폰 — Termius</b> — Termius 를 열어 통로(Port Forwarding)를 다시 켭니다. 뒤로 보내면 곧 끊기니 휴대폰은 Tailscale 이 낫습니다.</li>
           <li><b>자주 끊기면</b> — 그 기기에도 Tailscale 앱을 깔고 같은 계정으로 로그인 → <span class="js-ts" hidden><a class="js-tsurl" target="_blank" rel="noopener"></a> 를 즐겨찾기.</span><span class="js-nots">이 서버의 <code>https://…ts.net</code> 주소를 즐겨찾기.</span> 통로를 신경 쓸 일이 없어집니다.</li>
           <li><b>그래도 안 되면</b> — 위 명령 결과를 그대로 복사해 서버 작업방(Server)에 붙여 주세요.</li>
@@ -982,7 +1007,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       <li><b>Open the address above in a browser</b> — bookmark it</li>
       <li><b>ID · password · 6 digits</b> — same as iPhone</li>
     </ol>
-    <div class="cx-note cx-mactun"><b>Mac — always open without Tailscale (automatic tunnel)</b>: paste the line below into a Mac terminal <b>once</b>; from then on the tunnel opens by itself whenever the Mac starts and reconnects if it drops (checked every minute). Then just bookmark <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> — no terminal window needs to stay open. Already installed? No need to run it again (safe if you do).<pre class="js-rc">bash scripts/connect-mac.sh myserver <span class="js-port">8800</span></pre></div>
+        <!--tunC--><div class="cx-note cx-mactun" id="cx-mactun"><b>Mac — always open without Tailscale (automatic tunnel)</b> — a tunnel opened in a terminal window (<code>ssh -L …</code>) closes the board when that window closes. Do the steps below <b>once</b> and the tunnel opens by itself whenever the Mac starts, and reconnects 15 s after a drop. In the Mac's <b>Terminal</b> (Spotlight → «Terminal»), in order — skip a step when its check already passes.
+      <ol class="tun-steps">
+        <li><b>Key</b> — check:<pre class="js-rc">ls ~/.ssh/id_ed25519.pub</pre>A file name → skip · <code>No such file</code> → make one (Enter three times):<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
+        <li><b>Login without a password</b> — check:<pre class="js-rc">ssh -o BatchMode=yes <span class="js-sshtgt">user@server</span> echo ok</pre><code>ok</code> → skip · <code>Permission denied</code> → this Mac's key is not on the server: append the line <code>cat ~/.ssh/id_ed25519.pub</code> prints to the server's <code>~/.ssh/authorized_keys</code> (from an open server window, or ask the server admin) · key has a passphrase → <code>ssh-add --apple-use-keychain ~/.ssh/id_ed25519</code> · <code>timed out</code> → the Mac's internet or the server address</li>
+        <li><b>Alias <code class="js-alias">myserver</code></b> — nothing to do: the next line adds it to <code>~/.ssh/config</code> if missing (the old file is backed up as <code>~/.ssh/config.bak-serverboard</code>). Each server gets its own name, so boards don't collide.</li>
+        <li><b>Install the automatic tunnel</b> — first close the terminal window you opened with <code>ssh -L</code> (it holds the same port), then this one line:<pre class="js-rc js-tuninst"></pre><code>✅ Done</code> means finished — the browser opens <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> (bookmark it). It stays open after closing Terminal and after a reboot. A <code>✋</code> line says what to do. Safe to run again.</li>
+      </ol></div><!--/tunC-->
     <p class="cx-note">The iPhone home-screen app keeps its own sign-in, separate from Safari — sign in once more the first time you open it from the home screen.</p>
     <div class="cx-fix" id="cx-fix"><b>If it won't open</b>
       <ol>
@@ -1028,16 +1059,16 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         <li>Make a key — once. Press Enter three times.<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
         <li>Register the public key on the server — add the one line this prints to the end of <code>~/.ssh/authorized_keys</code> on the server (or send it to whoever runs the server).<pre class="js-rc">cat ~/.ssh/id_ed25519.pub</pre></li>
         <li>Connection settings — paste these 4 lines into <code>~/.ssh/config</code> (create it if missing). The last line is the board tunnel.<pre class="js-rc js-sshcfg"></pre></li>
-        <li>Connect — the tunnel is open while this window stays open.<pre class="js-rc">ssh myserver</pre></li>
+        <li>Connect — the tunnel is open while this window stays open.<pre class="js-rc">ssh <span class="js-alias">myserver</span></pre></li>
         <li>In the browser open <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> → bookmark it.</li>
-        <li class="cx-note">Closing the window closes the board too. To open it automatically whenever the Mac starts, see «always-on tunnel» in the <a class="js-docs" target="_blank" rel="noopener">install guide</a>. If it drops, see «When the connection drops» below.</li>
+        <li class="cx-note">Closing the window closes the board too. To open it automatically whenever the Mac starts, see «Mac — always open (automatic tunnel)» above. If it drops, see «When the connection drops» below.</li>
       </ol>
       <ol class="cx-steps" data-for="ssh-win">
         <li>Open <b>PowerShell</b> (Start menu → «PowerShell»). Windows 10 · 11 include SSH.</li>
         <li>Make a key — once. Press Enter three times.<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
         <li>Register the public key on the server — add the one line this prints to the end of <code>~/.ssh/authorized_keys</code> on the server (or send it to whoever runs the server).<pre class="js-rc">type $env:USERPROFILE\.ssh\id_ed25519.pub</pre></li>
         <li>Connection settings — in Notepad create <code>C:\Users\&lt;you&gt;\.ssh\config</code> (no extension — save as «All files») with these 4 lines.<pre class="js-rc js-sshcfg"></pre></li>
-        <li>Open the tunnel — open while this window stays open (no output is normal).<pre class="js-rc">ssh -N myserver</pre></li>
+        <li>Open the tunnel — open while this window stays open (no output is normal).<pre class="js-rc">ssh -N <span class="js-alias">myserver</span></pre></li>
         <li>In the browser open <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> → bookmark it.</li>
       </ol>
       <ol class="cx-steps" data-for="ssh-ios ssh-android">
@@ -1076,16 +1107,16 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           <li><b>Tailscale</b> — check the Tailscale app on that device is on (Connected) and on the <b>same account</b> as the server → reload the board. If this server isn't in the app's device list, it's a different account.</li>
           <li><b>Mac — one-shot check</b> (either way) paste the whole block into a Mac terminal; it prints ①–⑥. How to read it:<pre class="js-rc">echo "① Board answer (200=ok · 000=no): $(curl -s -m 3 -o /dev/null -w '%{http_code}' http://localhost:<span class="js-port">8800</span>/api/ping)"
 echo "② <span class="js-port">8800</span> port held by (empty = no tunnel):"; lsof -nP -iTCP:<span class="js-port">8800</span> -sTCP:LISTEN | tail -n +2
-echo "③ Automatic tunnel:"; launchctl print gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel.myserver</span> 2&gt;&amp;1 | grep -E 'state =|last exit code|Could not find' | head -3
+echo "③ Automatic tunnel:"; launchctl print gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel</span> 2&gt;&amp;1 | grep -E 'state =|last exit code|Could not find' | head -3
 echo "④ Key login:"; ssh -o BatchMode=yes -o ConnectTimeout=8 <span class="js-userhost">user@server</span> echo ok 2&gt;&amp;1 | tail -1
-echo "⑤ Tunnel log:"; tail -6 ~/Library/Logs/serverboard-tunnel-myserver.log 2&gt;&amp;1
-echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale status 2&gt;&amp;1 | head -2</pre><div class="rc-step">① <code>200</code> → connected: make sure the address bar is exactly <code>http://localhost:<span class="js-port">8800</span></code> (not https) and reload.</div><div class="rc-step">② empty → no tunnel on this Mac at all (see ③ ④) · <code>ssh</code> listed but ① is <code>000</code> → stuck tunnel: close that terminal window or use «automatic tunnel» ② below.</div><div class="rc-step">③ <code>Could not find service</code> → <b>the automatic tunnel is not installed on this Mac</b> — the «automatic tunnel» commands below do nothing here. If ④ says «ok», install it once with <code>bash scripts/connect-mac.sh myserver <span class="js-port">8800</span></code>; otherwise use Tailscale (last item). <code>last exit code = 255</code> → the tunnel keeps failing — ④ ⑤ say why.</div><div class="rc-step">④ <code>ok</code> → key login works · <code>Permission denied (publickey)</code> → <b>this Mac's key is not registered on the server</b> (password login is off — from a server window opened on another computer, append this Mac's <code>cat ~/.ssh/id_ed25519.pub</code> line to <code>~/.ssh/authorized_keys</code>) · <code>timed out</code> / <code>Could not resolve</code> → the Mac's internet.</div><div class="rc-step">⑥ <code>no such file</code> → no Tailscale app on this Mac · <code>Logged out</code> / <code>stopped</code> → turn the app on and log in with the server's account. With Tailscale the address is <code>https://…ts.net</code>, not <code>localhost</code>.</div></li>
-          <li><b>Mac — automatic tunnel</b> (installed with <code>scripts/connect-mac.sh</code>) in a Mac terminal, in order:
+echo "⑤ Tunnel log:"; tail -6 <span class="js-tunlog">~/Library/Logs/serverboard-tunnel.log</span> 2&gt;&amp;1
+echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale status 2&gt;&amp;1 | head -2</pre><div class="rc-step">① <code>200</code> → connected: make sure the address bar is exactly <code>http://localhost:<span class="js-port">8800</span></code> (not https) and reload.</div><div class="rc-step">② empty → no tunnel on this Mac at all (see ③ ④) · <code>ssh</code> listed but ① is <code>000</code> → stuck tunnel: close that terminal window or use «automatic tunnel» ② below.</div><div class="rc-step">③ <code>Could not find service</code> → <b>the automatic tunnel is not installed on this Mac</b> — the «automatic tunnel» commands below do nothing here. If ④ says «ok», install it with the «Mac — always open (automatic tunnel)» box above; otherwise use Tailscale (last item). <code>last exit code = 255</code> → the tunnel keeps failing — ④ ⑤ say why.</div><div class="rc-step">④ <code>ok</code> → key login works · <code>Permission denied (publickey)</code> → <b>this Mac's key is not registered on the server</b> (password login is off — from a server window opened on another computer, append this Mac's <code>cat ~/.ssh/id_ed25519.pub</code> line to <code>~/.ssh/authorized_keys</code>) · <code>timed out</code> / <code>Could not resolve</code> → the Mac's internet.</div><div class="rc-step">⑥ <code>no such file</code> → no Tailscale app on this Mac · <code>Logged out</code> / <code>stopped</code> → turn the app on and log in with the server's account. With Tailscale the address is <code>https://…ts.net</code>, not <code>localhost</code>.</div></li>
+          <li><b>Mac — automatic tunnel</b> (if installed) in a Mac terminal, in order:
             <div class="rc-step">① Check — <code>200</code> = connected (just reload the board), <code>000</code> = dropped<pre class="js-rc">curl -s -m 3 -o /dev/null -w '%{http_code}\n' http://localhost:<span class="js-port">8800</span>/api/ping</pre></div>
-            <div class="rc-step">② Restart the tunnel — run ① again after 5 seconds<pre class="js-rc">launchctl kickstart -k gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel.myserver</span></pre></div>
-            <div class="rc-step">③ Still <code>000</code>? See why — <code>Address already in use</code> = an <code>ssh</code> in another terminal window holds the same port (close it, then ②) · <code>Permission denied</code> = key login fails (key has a passphrase or was removed on the server) · <code>Could not resolve</code> / <code>timed out</code> = the Mac's internet / Wi-Fi · <code>Broken pipe</code> / <code>Timeout, server … not responding</code> = the link dropped (Mac sleep, Wi-Fi) — it reconnects by itself 15 s later · <code>Network is unreachable</code> / <code>Can't assign requested address</code> = the Mac had no internet at that moment (sleep, Wi-Fi off). With the new setup each «tunnel start» line carries a time, so you can see when it dropped<pre class="js-rc">tail -10 ~/Library/Logs/serverboard-tunnel-myserver.log</pre></div>
-            After the Mac wakes from sleep or changes Wi-Fi, the tunnel often «looks alive» but is stuck — ② clears it. To (re)install the automatic tunnel — in this repository folder on the Mac, in a Mac terminal:<pre class="js-rc">bash scripts/connect-mac.sh myserver <span class="js-port">8800</span></pre>Point the tunnel only at this server (where the board runs) — another server's address (e.g. production) has no board and will not open.</li>
-          <li><b>Mac · Linux — tunnel opened in a terminal</b> (<code>ssh myserver</code>) — if that window closed or froze, close it and run <code>ssh myserver</code> again. <b>Windows</b> — open the <code>ssh -N myserver</code> window again.</li>
+            <div class="rc-step">② Restart the tunnel — run ① again after 5 seconds<pre class="js-rc">launchctl kickstart -k gui/$(id -u)/<span class="js-tunlabel">com.serverboard.tunnel</span></pre></div>
+            <div class="rc-step">③ Still <code>000</code>? See why — <code>Address already in use</code> = an <code>ssh</code> in another terminal window holds the same port (close it, then ②) · <code>Permission denied</code> = key login fails (key has a passphrase or was removed on the server) · <code>Could not resolve</code> / <code>timed out</code> = the Mac's internet / Wi-Fi · <code>Broken pipe</code> / <code>Timeout, server … not responding</code> = the link dropped (Mac sleep, Wi-Fi) — it reconnects by itself 15 s later · <code>Network is unreachable</code> / <code>Can't assign requested address</code> = the Mac had no internet at that moment (sleep, Wi-Fi off). With the new setup each «tunnel start» line carries a time, so you can see when it dropped<pre class="js-rc">tail -10 <span class="js-tunlog">~/Library/Logs/serverboard-tunnel.log</span></pre></div>
+            After the Mac wakes from sleep or changes Wi-Fi, the tunnel often «looks alive» but is stuck — ② clears it. <!--tunC-->Re-installing is safe — step ④ of the «always open» box above.<!--/tunC--> Point the tunnel only at this server (where the board runs) — another server's address (e.g. production) has no board and will not open.</li>
+          <li><b>Mac · Linux — tunnel opened in a terminal</b> (<code>ssh <span class="js-alias">myserver</span></code>) — if that window closed or froze, close it and run <code>ssh <span class="js-alias">myserver</span></code> again. <b>Windows</b> — open the <code>ssh -N myserver</code> window again.</li>
           <li><b>Phone — Termius</b> — open Termius and turn the tunnel (Port Forwarding) back on. It drops soon after going to the background, so Tailscale is better on phones.</li>
           <li><b>If it drops often</b> — install the Tailscale app on that device too and log in with the same account → <span class="js-ts" hidden>bookmark <a class="js-tsurl" target="_blank" rel="noopener"></a>.</span><span class="js-nots">bookmark this server's <code>https://…ts.net</code> address.</span> No more tunnels to look after.</li>
           <li><b>Still not working?</b> — copy the output of the commands above and paste it into the server session (Server).</li>
@@ -1944,6 +1975,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   //   작업방은 전부 이 서버에서 돈다 — 운영서버 접속은 필요 없다. 접속 명령은 board/config.json «devSsh» (상황판 서버가 채워 보냄)
   var DEV_SSH = '__DEV_SSH__';
   var DOCS_URL = '__DOCS_URL__';
+  // 맥 자동 통로 — 서버가 정함: connect = 공개판 scripts/connect-mac.sh · legacy = 원본 서버의 옛 스크립트 · 이름·명령은 아래 «다른 기기에서 열기» 칸 채우기에서
+  var MAC_TUN = '__MAC_TUN__', BOARD_PORT = '__BOARD_PORT__';
+  var TUN = { alias: 'myserver', label: '', log: '', install: '', diag: '' };
   var termOpen = {};   // 펼친 «터미널에서 이 방 열기» — 다시 그려도 유지
   // AI 연결 한 마디 — «서버 상태» 칸 «AI 연결» 에 (claude auth status: 방식·요금제만)
   function aiText(ai) {
@@ -3466,6 +3500,58 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   //   쓰는 중엔 화면을 다시 그리지 않으니(typing) 붙여 넣은 코드는 그대로 남는다
   var aiLoginHow = 'claudeai';
   var aiLoginMsg = '', aiOkAt = 0;   // 마지막 «연결» 결과 — 칸 안에 그대로 남긴다(알림창은 곧 사라짐) · 연결된 뒤 1분은 초록 «연결됨» 칸
+  // ── SSH 통로 안내 — 터미널 창(ssh -L)으로 연 통로는 창을 닫으면 끝. 자동 통로가 깔린 맥인지는 서버가 모름 →
+  //   자동 통로 스크립트가 끝에 이 맥 브라우저로 «#autotunnel=<별명>» 을 열어 이 기기에 표시를 남긴다 · 표시 없는 통로 기기에만 권함
+  //   «그만 보기» 뒤에도 이 기기에서 1분 넘는 끊김이 7일에 2번 이상이면 다시 권함
+  var IS_MAC = /Mac/.test(navigator.platform || '') && !(navigator.maxTouchPoints > 1);
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} }
+  (function () {
+    var hm = /^#autotunnel=([\w.-]{1,64})$/.exec(location.hash || '');
+    if (!hm) return;
+    lsSet('board.autoTunnel', hm[1]); lsSet('board.justSetup', null);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (_) {}
+    setTimeout(function () { toast(K('✓ 이 맥은 자동 통로로 늘 열려요 — 이 주소를 즐겨찾기 해 두세요', '✓ This Mac now keeps the board open (automatic tunnel) — bookmark this address'), 6000); }, 800);
+  })();
+  function recentDrops(since) {
+    var a = []; try { a = JSON.parse(lsGet('board.drops') || '[]'); } catch (_) {}
+    var lim = Math.max(since || 0, Date.now() - 7 * 86400000);
+    return a.filter(function (t) { return t > lim; }).length;
+  }
+  function noteDrop() {
+    var a = []; try { a = JSON.parse(lsGet('board.drops') || '[]'); } catch (_) {}
+    a.push(Date.now()); lsSet('board.drops', JSON.stringify(a.filter(function (t) { return t > Date.now() - 14 * 86400000; }).slice(-20)));
+  }
+  function openTun(where) {
+    togglePanel('t-connect', true);
+    var t = document.getElementById(where === 'ts' ? 'cx-title' : 'cx-mactun') || document.getElementById('connect');
+    if (where === 'ts') { var cp = document.getElementById('connect'); if (cp) t = cp; }
+    setTimeout(function () { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); }, 50);
+  }
+  function tunHintBox(me) {
+    if (!me || me.via !== 'tunnel' || !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return null;
+    if (lsGet('board.autoTunnel')) return null;
+    var js = Number(lsGet('board.justSetup') || 0), big = js && Date.now() - js < 86400000;
+    var off = Number(lsGet('board.tunHintOff') || 0), drops = recentDrops(off);
+    if (!big && off && drops < 2) return null;
+    var box = el('div', 'todo tunhint'); box.style.cssText = 'margin:10px 0 0;padding:10px 12px;border-radius:8px;';
+    box.big = !!big;
+    var msg = big ? K('처음 설정 끝 — 지금은 이 SSH 통로(터미널 창)가 열려 있는 동안만 상황판이 보여요. 창을 닫으면 안 열려요.', 'First setup done — right now the board shows only while this SSH tunnel (terminal window) stays open. Close it and the board won\'t open.')
+      : off ? K('이 기기에서 연결이 자주 끊겨요(7일 ' + drops + '번) — 터미널 창으로 연 통로라 창이 닫히거나 맥이 잠들면 끊겨요.', 'This device drops often (' + drops + '× in 7 days) — a tunnel opened in a terminal window ends when the window closes or the Mac sleeps.')
+      : K('이 기기는 SSH 통로(터미널 창)가 열려 있는 동안만 상황판이 보여요.', 'This device shows the board only while the SSH tunnel (terminal window) stays open.');
+    var t = el('div', 'th-t'); t.appendChild(el(big ? 'b' : 'span', null, msg)); box.appendChild(t);
+    var b1;
+    if (IS_MAC) {
+      b1 = el('button', 'btn primary', K('맥 — 늘 열어 두기(자동 통로)', 'Mac — keep it open (automatic tunnel)'));
+      b1.type = 'button'; b1.onclick = function () { openTun('mac'); }; box.appendChild(b1);
+    }
+    var b2 = el('button', 'btn' + (IS_MAC ? '' : ' primary'), K(IS_MAC ? '휴대폰도 보려면 Tailscale' : '늘 열어 두기 — Tailscale', IS_MAC ? 'Phone too? Tailscale' : 'Keep it open — Tailscale'));
+    b2.type = 'button'; b2.onclick = function () { openTun('ts'); }; box.appendChild(b2);
+    var x = el('button', 'btn', big ? K('나중에', 'Later') : K('✕ 그만 보기', '✕ Hide'));
+    x.type = 'button'; x.onclick = function () { lsSet('board.tunHintOff', String(Date.now())); lsSet('board.justSetup', null); box.remove(); };
+    box.appendChild(x);
+    return box;
+  }
   var UPD_WHY = {
     dirty: K('이 서버에서 상황판 파일을 직접 고친 것이 있어 덮어쓰지 않았어요', 'Board files were edited on this server, so nothing was overwritten'),
     diverged: K('이 서버의 상황판 이력이 공개판과 갈라졌어요', 'This board\'s history has diverged from the public one'),
@@ -4445,14 +4531,43 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var box = live.cloneNode(false);
     var s = data.setup;
     if (s && (!s.done || setupShow)) {
-      var wrap = el('div', 'mine-box setup-box');
+      var wrap = el('div', 'mine-box setup-box'), ul0 = null;
       var req = (s.items || []).filter(function (x) { return x.need; });
       var nOk = req.filter(function (x) { return x.ok === true; }).length;
       wrap.appendChild(el('div', '', s.done ? K('처음 설정 — 끝남', 'First setup — finished') : (EN ? 'First setup — ' + nOk + ' of ' + req.length + ' required steps done' : '처음 설정 — 꼭 필요한 ' + req.length + '개 중 ' + nOk + '개 됨')));
+      var todoItems = (s.items || []).filter(function (x) { return x.ok !== true; });
       wrap.appendChild(el('div', 'mine-sub', (s.installer && s.installer.at ? K('install.sh 로 설치 ', 'Installed by install.sh ') + fmt(Date.parse(s.installer.at)) + ' · ' : '') +
-        K('서버가 1분마다 확인합니다. 아래 명령은 서버 창(SSH 로 접속한 터미널)에서 실행하세요 — 비밀번호·브라우저 로그인이 필요해 상황판에서는 실행하지 않습니다.', 'The server re-checks every minute. Run the commands below in a server window (your SSH terminal) — they need a password or a browser login, so the board never runs them.')));
+        (todoItems.length ? K('할 일: 아래 번호 순서대로 «복사» → 서버 창에 붙여 넣기(맥 ⌘V · 윈도우 우클릭) → Enter. 다 했으면 맨 아래 «↻ 다시 확인».', 'What to do: in the numbered order below, «Copy» → paste into the server window (Mac ⌘V · Windows right-click) → Enter. When done, press «↻ Recheck» at the bottom.')
+          : K('다 됐어요.', 'All done.'))));
       if (s.checking) wrap.appendChild(el('div', 'mine-sub', K('확인 중…', 'Checking…')));
+      // 붙여 넣을 줄 하나 — 글자는 한 줄 그대로(가로로 밀어 봄), 복사는 통째로
+      var cmdLine = function (c) {
+        var ln = el('div', 'todo-cmd setup-cmd'); var cd = el('code', null, c); ln.appendChild(cd);
+        var cb = copyBtn(K('복사', 'Copy'), c); cb.style.flex = 'none'; ln.appendChild(cb); return ln;
+      };
+      var stepN = 0;
+      var stepRow = function (parent, t, cmd, or) {
+        var r = el('div', 'setup-step'); r.appendChild(el('div', 'setup-st', (++stepN) + '. ' + t));
+        if (cmd) r.appendChild(cmdLine(cmd));
+        // 고르는 줄(둘 중 하나) — 번호를 따로 매기지 않고 이름표를 붙인다
+        (or || []).forEach(function (o) { var ow = el('div', 'setup-or'); ow.appendChild(el('span', 'setup-orl', o.t)); ow.appendChild(cmdLine(o.cmd)); r.appendChild(ow); });
+        parent.appendChild(r);
+      };
+      // 0) 서버 창 열기 — 이 서버 주소가 든 ssh 한 줄
+      if (todoItems.some(function (x) { return (x.steps || x.cmds || []).length; })) {
+        var so = el('div', 'setup-item bad setup-open');
+        var soh = el('div', 'setup-h'); soh.appendChild(el('span', 'setup-ic', '▶')); soh.appendChild(el('b', '', K('먼저 — 서버 창 열기', 'First — open a server window'))); so.appendChild(soh);
+        stepRow(so, K('맥은 «터미널» 앱, 윈도우는 «PowerShell» 을 열고 이 줄을 붙여 넣고 Enter. 처음이면 «yes» 치고 Enter · 비밀번호를 물으면 이 서버 계정 비밀번호. 이미 서버 창이 열려 있으면 건너뛰기',
+          'Open «Terminal» on a Mac or «PowerShell» on Windows, paste this line and press Enter. The first time, type «yes» and Enter · if asked for a password, use this server account\'s password. Skip if a server window is already open'),
+          s.ssh || '');
+        if (s.ssh && s.sshPrivate) so.appendChild(el('div', 'setup-why', K('△ 이 주소는 사설 주소예요 — 클라우드 서버라 밖에서 안 닿으면 늘 서버에 들어가던 그 명령(공인 주소·접속 도구)을 쓰세요.', '△ This is a private address — if it does not reach this cloud server from outside, use the command you always use to log in (public address or your usual tool).')));
+        so.appendChild(el('div', 'setup-why', K('맨 끝 줄이 «…$» 로 바뀌면 그 창이 «서버 창» 이에요 — 아래 명령은 모두 여기에 붙여 넣습니다(상황판 방 입력칸 아님). 메뉴가 뜨면 아무것도 고르지 말고 Enter.',
+          'When the last line ends in «…$», that window is the «server window» — paste every command below there (not into a session\'s input box). If a menu appears, press Enter without choosing.')));
+        if (!s.ssh) so.appendChild(el('div', 'setup-why', K('이 서버 주소를 몰라요 — 늘 서버에 들어가던 그 명령을 쓰세요.', 'This server\'s address is unknown — use the command you always use to log in to it.')));
+        ul0 = so;
+      }
       var ul = el('div', 'setup-items');
+      if (ul0) ul.appendChild(ul0);
       (s.items || []).forEach(function (x) {
         var row = el('div', 'setup-item' + (x.ok === true ? ' ok' : x.ok === false ? (x.need ? ' bad' : ' warn') : ''));
         var hd = el('div', 'setup-h');
@@ -4462,10 +4577,30 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         if (x.detail && x.ok === true) hd.appendChild(el('span', 'setup-det', x.detail));
         row.appendChild(hd);
         if (x.ok !== true) {
-          if (x.ok == null) row.appendChild(el('div', 'setup-why', K('확인하지 못했어요 — 아래대로 했으면 그대로 두세요(시작할 때 드러납니다)', 'Could not tell — if you have done this, leave it (it shows up when a session starts)')));
+          if (x.ok == null) row.appendChild(el('div', 'setup-why', x.key === 'login'
+            ? K('로그인됐는지 아직 못 읽었어요(1분마다 다시 봄). 이미 했으면 «↻ 다시 확인», 안 했으면 아래대로.', 'Could not read the login state yet (checked every minute). If you already did it, press «↻ Recheck»; otherwise follow the steps below.')
+            : K('확인하지 못했어요 — 이미 했으면 «↻ 다시 확인», 안 했으면 아래대로.', 'Could not tell — if you already did it, press «↻ Recheck»; otherwise follow the steps below.')));
           if (x.why) row.appendChild(el('div', 'setup-why', x.why));
-          (x.cmds || []).forEach(function (c) { var ln = el('div', 'todo-cmd'); ln.appendChild(el('code', null, c)); ln.appendChild(copyBtn(K('복사', 'Copy'), c)); row.appendChild(ln); });
-          if ((x.cmds || []).length) row.appendChild(el('div', 'setup-where', K('↑ 서버 창에서 실행 (상황판 방 입력칸이 아님)', '↑ Run in a server window (not in a session input box)')));
+          // 로그인은 터미널 없이 상황판에서 바로 — 상황판이 claude auth login 을 띄우고 코드만 붙여 넣음(맨 위 «AI 로그인» 칸이 이어받음)
+          if (x.board && x.key === 'login' && !(data.ai && data.ai.login)) {
+            var lb = el('div', 'row'); lb.style.marginTop = '6px';
+            var lg = el('button', 'btn primary', K('여기서 로그인(터미널 없이) ▶', 'Log in here (no terminal) ▶'));
+            var lh = el('select'); lh.innerHTML = '<option value="claudeai">' + K('구독(Pro·Max·Team)', 'Subscription (Pro · Max · Team)') + '</option><option value="console">' + K('API 키(사용량 과금)', 'API key (usage billing)') + '</option>';
+            lh.value = aiLoginHow; lh.onchange = function () { aiLoginHow = lh.value; };
+            lg.onclick = function () {
+              lg.disabled = true; lg.textContent = K('주소 받는 중…', 'Getting the link…');
+              post('/api/ai-login/start', { how: aiLoginHow }).then(function (j) {
+                if (!j.ok) { toast(j.message || K('시작하지 못했어요', 'Could not start')); lg.disabled = false; lg.textContent = K('여기서 로그인(터미널 없이) ▶', 'Log in here (no terminal) ▶'); return; }
+                if (j.url) { try { window.open(j.url, '_blank', 'noopener'); } catch (_) {} }
+                toast(K('열린 화면에서 로그인 → 코드를 맨 위 «AI 로그인» 칸에 붙여 넣고 «연결»', 'Sign in on the page that opened → paste the code into the «AI login» box at the top and press «Connect»'), 9000);
+                load(); try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (_) {}
+              }).catch(function () { lg.disabled = false; });
+            };
+            lb.appendChild(lg); lb.appendChild(lh); row.appendChild(lb);
+            row.appendChild(el('div', 'setup-why', K('버튼 → 열린 화면에서 로그인 → 나온 코드를 맨 위 «AI 로그인» 칸에 붙여 넣기. 버튼이 안 되면 아래 서버 창 방법:', 'Button → sign in on the page that opens → paste the code into the «AI login» box at the top. If the button does not work, use the server window:')));
+          } else if (x.key === 'login' && data.ai && data.ai.login) row.appendChild(el('div', 'setup-why', K('▲ 로그인 진행 중 — 맨 위 «AI 로그인» 칸에 코드를 붙여 넣으세요', '▲ Login in progress — paste the code into the «AI login» box at the top')));
+          if ((x.steps || []).length) x.steps.forEach(function (st) { stepRow(row, st.t, st.cmd, st.or); });
+          else (x.cmds || []).forEach(function (c) { row.appendChild(cmdLine(c)); });   // 옛 서버 자료(steps 없음)
         }
         ul.appendChild(row);
       });
@@ -4879,7 +5014,18 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       todo.insertBefore(okb, todo.firstChild);
     }
     if (data.claudeCheck && data.claudeCheck.ok === false) todo.appendChild(claudeCheckBox(data.claudeCheck));
-    if (OWN && data.update) { var ubx = updateBox(data.update); if (ubx) todo.appendChild(ubx); }
+    if (OWN && data.update) { var ubx = updateBox(data.update); if (ubx) { ubx.id = 'updbox'; todo.appendChild(ubx); } }
+    var ubg = document.getElementById('updbadge');
+    if (ubg) {
+      ubg.hidden = !(OWN && data.update && data.update.newer && !data.update.running);
+      if (!ubg.hidden) {
+        ubg.textContent = K('새 판 ' + data.update.latest, 'Update ' + data.update.latest);
+        ubg.title = K('지금 ' + data.update.current + ' → ' + data.update.latest + ' — 눌러서 받기 칸으로', 'Now ' + data.update.current + ' → ' + data.update.latest + ' — tap to open the update box');
+        ubg.onclick = function () { var u = document.getElementById('updbox'); if (u) { u.scrollIntoView({ behavior: 'smooth', block: 'center' }); u.classList.remove('flash'); void u.offsetWidth; u.classList.add('flash'); } };
+      }
+    }
+    // SSH 통로로 들어온 기기 — 창을 닫으면 안 열린다는 것·늘 열어 두는 길을 상황판이 먼저 (처음 설정 직후엔 크게)
+    var thb = tunHintBox(me); if (thb) { if (thb.big) todo.insertBefore(thb, todo.firstChild); else todo.appendChild(thb); }
     var lu = document.getElementById('l-upd');
     if (lu) {
       lu.hidden = !(OWN && data.update && data.update.current);
@@ -5291,18 +5437,36 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   function connFail(e) {
     if (++fails < 4 && Date.now() - lastOkAt < 30000) return;   // 10초(한 번 기다림이 길면 30초) 넘게 안 될 때만 알린다 — 그 사이엔 보던 화면 그대로
     var errBox = document.getElementById('err');
-    errBox.textContent = '';
     var downS = Math.round((Date.now() - lastOkAt) / 1000);
     if (downS < 60) {
+      errBox.textContent = '';
       errBox.appendChild(el('div', 'err', K('상황판 다시 켜는 중… 저절로 다시 연결합니다(' + downS + '초째) — 새로 고침은 안 눌러도 돼요. 작업방은 계속 일하고 있고, 지금 보내는 일은 이 기기에 담아 두었다가 연결되면 보냅니다.', 'The board is restarting… reconnecting by itself (' + downS + 's) — no need to refresh. Sessions keep working, and tasks you send now are kept on this device and sent once connected.'))).id = 'connerr';
       return;
     }
     var viaTs = /\.ts\.net$/.test(location.hostname);
+    var cur = document.getElementById('connerr');
+    if (cur && cur.dataset.long) return;   // 이미 띄운 긴 안내는 그대로(3초마다 다시 그리면 복사·선택이 끊김)
+    if (!viaTs) noteDrop();
+    errBox.textContent = '';
     var d = el('div', 'err', K('1분 넘게 연결되지 않아요. ', 'Not connected for over a minute. ') + (viaTs ? K('상황판 서버에 연결하지 못했습니다(' + e.message + '). 이 기기의 Tailscale 앱이 켜져 있는지 확인해 주세요. 작업방은 계속 일하고 있습니다. 지금 보내는 일은 이 기기에 담아 두었다가 연결되면 보냅니다.', 'Could not reach the board server (' + e.message + '). Check that the Tailscale app is on on this device. Sessions keep working on the server. Tasks you send now are kept on this device and sent when the connection is back.') : EN ? 'Could not reach the board server (' + e.message + '). Check whether your SSH connection (tunnel) dropped — on a phone, open Termius and turn the tunnel back on. Sessions keep working on the server. Tasks you send now are kept on this device and sent when the connection is back.' : '상황판 서버에 연결하지 못했습니다(' + e.message + '). 서버 접속(SSH 통로)이 끊겼는지 확인해 주세요 — 휴대폰은 Termius 를 열어 통로를 다시 켜면 됩니다. 작업방은 계속 일하고 있습니다. 지금 보내는 일은 이 기기에 담아 두었다가 연결되면 보냅니다.'));
+    // 맥 — 끊긴 뒤에는 안내 칸을 찾아 열 여유가 없다: 이 화면에 바로 «맥 터미널에 이 한 줄» 진단 + 자동 통로 한 줄
+    if (!viaTs && IS_MAC && TUN.diag) {
+      var cm = el('div', 'conn-mac');
+      var rc = function (txt) { var ln = el('div', 'rc-line'), pr = document.createElement('pre'); pr.textContent = txt; ln.appendChild(pr);   // el() 은 글을 다듬어(기호 뺌) — 명령은 그대로
+        ln.appendChild(copyBtn(K('복사', 'Copy'), txt)); return ln; };
+      cm.appendChild(el('b', null, K('맥 터미널에 이 한 줄 — 무엇이 문제인지 말로 나와요', 'Paste this into a Mac terminal — it tells you what is wrong')));
+      cm.appendChild(rc(TUN.diag));
+      if (TUN.install && !lsGet('board.autoTunnel')) {
+        cm.appendChild(el('b', null, K('«통로가 없어요» 가 나오면 — 늘 열어 두기(자동 통로) 한 줄', '«No tunnel» — install the automatic tunnel (one line)')));
+        cm.appendChild(rc(TUN.install));
+        cm.appendChild(el('small', null, MAC_TUN === 'legacy' ? '' : K('열쇠 접속이 «됨» 일 때 · 별명 ' + TUN.alias + ' 을 ~/.ssh/config 에 넣고 맥을 켤 때마다 저절로 열어요.', 'Needs «Key login: ok» · adds the alias ' + TUN.alias + ' to ~/.ssh/config and opens the tunnel whenever the Mac starts.')));
+      }
+      d.appendChild(cm);
+    }
     var hb = el('button', 'btn', K('다시 연결하는 법 — 기기별 확인 명령', 'How to reconnect — checks per device'));
     hb.type = 'button'; hb.style.cssText = 'display:block;margin-top:8px;'; hb.onclick = showReconnect;
     d.appendChild(hb);
-    d.id = 'connerr'; errBox.appendChild(d);
+    d.id = 'connerr'; d.dataset.long = '1'; errBox.appendChild(d);
   }
   renderOutbox();
   var tt = document.getElementById('totop');
@@ -5320,18 +5484,45 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   }
   // «다른 기기에서 열기» 칸 — 이 서버 접속 값으로 채움 (config devSsh · docsUrl)
   (function () {
-    var m = /([\w.-]+)@([\w.:-]+)/.exec(DEV_SSH) || [];
-    var user = m[1] || '<user>', host = m[2] || '<server address>', PORT_NO = location.port || '8800';
+    var m = /([\w.-]+)@([\w.-]+)(?::(\d+))?/.exec(DEV_SSH) || [];
+    var user = m[1] || '<user>', host = m[2] || '<server address>', PORT_NO = /^\d+$/.test(BOARD_PORT) ? BOARD_PORT : (location.port || '8800');
+    var sp = /(?:^|\s)-p\s*(\d+)/.exec(DEV_SSH) || (m[3] ? [0, m[3]] : null), tgt = (sp ? '-p ' + sp[1] + ' ' : '') + user + '@' + host;
+    // 별명 — 서버마다 따로(서버 이름 + 포트): 같은 맥에서 여러 서버 상황판을 열어도 ~/.ssh/config Host·자동 통로 이름·기록 파일이 안 겹침
+    var nm = (document.querySelector('.srvname') || {}).textContent || '';
+    var w = /^[\d.:]+$/.test(nm.trim()) ? [] : nm.toLowerCase().match(/[a-z0-9]+/g) || [], slug = w.join('-').slice(0, 20).replace(/-+$/, '');   // 이름이 비어 주소로 대신 보이면 포트만
+    var TUN_LEGACY = null;
+    if (TUN_LEGACY) { TUN.alias = TUN_LEGACY.alias; TUN.label = TUN_LEGACY.label; TUN.log = TUN_LEGACY.log; TUN.install = TUN_LEGACY.install; }
+    else {
+      // 이 맥에 이미 깐 별명이 있으면 그것(이름을 바꿨거나 손으로 다른 별명을 썼을 때 진단이 엉뚱한 통로를 보지 않게)
+      TUN.alias = lsGet('board.autoTunnel') || 'sb-' + (slug ? slug + '-' : '') + PORT_NO;
+      TUN.label = 'com.serverboard.tunnel.' + TUN.alias;
+      TUN.log = '~/Library/Logs/serverboard-tunnel-' + TUN.alias + '.log';
+      // 맥에는 이 저장소가 없다 — 서버에서 스크립트를 읽어 와 바로 돌림(별명이 아직 없어도 되게 사용자@주소로) · 스크립트가 별명을 ~/.ssh/config 에 넣음
+      TUN.install = 'S=$(ssh ' + tgt + ' cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac ' + TUN.alias + ' ' + user + '@' + host + (sp ? ':' + sp[1] : '');
+    }
+    // 끊긴 화면에 바로 보일 한 줄 진단 — 결론을 말로
+    TUN.diag = 'P=' + PORT_NO + '; L=' + TUN.label + '; c=$(curl -s -m 3 -o /dev/null -w "%{http_code}" http://localhost:$P/api/ping); '
+      + 'if [ "$c" = 200 ]; then echo "' + K('✅ 연결돼 있어요 — 상황판을 새로 고침', '✅ Connected — reload the board') + '"; '
+      + 'elif lsof -nP -iTCP:$P -sTCP:LISTEN >/dev/null 2>&1; then echo "' + K('✘ 통로가 멈춤 — 터미널 창의 ssh 면 그 창을 닫고 다시, 자동 통로면:', '✘ Tunnel stuck — if it is an ssh window close it and reopen; automatic tunnel:') + ' launchctl kickstart -k gui/$(id -u)/$L"; '
+      + 'elif launchctl print gui/$(id -u)/$L >/dev/null 2>&1; then echo "' + K('✘ 자동 통로가 붙지 못하는 중 — 기록:', '✘ Automatic tunnel cannot connect — log:') + '"; tail -4 ' + TUN.log + '; '
+      + 'else echo "' + K('✘ 이 맥에 통로가 없어요(터미널 창이 닫힘) — 다시 열거나, 아래 «늘 열어 두기» 한 줄', '✘ No tunnel on this Mac (the terminal window closed) — reopen it, or use «keep it open» below') + '"; fi; '
+      + 'ssh -o BatchMode=yes -o ConnectTimeout=8 ' + tgt + ' true 2>/dev/null && echo "' + K('열쇠 접속: 됨', 'Key login: ok') + '" || echo "' + K('✘ 열쇠 접속 안 됨 — 맥 열쇠를 서버에 등록하거나(암호 걸린 열쇠면 ssh-add --apple-use-keychain) 인터넷 확인', '✘ Key login fails — register the Mac key on the server (passphrase key: ssh-add --apple-use-keychain) or check the internet') + '"';
+    if (!m[1]) { TUN.install = ''; TUN.diag = ''; }   // devSsh 에 사용자@주소가 없으면 복사할 명령을 만들지 않음(자리표 <user> 가 셸 기호로 들어감)
     Array.prototype.forEach.call(document.querySelectorAll('.js-port'), function (x) { x.textContent = PORT_NO; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-userhost'), function (x) { x.textContent = user + '@' + host; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-host'), function (x) { x.textContent = host; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-user'), function (x) { x.textContent = user; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-lh'), function (x) { x.href = 'http://localhost:' + PORT_NO; x.textContent = 'http://localhost:' + PORT_NO; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-sshcfg'), function (x) {
-      x.textContent = 'Host myserver\n  HostName ' + host + '\n  User ' + user + '\n  LocalForward ' + PORT_NO + ' 127.0.0.1:' + PORT_NO + '\n  ExitOnForwardFailure yes';
+      x.textContent = 'Host ' + TUN.alias + '\n  HostName ' + host + '\n  User ' + user + (sp ? '\n  Port ' + sp[1] : '') + '\n  LocalForward ' + PORT_NO + ' 127.0.0.1:' + PORT_NO + '\n  ExitOnForwardFailure yes';
     });
     Array.prototype.forEach.call(document.querySelectorAll('.js-docs'), function (x) { x.href = DOCS_URL; });
-    Array.prototype.forEach.call(document.querySelectorAll('.js-tunlabel'), function (x) { x.textContent = 'com.serverboard.tunnel.myserver'; });
+    // 연결이 끊겼을 때 — 자동 통로 이름·기록 파일·깔기 한 줄 · 명령마다 «복사»
+    Array.prototype.forEach.call(document.querySelectorAll('.js-tunlabel'), function (x) { x.textContent = TUN.label; });
+    Array.prototype.forEach.call(document.querySelectorAll('.js-tunlog'), function (x) { x.textContent = TUN.log; });
+    Array.prototype.forEach.call(document.querySelectorAll('.js-tuninst'), function (x) { x.textContent = TUN.install; });
+    Array.prototype.forEach.call(document.querySelectorAll('.js-alias'), function (x) { x.textContent = TUN.alias; });
+    Array.prototype.forEach.call(document.querySelectorAll('.js-sshtgt'), function (x) { x.textContent = tgt; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-rc'), function (pre) {
       var line = el('div', 'rc-line'); pre.parentNode.insertBefore(line, pre); line.appendChild(pre);
       var b = copyBtn(K('복사', 'Copy'), function () { return pre.textContent; }); b.style.flex = 'none'; line.appendChild(b);

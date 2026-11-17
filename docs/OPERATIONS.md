@@ -98,7 +98,7 @@ Give every server a different `serverName` too — it shows in the board header,
 To change a board's port (on that server, owner):
 1. `board/config.json` → `"port": <new>` (a number nobody uses on the server: `ss -ltn | grep :<new>` prints nothing) → `pm2 restart dev-board --update-env`
 2. Docs the kit placed: replace the old number in `~/.claude/CLAUDE.md` and `~/dev-server/CLAUDE.md` (`localhost:<old>` and `127.0.0.1:<old>` → new) — `kit/verify.sh` lists any leftover with file and line
-3. Your computer: `~/.ssh/config` → `LocalForward <new> 127.0.0.1:<new>` (both numbers the same) · Mac auto tunnel: run `bash scripts/connect-mac.sh <alias>` again · phone (Termius): change the forward
+3. Your computer: `~/.ssh/config` → `LocalForward <new> 127.0.0.1:<new>` (both numbers the same) · Mac auto tunnel: install it again from the board's «Mac — always open (automatic tunnel)» box (the alias includes the port, so the new port gets its own tunnel; remove the old one with the «Undo» line the script printed) · phone (Termius): change the forward
 4. If used: `sudo tailscale serve --bg <new>` · dev-site gate: re-run `kit/board-gate-install.sh` (the nginx snippet carries the port)
 5. Sign in again on the new address (sign-in cookies are per port) · `bash ~/dev-server/kit/verify.sh`
 
