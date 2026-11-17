@@ -622,6 +622,18 @@
   .consultbox .cs-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .consultbox .cs-act .btn { font-size: 13px; padding: 5px 10px; }
   .consultbox .cs-taskbox { margin-top: 8px; }
+  .att-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .att-row .att-pick { font-size: 13px; padding: 4px 10px; }
+  .att-chips { display: contents; }
+  .att-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font-size: 12.5px; padding: 3px 4px 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .att-chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
+  .att-chip .sz { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .att-chip.up { opacity: .7; }
+  .att-chip.err { border-color: var(--red); background: var(--red-bg); }
+  .att-chip.err .sz { color: var(--red); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
+  .att-chip button { border: 0; background: none; cursor: pointer; color: var(--muted); font: inherit; font-size: 13px; padding: 0 6px; min-height: 24px; }
+  textarea.att-drop { outline: 2px dashed var(--primary); outline-offset: 2px; }
+  .cs-m .cs-att { display: block; margin-top: 4px; font-size: 12px; opacity: .85; }
   .consultbox .cs-note { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
   .langbox { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -6px 0 16px; font-size: 14px; }
   .langbox label { display: block; margin: 0 0 10px; }
@@ -636,7 +648,7 @@
   .langbox .nstate { font-weight: 600; }
   .langbox details.nsec > summary { cursor: pointer; }
   .langbox .btn.sel { background: var(--sel); color: var(--sel-text); border-color: var(--sel); }
-  .nt-notify { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 6px 0 2px; }
+  .nt-notify { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); margin: 0; }
   .nt-notify select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 32px; }
   .btn.nb-off { color: var(--muted); border-style: dashed; text-decoration: line-through; text-decoration-thickness: 1px; }
   .btn.nb-all { color: var(--link); border-color: var(--link); }
@@ -705,7 +717,7 @@
       <textarea id="cs-sum" rows="5"></textarea>
       <div class="cs-act"><button type="button" class="btn primary" id="cs-sum-go"><!--ko-->대기열에 넣기<!--/ko--><!--en-->Add to queue<!--/en--></button><button type="button" class="btn" id="cs-sum-last"><!--ko-->마지막 답 가져오기<!--/ko--><!--en-->Use last answer<!--/en--></button><button type="button" class="btn" id="cs-sum-x"><!--ko-->취소<!--/ko--><!--en-->Cancel<!--/en--></button></div>
     </div>
-    <small class="cs-note"><!--ko-->읽기만 하는 상의 창이에요 — 코드·작업기록을 읽고 바로 답하지만 고치거나 명령을 실행하지 않아요(비밀 파일도 안 읽음). 고칠 일은 «이 상의로 일 시키기». 20분 말이 없으면 쉬고, 다시 열면 이어서 대화합니다. 터미널에서는 메뉴 «c».<!--/ko--><!--en-->A read-only chat — it reads code and notes and answers right away, but never edits or runs commands (no secret files either). For changes use «Give this as a task». It rests after 20 idle minutes and continues when reopened. In the terminal: menu «c».<!--/en--></small>
+    <small class="cs-note"><!--ko-->읽기만 하는 상의 창이에요 — 코드·작업기록을 읽고 바로 답하지만 고치거나 명령을 실행하지 않아요(비밀 파일도 안 읽음). 고칠 일은 «이 상의로 일 시키기». 📎 로 사진·파일을 붙일 수 있어요(캡처는 입력칸에 붙여 넣기) — 일로 넘기면 첨부도 같이 가고, 임시 보관이라 7일 뒤 저절로 지워져요. 20분 말이 없으면 쉬고, 다시 열면 이어서 대화합니다. 터미널에서는 메뉴 «c».<!--/ko--><!--en-->A read-only chat — it reads code and notes and answers right away, but never edits or runs commands (no secret files either). For changes use «Give this as a task». Attach photos or files with 📎 (paste screenshots into the box) — they go along with a task and are deleted automatically after 7 days. It rests after 20 idle minutes and continues when reopened. In the terminal: menu «c».<!--/en--></small>
   </div>
   <!-- ⚙ 팀·권한 — 서버 계정별 역할·최종 컨펌자 승인·배포 확인 -->
   <div class="langbox teambox" id="teambox" hidden>
@@ -1275,6 +1287,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var body = { project: it.project, task: it.task, queue: true, cid: it.cid };
     if (it.priority) body.priority = true;
     if (it.notify) body.notify = it.notify;
+    if (it.atts && it.atts.length) body.atts = it.atts;
     if (Date.now() - it.at > 30000) body.late = true;
     return fetchT('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       // 서버가 JSON 이 아닌 답(통로·중계가 낸 오류 화면 등)을 주면 «연결 안 됨» 이 아니라 거절로 — 전엔 끝없이 «못 보낸 일» 로 남았다
@@ -1301,16 +1314,78 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     return out;
   }
   function projName(k) { var p = ((last && last.projects) || []).find(function (x) { return x.key === k; }); return p ? p.name : k; }
+  // ── 📎 첨부 — 일 시키기·상의에 사진·파일 ──
+  //   고르기(📎) · 붙여 넣기(캡처 사진) · 끌어다 놓기 → 바로 서버 임시 칸에 올림(/api/attach) → 보낼 때 번호만 같이
+  //   올린 것은 솔루션 폴더 .claude/attach-tmp 에 있다가 정해진 날이 지나면 저절로 지워짐 — 계속 쓸 것은 일하는 방이 알맞은 폴더로 옮김
+  var attState = {}, attChain = Promise.resolve();
+  function attList(key) { return attState[key] || (attState[key] = []); }
+  function attIds(key) { return attList(key).filter(function (x) { return x.st === 'ok'; }).map(function (x) { return x.id; }); }
+  function attBusy(key) { return attList(key).some(function (x) { return x.st === 'up'; }); }
+  function attClear(key) { attState[key] = []; attPaint(key); }
+  function attSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB'; }
+  function attPaint(key) {
+    [].forEach.call(document.querySelectorAll('.att-chips[data-att="' + key + '"]'), function (box) {
+      box.innerHTML = '';
+      attList(key).forEach(function (x) {
+        var c = el('span', 'att-chip' + (x.st === 'err' ? ' err' : x.st === 'up' ? ' up' : '')); if (x.msg) c.title = x.msg;
+        c.appendChild(el('span', 'nm', x.name));
+        c.appendChild(el('span', 'sz', x.st === 'up' ? K('올리는 중…', 'Uploading…') : x.st === 'err' ? K('못 올림', 'Not uploaded') : attSize(x.size)));
+        var rm = el('button', null, '✕'); rm.type = 'button'; rm.title = K('빼기', 'Remove'); rm.setAttribute('aria-label', K('첨부 빼기: ', 'Remove attachment: ') + x.name);
+        rm.addEventListener('click', function () { attState[key] = attList(key).filter(function (y) { return y !== x; }); attPaint(key); });
+        c.appendChild(rm); box.appendChild(c);
+      });
+    });
+  }
+  function attAdd(key, project, files) {
+    if (!project) { toast(K('솔루션을 먼저 골라 주세요', 'Pick a project first')); return; }
+    [].forEach.call(files || [], function (f) {
+      if (attList(key).length >= 8) { toast(K('첨부는 한 번에 8개까지예요', 'At most 8 attachments at once')); return; }
+      if (f.size > 25 * 1048576) { toast(K('파일이 너무 커요(25MB 이하): ', 'File too large (max 25MB): ') + f.name, 6000); return; }
+      var name = f.name && f.name !== 'image.png' ? f.name : K('캡처-', 'capture-') + new Date().toISOString().slice(5, 19).replace(/[-:T]/g, '') + '.' + ((f.type || '').split('/')[1] || 'png').replace('jpeg', 'jpg');
+      var x = { name: name, size: f.size, st: 'up', image: /^image\//.test(f.type || '') };
+      attList(key).push(x); attPaint(key);
+      attChain = attChain.then(function () { return fetch('/api/attach?project=' + encodeURIComponent(project) + '&name=' + encodeURIComponent(name), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f }); })   // 하나씩 차례로(서버 메모리)
+        .then(function (r) { return r.json().catch(function () { return { ok: false, message: 'HTTP ' + r.status }; }); })
+        .then(function (j) {
+          if (j.ok) { x.st = 'ok'; x.id = j.att.id; x.name = j.att.name; x.image = j.att.image; }
+          else { x.st = 'err'; x.msg = j.message; toast(j.message || K('올리지 못했어요', 'Upload failed'), 6000); }
+          attPaint(key);
+        }, function () { x.st = 'err'; x.msg = K('연결 안 됨', 'No connection'); attPaint(key); });
+      attChain = attChain.catch(function () {});
+    });
+  }
+  /** 📎 버튼 + 붙인 것 목록 — textarea 에 붙여 넣기·끌어다 놓기도 받음 */
+  function attBox(key, getProject, ta) {
+    var row = el('div', 'att-row');
+    var inp = el('input'); inp.type = 'file'; inp.multiple = true; inp.hidden = true;
+    var b = el('button', 'btn att-pick'); b.type = 'button'; b.appendChild(icon('clip')); b.appendChild(document.createTextNode(' ' + K('첨부', 'Attach')));   // 짧게 한 줄
+    b.title = K('사진·PDF·문서를 붙입니다(캡처는 입력칸에 붙여 넣기·끌어다 놓기도 됨) — 임시 보관 뒤 저절로 지워지고, 계속 쓸 것은 일하는 방이 알맞은 폴더에 둡니다', 'Attach images, PDFs, documents (you can also paste or drop into the box) — kept temporarily, then deleted; the session keeps what is needed in a fitting folder');
+    b.addEventListener('click', function () { inp.click(); });
+    inp.addEventListener('change', function () { attAdd(key, getProject(), inp.files); inp.value = ''; });
+    var chips = el('span', 'att-chips'); chips.setAttribute('data-att', key);
+    row.appendChild(b); row.appendChild(inp); row.appendChild(chips);
+    if (ta) {
+      ta.addEventListener('paste', function (e) {
+        var fs = [].filter.call((e.clipboardData && e.clipboardData.files) || [], function () { return true; });
+        if (fs.length) { e.preventDefault(); attAdd(key, getProject(), fs); }
+      });
+      ta.addEventListener('dragover', function (e) { if (e.dataTransfer && [].indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); ta.classList.add('att-drop'); } });
+      ta.addEventListener('dragleave', function () { ta.classList.remove('att-drop'); });
+      ta.addEventListener('drop', function (e) { ta.classList.remove('att-drop'); if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); attAdd(key, getProject(), e.dataTransfer.files); } });
+    }
+    setTimeout(function () { attPaint(key); }, 0);
+    return row;
+  }
   // «새 일 시키기» 보내기 — restore(task): 서버가 거절했을 때 입력칸에 되살리기
-  function sendTask(project, task, priority, btn, restore, notify) {
-    var it = { cid: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), project: project, task: task, priority: !!priority, at: Date.now(), notify: notify || undefined };
+  function sendTask(project, task, priority, btn, restore, notify, atts) {
+    var it = { cid: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), project: project, task: task, priority: !!priority, at: Date.now(), notify: notify || undefined, atts: atts && atts.length ? atts : undefined };
     outboxSet(outboxGet().concat([it]));
     if (btn) btn.disabled = true;
     return outboxSend(it).then(function (x) {
       if (btn) btn.disabled = false;
-      if (x.r === 'ok') { toast(x.j.message || K('완료', 'Done')); lastSig = ''; actedAt = Date.now(); load(); }
+      if (x.r === 'ok') { toast(x.j.message || K('완료', 'Done')); lastSig = ''; actedAt = Date.now(); load(); if (atts && atts.length) attClear('task:' + project); }
       else if (x.r === 'rejected') { restore(task); toast(x.j.message || K('실패', 'Failed')); }
-      else toast(K('서버에 연결되지 않아 아직 못 보냈습니다 — 이 기기에 담아 두었고, 연결이 돌아오면 저절로 보냅니다(맨 위 노랑 줄)', 'Not connected to the server — kept on this device and sent automatically when the connection is back (yellow bar at the top)'), 10000);
+      else { if (atts && atts.length) attClear('task:' + project); toast(K('서버에 연결되지 않아 아직 못 보냈습니다 — 이 기기에 담아 두었고, 연결이 돌아오면 저절로 보냅니다(맨 위 노랑 줄)', 'Not connected to the server — kept on this device and sent automatically when the connection is back (yellow bar at the top)'), 10000); }
       return x;
     });
   }
@@ -1656,6 +1731,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }).replace(/\uFE0F/g, '');
   }
   var IC = {
+    clip: '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
     check: '<polyline points="20 6 9 17 4 12"/>',
     x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
@@ -3723,29 +3799,36 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var f = el('div', 'form');
     var taskArea = draftArea('task:' + p.key, enterLabel(EN ? 'Write the task and press Enter (Shift+Enter for a new line) · commands like /' + CMD.devstart + ' work too' : '할 일을 적고 Enter (줄바꿈 Shift+Enter) · /개발시작 같은 명령도 됨'));
     f.appendChild(taskArea);
+    var attRow = attBox('task:' + p.key, function () { return p.key; }, taskArea); f.appendChild(attRow);
     var go = el('button', 'btn', K('우선 실행 (지금 바로)', 'Run now (first)'));
     var later = el('button', 'btn primary', enterLabel(K('대기열에 넣기 (Enter)', 'Add to queue (Enter)')));
     enterToSubmit(taskArea, later);
     later.addEventListener('click', function () {
-      var task = (drafts['task:' + p.key] || '').trim();
+      var task = (drafts['task:' + p.key] || '').trim(), atts = attIds('task:' + p.key);
+      if (attBusy('task:' + p.key)) { toast(K('첨부를 올리는 중이에요 — 끝나면 다시 눌러 주세요', 'Still uploading — press again when done')); return; }
+      if (!task && atts.length) task = K('첨부를 보고 할 일을 정리해 주세요', 'Look at the attachments and work out the task');
       if (!task) { toast(K('할 일을 적어 주세요', 'Write the task')); return; }
       // 즉시 접수 — 입력칸을 바로 비운다(서버가 거절하면 되살림 · 연결이 끊겼으면 이 기기 보관함에 담겨 저절로 다시 보냄)
       delete drafts['task:' + p.key]; taskArea.value = '';
-      sendTask(p.key, task, false, later, function (t) { drafts['task:' + p.key] = t; taskArea.value = t; }, last && last.notifyAll ? '' : ntSel.value);
+      sendTask(p.key, task, false, later, function (t) { drafts['task:' + p.key] = t; taskArea.value = t; }, last && last.notifyAll ? '' : ntSel.value, atts);
     });
     go.addEventListener('click', function () {
-      var task = (drafts['task:' + p.key] || '').trim();
+      var task = (drafts['task:' + p.key] || '').trim(), atts = attIds('task:' + p.key);
+      if (attBusy('task:' + p.key)) { toast(K('첨부를 올리는 중이에요 — 끝나면 다시 눌러 주세요', 'Still uploading — press again when done')); return; }
+      if (!task && atts.length) task = K('첨부를 보고 할 일을 정리해 주세요', 'Look at the attachments and work out the task');
       if (!task) { toast(K('할 일을 적어 주세요', 'Write the task')); return; }
       delete drafts['task:' + p.key]; taskArea.value = '';
-      sendTask(p.key, task, true, go, function (t) { drafts['task:' + p.key] = t; taskArea.value = t; }, last && last.notifyAll ? '' : ntSel.value);
+      sendTask(p.key, task, true, go, function (t) { drafts['task:' + p.key] = t; taskArea.value = t; }, last && last.notifyAll ? '' : ntSel.value, atts);
     });
     // 이 일 알림 — 일 줄 때부터 고름 (방 카드 «알림» 버튼과 같은 세 가지 ·
-    var ntl = el('label', 'nt-notify'); ntl.appendChild(icon('bell')); ntl.appendChild(document.createTextNode(' ' + K('이 일 알림', 'Alerts for this task') + ' '));
+    //   «📎 첨부» 와 같은 줄에 짧게
+    var ntl = el('label', 'nt-notify'); ntl.appendChild(icon('bell')); ntl.title = K('이 일 알림', 'Alerts for this task');
     var ntSel = el('select'); ntSel.setAttribute('data-sk-no', '1');
-    [['', K('기본 («알림» 칸 설정대로)', 'Default (overall setting)')], ['all', K('끝나도 알림 (모두)', 'Incl. done (everything)')], ['off', K('알림 끔', 'Off')]].forEach(function (o) { var x = el('option', null, o[1]); x.value = o[0]; ntSel.appendChild(x); });
+    [['', K('알림 기본', 'Alerts: default')], ['all', K('끝나도 알림', 'Alerts: incl. done')], ['off', K('알림 끔', 'Alerts off')]].forEach(function (o) { var x = el('option', null, o[1]); x.value = o[0]; ntSel.appendChild(x); });
     try { ntSel.value = localStorage.getItem('board.ntNotify') || ''; } catch (_) {}
     ntSel.addEventListener('change', function () { try { localStorage.setItem('board.ntNotify', ntSel.value); } catch (_) {} });
-    ntl.appendChild(ntSel); if (!(last && last.notifyAll)) f.appendChild(ntl);   // «모두» 받기면 고를 일 없음
+    ntSel.title = K('이 일 알림 — 기본은 «알림» 칸 설정대로', 'Alerts for this task — default follows the overall setting');
+    ntl.appendChild(ntSel); if (!(last && last.notifyAll)) attRow.insertBefore(ntl, attRow.querySelector('.att-chips'));   // «모두» 받기면 고를 일 없음
     var r = el('div', 'row'); r.appendChild(later); r.appendChild(go); f.appendChild(r);
     // 일 맡기기가 아니라 바로 상의 — 터미널 dev 메뉴 «c»
     var cs = el('small', 'nt-consult', K('💬 일 맡기기 말고 실시간으로 상의하려면: 맨 위 «💬 AI 와 상의» (터미널에서는 메뉴 «c»)', '💬 To talk it through live instead of giving a task: «💬 Chat with AI» at the top (terminal: menu «c»)'));
@@ -5201,7 +5284,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   function csStatus(t) { csEl('cs-st').textContent = t || ''; }
   function csSetBusy(b) { cs.busy = b; csStatus(b ? K('답 쓰는 중…', 'Writing…') : (cs.cid ? K('● 연결됨', '● Connected') : '')); }
   function csEv(ev) {
-    if (ev.k === 'user') { cs.cur = null; csAdd('me', ev.t, ev.old); if (!ev.old) csSetBusy(true); }
+    if (ev.k === 'user') { cs.cur = null; var um = csAdd('me', ev.t, ev.old); if (ev.atts && ev.atts.length) um.appendChild(el('span', 'cs-att', '📎 ' + ev.atts.join(' · '))); if (!ev.old) csSetBusy(true); }
     else if (ev.k === 'delta') { if (!cs.cur) cs.cur = csAdd('ai live', ''); cs.cur._t = (cs.cur._t || '') + ev.t; cs.cur.innerHTML = csFmt(cs.cur._t); }
     else if (ev.k === 'say') { var d = cs.cur; if (d) { d.innerHTML = csFmt(ev.t); d.classList.remove('live'); } else d = csAdd('ai', ev.t, ev.old); d._t = ev.t; csCopies(d); cs.cur = null; cs.lastAi = ev.t; }
     else if (ev.k === 'tool') { cs.cur = null; csLine('· ' + ev.t); }
@@ -5253,6 +5336,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       b.addEventListener('click', function () {
         if (cs.project === p.key && cs.cid) return;
         cs.project = p.key; try { localStorage.setItem('board.consultProject', p.key); } catch (_) {}
+        attClear('cs');   // 첨부는 솔루션마다 따로 올라감
         if (cs.es) { cs.es.close(); cs.es = null; } cs.cid = null;
         csPickRender(); csEl('cs-log').innerHTML = ''; csOpen(false);
       });
@@ -5269,11 +5353,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }).catch(function () {});
   }
   function csSend() {
-    var ta = csEl('cs-text'), text = (ta.value || '').trim(); if (!text) return;
+    var ta = csEl('cs-text'), text = (ta.value || '').trim();
+    if (attBusy('cs')) { toast(K('첨부를 올리는 중이에요 — 끝나면 다시 보내 주세요', 'Still uploading — send again when done')); return; }
+    var atts = attIds('cs'); if (!text && !atts.length) return;
     var go = function () {
-      return post('/api/consult/' + cs.cid + '/send', { text: text }).then(function (j) {
+      return post('/api/consult/' + cs.cid + '/send', { text: text, atts: atts.length ? atts : undefined }).then(function (j) {
         if (j._status === 404) { csDrop(); return csOpen(false).then(function (ok) { if (ok) setTimeout(go, 600); }); }
         if (!j.ok) { toast(j.message || K('보내지 못했어요', 'Could not send'), 6000); ta.value = text; return; }
+        if (atts.length) attClear('cs');
         cs.stick = true;
       });
     };
@@ -5285,6 +5372,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     ta.placeholder = enterLabel(K('물어보거나 의논할 것을 적고 Enter (줄바꿈 Shift+Enter)', 'Ask or discuss, then Enter (Shift+Enter for a new line)'));
     csEl('cs-sum').placeholder = K('맡길 일 — 상의 창이 정리해 준 글을 고쳐 넣으세요(이 글이 작업방에 그대로 가요)', 'The task — edit the summary the chat gave you (this text goes to the session as is)');
     csEl('cs-send').addEventListener('click', csSend);
+    ta.parentNode.parentNode.insertBefore(attBox('cs', function () { return cs.project; }, ta), ta.parentNode.nextSibling);
     enterToSubmit(ta, csEl('cs-send'));
     csEl('cs-new').addEventListener('click', function () {
       if (!cs.project) return toast(K('솔루션을 먼저 골라 주세요', 'Pick a project first'));

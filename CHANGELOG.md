@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0]
+**Board**
+- **📎 Attachments** in "New task" and "💬 Ask the AI": add photos and files with the button, paste a screenshot, or drag and drop (25MB per file, up to 8 per send; only an allow-list of photo, document, text, archive and video types — programs such as .exe are refused). Files are stored per project in `<project>/.claude/attach-tmp/<date>/` (its own `.gitignore` is `*`, so nothing enters git). Only the owner or a member assigned to that project can upload; AI sessions and viewers cannot
+- A task with attachments ends with their paths and a note: the session copies only files still needed after the task into a fitting project folder and says where in its report; reference-only files are left alone
+- In 💬 chats, real images (checked by their first bytes, ≤3.5MB, 12MB per message) go straight to the model; other files are read by path, small text files are fenced as data
+- Hourly cleanup: attachments are deleted `attachKeepDays` days after upload (`board/config.json`, default 7, 1–90), unsent ones after a day; files still referenced by the queue, a proposal or an open chat are kept
+- "New task": attachments and "notify me about this task" share one line
+
 ## [0.2.0]
 **Board**
 - **Inquiries box tells you what to do:** each line gets a plain "👉 To do" (send a reply · read and decide · nothing to do) and the header counts them separately. Lines with a draft get **Copy draft** and an owner-only **Have the session send it**: it queues "send this exact draft" for that project's session, which must use the project's established reply path (dry-run first), leave the status alone, and stop and ask if a fact in the draft is not true, the customer wrote again, or no reply path exists. The same draft is never queued twice; a changed draft can be handed over again

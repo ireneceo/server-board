@@ -17,6 +17,8 @@
 | One project's rules: build, restart, deploy, reading inquiries, reply path | `<project>/CLAUDE.md` "Dev command settings" | **that project's session** | new sessions |
 | Project commands (/dev-start …) | `<project>/.claude/commands/` | that project's session | live |
 
+- **📎 Attachments** (photos/files added to a task or a 💬 chat): stored per project in `<project>/.claude/attach-tmp/<date>/` (its own `.gitignore` is `*`, so nothing enters git). The board deletes them `attachKeepDays` days after upload (`config.json`, default 7, 1–90), unsent ones after a day, and keeps any still referenced by the queue or a proposal. When a task ends with «[📎 N attachment(s) …]» and paths, the session views them with Read and copies **only files needed after the task** into a fitting project folder, naming where in its report; reference-only files are left alone. 25MB per file · 8 per send · sessions (AI) cannot upload or attach.
+
 - The server session never edits inside a project folder. If a project needs a change, queue it: `POST /api/rooms {"project":"<key>","task":"…","queue":true}`.
 - Never write secrets (.env values, tokens, DB passwords) into any file. Write **where** they are.
 
