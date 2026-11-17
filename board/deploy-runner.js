@@ -56,6 +56,11 @@ function confProblems(c) {
   if (c.dry && (c.dry.some((a) => !DRY_ARGS.includes(a) && !ALLOWED_ARGS.includes(a)) || !c.dry.includes('--dry-run'))) out.push(D.K('시험 배포 인자는 --dry-run 이 있어야 하고 허용 인자만', 'Dry-run arguments must include --dry-run and only allowed ones'));
   const rel = path.relative(c.dir, c.script);
   if (rel.startsWith('..') || path.isAbsolute(rel)) out.push(D.K('배포 스크립트가 솔루션 폴더 밖에 있음', 'Deploy script is outside the project folder'));
+  else try {
+    const real = fs.realpathSync(c.script), rr = path.relative(fs.realpathSync(c.dir), real);
+    if (rr.startsWith('..') || path.isAbsolute(rr)) out.push(D.K('배포 스크립트가 링크로 솔루션 폴더 밖을 가리킴', 'Deploy script links outside the project folder'));
+    else if (!fs.statSync(real).isFile()) out.push(D.K('배포 스크립트가 일반 파일이 아님', 'Deploy script is not a regular file'));
+  } catch (_) {}
   try { fs.accessSync(c.script, fs.constants.X_OK); } catch (_) { out.push(D.K('배포 스크립트가 없거나 실행 권한 없음: ', 'Deploy script missing or not executable: ') + c.script); }
   return out;
 }

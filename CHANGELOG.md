@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0]
+**New**
+- Deploy connection: a project with no production server registered shows a **"Deploy · not connected"** button. The owner can connect a deploy script that is already in the project (one-line command, saving = approving it), change or disconnect it later (**⚙ Connection** on the deploy line), or — with no script yet — queue "write a deploy script" for that project's session. The board never takes or stores production addresses, accounts or keys. See [SERVER-GUIDE](docs/SERVER-GUIDE.md) section 2
+
+**Fixes**
+- An open board tab could stay on a page showing the raw `__SERVER_NAME__` placeholder after an update; the auto-reload check now compares the page as actually served
+- Some session instructions and the "stopped by" label lost words in the public build (e.g. " stopped with" with no name); the release build now refuses to package text that would be cut
+- First setup box: the **Copy** button no longer squeezes into a vertical column next to a long command
+- `kit/verify.sh`: the terminal menu (`~/bin/dev`) is optional, so a missing menu is now △ instead of ✘
+- `kit/check-host.sh`: the SSH tunnel hint uses `SB_PORT` when set
+- Deploy connection refuses a script path that is a symlink (the link may be committed while the file it points to is not)
+- Docs: a blank line split the `projects.json` table in the Korean server guide; the English `prodLabel` row now describes the "not connected" button
+
+Tested with Claude Code 2.1.326 (fresh install from the README on Ubuntu, self-tests pass).
+
 ## [0.4.0]
 Fixes found while installing on another server (RHEL 8 · Claude Code 2.1.311 · a Docker project).
 

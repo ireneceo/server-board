@@ -25,7 +25,7 @@ T=[(r"AI 로그인됨 \(([^)]*)\)",r"AI logged in (\1)"),(r"AI 로그인 안 됨
 (r"projects\.json 을 읽지 못함:","could not read projects.json:"),(r"폴더 없음","folder missing"),
 (r" \((정기 점검 켰는데|개발완료 버튼 보이는데|배포 버튼 보이는데) 명령 none\)",""),(r"작업기록 (\S+) none",r"notes file \1 missing"),
 (r"폴더·작업기록·켠 버튼의 명령 맞음","folder, notes file and button commands OK"),(r"CLAUDE\.md 없음 — 솔루션 규칙 틀\(kit/templates/<lang>/solution-CLAUDE\.md\)로 만들기 권고","CLAUDE.md missing — create it from kit/templates/<lang>/solution-CLAUDE.md"),
-(r"터미널 메뉴 ~/bin/dev","terminal menu ~/bin/dev"),(r"~/bin/dev none","~/bin/dev missing"),(r" — 넣기: SB_MENU=1"," — add it: SB_MENU=1"),(r" · 넣기: SB_MENU=1"," · add it: SB_MENU=1"),(r"\(틀: ","(template: "),
+(r"터미널 메뉴 ~/bin/dev","terminal menu ~/bin/dev"),(r"~/bin/dev none","~/bin/dev missing"),(r"missing\(선택\)","missing (optional)"),(r" — 넣기: SB_MENU=1"," — add it: SB_MENU=1"),(r" · 넣기: SB_MENU=1"," · add it: SB_MENU=1"),(r"\(틀: ","(template: "),
 (r"✔ 권한 모드 auto$","✔ permission mode auto"),(r"✔ 원본 폴더 작업 none$","✔ bgIsolation none"),(r"\.bashrc 접속 메뉴 블록",".bashrc menu block"),(r"\.bashrc 블록 none — 접속해도 메뉴가 안 뜸",".bashrc block missing — no menu on login"),
 (r"정기 점검 켜짐 \(scheduled check on\)","scheduled check on"),(r"정기 점검 crontab","scheduled check in crontab"),
 (r"morningCheck 를 켠 솔루션이 있는데 정기 점검이 none — 상황판 카드 «◷ 정기 점검» 에서 추가 \(no scheduled check yet\)","morningCheck is on but no scheduled check — add one in the card «◷ Scheduled checks»"),
@@ -177,7 +177,7 @@ print(f"✔ 문서·명령의 상황판 주소 포트 {port} 로 맞음")
 PY
 
 # 4. 터미널 메뉴·정기 점검
-[ -x "$HOME/bin/dev" ] && ok "터미널 메뉴 ~/bin/dev" || bad "~/bin/dev 없음 — 넣기: SB_MENU=1 bash ~/dev-server/install.sh"
+[ -x "$HOME/bin/dev" ] && ok "터미널 메뉴 ~/bin/dev" || warn "~/bin/dev 없음(선택) — 넣기: SB_MENU=1 bash ~/dev-server/install.sh"   # 설치가 «넣을까요?» 로 묻는 선택 항목 — 안 넣었다고 실패로 세지 않음
 grep -q "dev-menu" "$HOME/.bashrc" 2>/dev/null && ok ".bashrc 접속 메뉴 블록" || warn ".bashrc 블록 없음 — 접속해도 메뉴가 안 뜸 · 넣기: SB_MENU=1 bash ~/dev-server/install.sh"
 if python3 -c 'import json,os,sys;sys.exit(0 if any(p.get("morningCheck") for p in json.load(open(os.path.expanduser("~/dev-server/projects.json")))) else 1)' 2>/dev/null; then
   if python3 -c 'import json,os,sys;s=json.load(open(os.path.expanduser("~/dev-server/board/state.json"))).get("schedules") or {};sys.exit(0 if any(x.get("on") for x in s.values()) else 1)' 2>/dev/null; then ok "정기 점검 켜짐 (scheduled check on)"

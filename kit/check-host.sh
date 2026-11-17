@@ -49,7 +49,7 @@ command -v pm2 >/dev/null && ok "pm2" || warn "$(t 'pm2 없음 — npm install -
 
 # 8. SSH port forwarding (to open the board from your computer) — can only be confirmed from your computer
 if [ -r /etc/ssh/sshd_config ] && grep -qiE '^\s*AllowTcpForwarding\s+no' /etc/ssh/sshd_config 2>/dev/null; then bad "$(t 'SSH 통로(포트 포워딩)가 꺼진 서버 — 상황판을 내 컴퓨터에서 열 수 없음(Tailscale 은 가능할 수 있음)' 'SSH port forwarding is disabled — you cannot open the board from your computer (Tailscale may still work)')"
-else warn "$(t 'SSH 통로는 내 컴퓨터에서 확인: ssh -N -L 8800:127.0.0.1:8800 <별명>  (오류 없이 멈춰 있으면 됨)' 'check the SSH tunnel from your computer: ssh -N -L 8800:127.0.0.1:8800 <alias>  (no error = OK)')"; fi
+else CP="${SB_PORT:-8800}"; warn "$(t "SSH 통로는 내 컴퓨터에서 확인: ssh -N -L $CP:127.0.0.1:$CP <별명>  (오류 없이 멈춰 있으면 됨 · 설치에서 다른 포트를 고르면 그 번호로)" "check the SSH tunnel from your computer: ssh -N -L $CP:127.0.0.1:$CP <alias>  (no error = OK · use the board port if install picks another)")"; fi
 
 echo "──"
 if [ $F = 0 ]; then echo "$(t "✔ 쓸 수 있어 보입니다 (확인할 것 △ ${W}개)" "✔ Looks usable (${W} △ to check)")"

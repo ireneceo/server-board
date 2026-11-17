@@ -115,7 +115,7 @@ Not sure? Run the one-minute check on the server, read-only, no root: `bash kit/
 - A Claude Code login on the server: a **Claude subscription** (Pro / Max / Team) or an **Anthropic API key** — see [Install · step 4b](docs/INSTALL.md#step-4b--connect-claude-subscription-or-api-key). The board shows whether it is connected.
 
 - Linux (Ubuntu 22.04/24.04 tested), Node 18+ (20 tested), PM2 5+, python3, git
-- Claude Code with background sessions (`claude --bg`, `claude agents --json`) — tested with **2.1.314**. The board relies on some internal formats of Claude Code, so it checks them itself: whenever the Claude Code version changes it re-checks those formats on your server and runs its self-tests; if anything moved, a red box appears at the top of the board (with a phone alert) naming what broke. `bash kit/verify.sh` shows the same result.
+- Claude Code with background sessions (`claude --bg`, `claude agents --json`) — tested with **2.1.326**. The board relies on some internal formats of Claude Code, so it checks them itself: whenever the Claude Code version changes it re-checks those formats on your server and runs its self-tests; if anything moved, a red box appears at the top of the board (with a phone alert) naming what broke. `bash kit/verify.sh` shows the same result.
 - Self-tests: `cd board && node --test test/*.test.js` (no extra packages; uses a throwaway copy and a fake `claude`, never your real sessions).
 - Memory: about 100–200 MB for the board itself (grows with the number of sessions).
 

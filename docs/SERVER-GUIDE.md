@@ -30,7 +30,7 @@ Required: `key` (lowercase, used in queue/questions) · `name` (display) · `dir
 |---|---|---|---|
 | `devUrl` | dev site URL | "Where to check" links in reports | plain text |
 | `noDevDone` | `true` | hides the **Dev done** button | button shown (the project needs a `/dev-done` command; `kit/verify.sh` checks) |
-| `prodLabel` | e.g. `"MyApp production"` | **Deploy** button (type the project key to open) · "deploy" step in scheduled checks | no deploy button |
+| `prodLabel` | e.g. `"MyApp production"` | **Deploy** button (type the project key to open) · "deploy" step in scheduled checks | card shows **"Deploy · not connected"** — the owner clicks it to open the connection box (see "Deploy connection" below) |
 | `deploy` | `{command, dryRun, prep, timeoutMin, minMemMb, rollback, extraScripts}` | the board runs the deploy command **itself** (only the command the owner approved on screen; a change needs re-approval) · `dryRun` = test-deploy args · `prep:true` = an AI prep session first · `minMemMb` = only with this much free memory · `timeoutMin` = stop after · `rollback` = shown on failure (never run) · `extraScripts` = fingerprinted for changes | an AI `/deploy` session deploys |
 | `routineDeploy` / `manualDeploy` | one deploy line (relative to the folder / absolute) | shown under "deploy by hand without AI" | "no deploy command registered" |
 | `deployScripts` | deploy script paths | "deploying" badge while one runs · blocks a second deploy | no badge |
@@ -42,6 +42,9 @@ Required: `key` (lowercase, used in queue/questions) · `name` (display) · `dir
 | `batch` | 1–5 | small tasks sent together in one session | one at a time |
 | `scout` | 0–n | read-only "scout" sessions alongside the editing session | none |
 | `morningCheck` | `true` | legacy crontab morning check; the board's scheduled checks ignore it | — |
+
+**Deploy connection** (2026-11-17) — the box opened from the card's "Deploy · not connected" button, or "⚙ Connection" on a connected card's deploy line, writes four fields to projects.json: `prodLabel`, `deploy.command`, `deploy.dryRun`, `prodMarker` (owner only · saving = approving that command · the old file is kept as `board/log/projects-<time>.json` · cannot change while a deploy is preparing or running). The command must be an executable script inside the project folder and committed in git, plus allowed arguments only (`--auto` `--routine`, dry run `--dry-run`); no shell symbols. "Disconnect" clears the four fields (script and production untouched). **The board never takes or stores production server addresses, accounts or keys** — those live in the project's deploy script / server config. Sessions (AI) and members cannot use this box (403) — a session only writes the script and lists the "board connection values" in its report.
+
 
 **After adding or changing values**: `bash ~/dev-server/kit/verify.sh` (target: 0 ✘). It also checks every enabled button has its command.
 
@@ -110,7 +113,7 @@ Every write needs the header `Origin: http://localhost:<port>`. Buttons a sessio
 | Inquiries "could not check" | the session couldn't read production (list below is the previous one) | see that session's report, usually production read access |
 | No inquiries box on a card | `inquiries` not set | server session: set `inquiries` (the inquiry section heading, or `true`) |
 | "Not in production yet" | the fix is newer than the last production deploy (`prodMarker`) | deploy first, then check in production |
-| No deploy button | no `prodLabel` or no `/deploy` command | server session: section 2 · `kit/verify.sh` |
+| "Deploy · not connected" | no production server (`prodLabel`/`deploy`) registered for the project | owner clicks it → connection box: have a deploy script → ① enter the one-line command, "Connect and approve this command" · no script → ② "Add to queue" (the project session writes the script and reports the values) |
 | No "Open as test account" | `devLogin` off or the project has no route | `kit/DEV-LOGIN.md` |
 | Several identical entries in the authenticator | `serverName` empty or the same on several servers | give each server its own `serverName` in `config.json` |
 | A session stuck at "waiting for permission" | Claude Code permission prompt | approve in `claude attach <id>` · if frequent, `defaultMode: auto` |

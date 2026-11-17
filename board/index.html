@@ -566,6 +566,18 @@
   .svc-ls { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 5px; font-size: 12px; }
   .svc-ls a { color: var(--link); text-decoration: none; }
   .svc-ls a:hover, .svc-ls a:focus-visible { text-decoration: underline; }
+  .dsu .dsu-st { font-size: 13px; font-weight: 600; margin: 6px 0 8px; }
+  .dsu .dsu-st.off { color: var(--muted); }
+  .dsu .dsu-st.on { color: var(--green, var(--text)); }
+  .dsu .dsu-f { display: block; margin-top: 8px; font-size: 13px; }
+  .dsu .dsu-f b { display: block; }
+  .dsu .dsu-f span { display: block; color: var(--muted); font-size: 12px; margin: 1px 0 3px; }
+  .dsu input, .dsu .dsu-note { box-sizing: border-box; width: 100%; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+  .dsu .dsu-note { margin-top: 6px; resize: vertical; }
+  .dsu .dsu-cands { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .dsu .dsu-act { margin-top: 10px; }
+  .dsu .dsu-act .btn { font-size: 13px; padding: 6px 12px; }
+  .btn.dep-off { color: var(--muted); border-style: dashed; }
   .modal .mmsg { color: var(--muted); font-size: 14px; margin-bottom: 12px; white-space: pre-wrap; }
   .modal .opt { all: unset; box-sizing: border-box; display: block; width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; cursor: pointer; }
   .modal .opt:hover, .modal .opt:focus-visible { border-color: var(--link); background: var(--gray-bg); }
@@ -1519,6 +1531,83 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       bg.appendChild(m); document.body.appendChild(bg); x.focus();
     }).catch(function () { toast(K('외부 서비스 목록을 못 읽었습니다', 'Could not load the services list')); });
   }
+  // 운영 배포 연결 창 — «연결 안 됨» 버튼·«⚙ 연결 설정» 에서 연다. 상황판은 운영서버 주소·키를 갖지 않고, 그 솔루션 배포 스크립트 한 줄만 누른다.
+  //
+  function openDeploySetup(p) {
+    fetch('/api/deploy-setup?p=' + encodeURIComponent(p.key), { cache: 'no-store' }).then(function (x) { return x.json(); }).then(function (j) {
+      if (!j.ok) { toast(j.message || K('연결 설정을 못 읽었습니다', 'Could not load the connection settings')); return; }
+      var bg = el('div', 'modal-bg'); var m = el('div', 'modal svc-modal dsu'); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+      var hd = el('div', 'svc-hd'); hd.appendChild(el('h3', null, p.name + K(' · 운영 배포 연결', ' · Production deploy connection')));
+      var x = el('button', 'svc-x', '×'); x.type = 'button'; x.setAttribute('aria-label', K('닫기', 'Close')); hd.appendChild(x); m.appendChild(hd);
+      m.appendChild(el('div', 'dsu-st ' + (j.connected ? 'on' : 'off'), j.connected ? K('● 연결됨 — ', '● Connected — ') + (j.prodLabel || '') + (j.command ? ' · ' + j.command : K(' · 배포 명령 없음(AI 배포 방이 배포)', ' · no command (AI deploy session deploys)')) : K('○ 연결 안 됨 — 이 솔루션은 배포할 운영서버가 등록되지 않았어요', '○ Not connected — no production server registered for this project')));
+      m.appendChild(el('div', 'mmsg', K('상황판은 운영서버 주소·비밀번호·키를 받지도 저장하지도 않아요. 운영으로 보내는 일(접속·백업·빌드·실패 시 원복)은 ' + p.name + ' 폴더의 배포 스크립트가 하고, 상황판은 그 스크립트를 «배포» 버튼으로 누르기만 해요.',
+        'The board never takes or stores production server addresses, passwords or keys. Shipping to production (connect, backup, build, restore on failure) is done by the deploy script in the ' + p.name + ' folder; the board only presses it from the «Deploy» button.')));
+      function field(label, hint, val, ph) {
+        var w = el('label', 'dsu-f'); w.appendChild(el('b', null, label)); if (hint) w.appendChild(el('span', null, hint));
+        var i = document.createElement('input'); i.type = 'text'; i.value = val || ''; if (ph) i.placeholder = ph; i.autocomplete = 'off'; i.spellcheck = false; w.appendChild(i); return { w: w, i: i };
+      }
+      // ① 스크립트가 있으면 — 바로 연결
+      m.appendChild(el('div', 'svc-sec', K('① 배포 스크립트가 있으면 — 바로 연결', '① Have a deploy script — connect now')));
+      var fCmd = field(K('배포 명령', 'Deploy command'), K(p.name + ' 폴더 기준 · 스크립트 경로 + 인자(허용: ', 'Relative to the ' + p.name + ' folder · script path + arguments (allowed: ') + (j.allowedArgs || []).join(' ') + ')', j.command, './scripts/deploy.sh --auto');
+      m.appendChild(fCmd.w);
+      if (j.candidates && j.candidates.length) {
+        var cw = el('div', 'dsu-cands'); cw.appendChild(el('span', null, K('폴더에서 찾은 스크립트: ', 'Found in the folder: ')));
+        j.candidates.forEach(function (c) { var b = el('button', 'svc-link', c.path + (c.exec ? '' : K(' (실행 권한 없음)', ' (not executable)'))); b.type = 'button'; b.addEventListener('click', function () { fCmd.i.value = c.path; fCmd.i.focus(); }); cw.appendChild(b); });
+        m.appendChild(cw);
+      } else m.appendChild(el('div', 'svc-w', K('폴더(git)에서 이름에 deploy 가 들어간 .sh 를 못 찾았어요 — 없으면 ② 로 만들기를 맡기세요.', 'No *deploy*.sh found in the folder (git) — if there is none, use ② to have it made.')));
+      var fLab = field(K('운영 이름', 'Production name'), K('버튼·확인 창에 보일 이름', 'Shown on the button and confirm box'), j.prodLabel, p.name + K(' 운영', ' production'));
+      var fDry = field(K('시험 배포 인자 (선택)', 'Dry-run arguments (optional)'), K('스크립트가 운영을 안 바꾸는 시험을 지원하면 · 예 --auto --dry-run', 'If the script supports a no-change test · e.g. --auto --dry-run'), j.dryRun, '--auto --dry-run');
+      var mk = j.marker || {};
+      var fMk = field(K('운영 확인 주소 (선택)', 'Production check URL (optional)'), K('운영 사이트가 공개로 내는 배포 시각 파일 — 배포 뒤 바뀌었는지 봐요. 비우면 종료 코드로만 판단', 'A public file with the deploy time — checked after deploying. Empty = judge by exit code only'), mk.url, 'https://example.com/version.json');
+      var fMj = field(K('그 파일의 시각 칸 (선택)', 'Time field in that file (optional)'), K('JSON 칸 이름(예 built_at) · 비우면 Last-Modified 머리글', 'JSON field name (e.g. built_at) · empty = Last-Modified header'), mk.json, 'built_at');
+      [fLab, fDry, fMk, fMj].forEach(function (f) { m.appendChild(f.w); });
+      var save = el('button', 'btn', j.connected && j.command ? K('저장하고 이 명령 승인', 'Save and approve this command') : K('연결하고 이 명령 승인', 'Connect and approve this command')); save.type = 'button';
+      save.title = K('저장하면 지금 적은 명령이 승인돼요 — 상황판은 이 명령만 실행하고, 나중에 명령이 바뀌면 다시 승인 전엔 실행하지 않아요', 'Saving approves this exact command — the board runs only it, and not again after a change until re-approved');
+      save.addEventListener('click', function () {
+        var cmd = fCmd.i.value.trim(); if (!cmd) { toast(K('배포 명령을 적어 주세요', 'Enter the deploy command')); fCmd.i.focus(); return; }
+        if (!window.confirm(K('이 명령을 ' + p.name + ' 운영 배포로 연결할까요?\n\n', 'Connect this command as the ' + p.name + ' production deploy?\n\n') + cmd + K('\n\n«배포» 버튼을 누를 때만 실행돼요(지금 실행하지 않음).', '\n\nIt runs only when you press «Deploy» (not now).'))) return;
+        act('/api/projects/' + p.key + '/deploy-setup', { prodLabel: fLab.i.value, command: cmd, dryRun: fDry.i.value, markerUrl: fMk.i.value, markerJson: fMj.i.value }, save).then(function (r) { if (r && r.ok) done(); });
+      });
+      var sr = el('div', 'dsu-act'); sr.appendChild(save); m.appendChild(sr);
+      // ② 스크립트가 없으면 — 그 솔루션 방에 만들기 맡기기
+      m.appendChild(el('div', 'svc-sec', K('② 배포 스크립트가 없으면 — ' + p.name + ' 방에 만들기 맡기기', '② No deploy script — ask the ' + p.name + ' session to make one')));
+      m.appendChild(el('div', 'svc-w', K('그 방이 스크립트를 만들고(운영은 안 건드림 · 시험은 --dry-run 만), 운영서버 주소·접속 방법은 __OWNER__ 님께 질문으로 물어요. 끝나면 보고에 ① 에 넣을 값을 적어요.', 'That session writes the script (production untouched · tests with --dry-run only) and asks you for the server address and access. Its report lists the values for ①.')));
+      var note = document.createElement('textarea'); note.className = 'dsu-note'; note.rows = 2; note.placeholder = K('알려 줄 것 (선택) — 예: 운영서버는 1.2.3.4 의 /opt/app, Docker 로 돎', 'Anything to tell it (optional) — e.g. production is /opt/app on 1.2.3.4, runs in Docker'); m.appendChild(note);
+      var qb = el('button', 'btn', K('대기열에 넣기', 'Add to queue')); qb.type = 'button';
+      qb.addEventListener('click', function () {
+        var n = note.value.trim();
+        var task = K('[운영 배포 연결 준비] ' + p.name + ' 운영 배포 스크립트 만들기 — 상황판 «배포» 버튼이 누를 한 줄 명령을 만든다.\n' +
+          '- 운영서버 주소·접속 계정·열쇠·운영 폴더는 __OWNER__ 님께 ⏸ 로 묻는다(상황판은 이 값을 저장하지 않음 · 스크립트·서버 설정에만). 운영서버에 접속·배포는 하지 않는다.\n' +
+          '- 스크립트가 할 것: 마지막 커밋의 깨끗한 사본만 보냄 · 운영 백업 · 빌드/마이그 · 실패하면 원복 · 성공이면 종료 코드 0. 인자는 --auto · --routine · --dry-run 만(상황판 허용 목록) · --dry-run 은 운영을 바꾸지 않음.\n' +
+          '- 가능하면 운영 공개 주소에 배포 시각 파일(예 /version.json 의 built_at)을 내게 한다 — 상황판이 배포 뒤 바뀌었는지 확인.\n' +
+          '- 스크립트는 git 에 커밋(상황판은 커밋된 스크립트만 누름). 시험은 --dry-run 까지만.\n' +
+          '- 끝나면 보고 «확인할 곳» 대신 «상황판 연결 값» 절: 배포 명령 · 시험 배포 인자 · 운영 확인 주소·시각 칸 — __OWNER__ 님이 ' + p.name + ' 카드 «운영 배포 · 연결 안 됨» 창 ① 에 넣는다(방은 projects.json 을 고치지 않음).' + (n ? '\n- __OWNER__ 님 메모: ' + n : ''),
+          '[Prepare production deploy] Write the ' + p.name + ' production deploy script — one command for the board «Deploy» button to press.\n' +
+          '- Ask the owner (⏸) for the production server address, account, key and folder (the board never stores them — they live in the script / server config). Do not connect to or deploy production.\n' +
+          '- The script: ships only a clean copy of the last commit · backs up production · builds/migrates · restores on failure · exits 0 on success. Arguments only --auto · --routine · --dry-run (board allow-list) · --dry-run never changes production.\n' +
+          '- If possible, publish a deploy-time file on the production site (e.g. /version.json built_at) so the board can confirm the change.\n' +
+          '- Commit the script (the board only presses committed scripts). Test with --dry-run only.\n' +
+          '- In the report add a «Board connection values» section: deploy command · dry-run arguments · check URL and field — the owner enters them in the ' + p.name + ' card «Deploy · not connected» box ① (the session does not edit projects.json).' + (n ? '\n- Owner note: ' + n : ''));
+        act('/api/rooms', { project: p.key, task: task, queue: true, name: K('운영 배포 스크립트 만들기', 'Make deploy script') }, qb).then(function (r) { if (r && r.ok) done(); });
+      });
+      var qr = el('div', 'dsu-act'); qr.appendChild(qb); m.appendChild(qr);
+      if (j.connected) {   // 연결 끊기 — 배포 버튼이 «연결 안 됨» 으로 (운영·스크립트는 그대로)
+        m.appendChild(el('div', 'svc-sec', K('연결 끊기', 'Disconnect')));
+        var off = el('button', 'btn', K('운영 배포 연결 끊기', 'Disconnect production deploy')); off.type = 'button';
+        off.addEventListener('click', function () {
+          if (window.confirm(K(p.name + ' 운영 배포 연결을 끊을까요?\n배포 버튼과 정기 점검 «배포» 가 «연결 안 됨» 이 돼요. 운영서버·배포 스크립트는 그대로이고, 다시 연결하면 명령을 다시 승인해요.', 'Disconnect the ' + p.name + ' production deploy?\nThe Deploy button and the scheduled «Deploy» step become «not connected». Production and the script are untouched; reconnecting approves the command again.')))
+            act('/api/projects/' + p.key + '/deploy-setup', { off: true }, off).then(function (r) { if (r && r.ok) done(); });
+        });
+        var or = el('div', 'dsu-act'); or.appendChild(off); m.appendChild(or);
+      }
+      function done() { document.removeEventListener('keydown', esc); bg.remove(); lastSig = ''; load(); }
+      function esc(ev) { if (ev.key === 'Escape') done(); }
+      x.addEventListener('click', done);
+      bg.addEventListener('click', function (ev) { if (ev.target === bg) done(); });
+      document.addEventListener('keydown', esc);
+      bg.appendChild(m); document.body.appendChild(bg); fCmd.i.focus();
+    }).catch(function () { toast(K('연결 설정을 못 읽었습니다', 'Could not load the connection settings')); });
+  }
   function runnerLine(p) {
     var R = p.runner, row = el('div', 'runner-row');
     row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:4px;';
@@ -1540,6 +1629,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     if (R.holds && R.holds.length) small(K('막음 풀기 ', 'Lift hold ') + R.holds.length, R.holds.map(function (h) { return '«' + h.reason + '» ' + (h.roomName || h.room || ''); }).join(' · '), function (b) {
       if (window.confirm(K('배포 막음을 풀까요?\n', 'Lift the deploy hold?\n') + R.holds.map(function (h) { return '· ' + h.reason + ' (' + (h.roomName || h.room || '?') + ')'; }).join('\n'))) act('/api/projects/' + p.key + '/deploy-unhold', {}, b);
     });
+    if (OWN_NOW) small(K('⚙ 연결 설정', '⚙ Connection'), K('배포 명령·운영 이름·운영 확인 주소 바꾸기 · 연결 끊기', 'Change the deploy command, name or check URL · disconnect'), function () { openDeploySetup(p); });
     if (p.unchecked && p.unchecked.length) small(K('확인 기준선 다시 잡기', 'Reset check baseline'), K('지금까지 끝난 일 ' + p.unchecked.length + '개를 확인한 것으로 보고(누가·언제 기록) 앞으로 끝나는 일부터 «배포 전 확인»', 'Count the ' + p.unchecked.length + ' finished task(s) so far as checked (who/when recorded); confirm from new work on'), function (b) {
       if (window.confirm(K('«배포 전 확인 완료» 기준선을 지금으로 다시 잡을까요?\n확인 안 된 끝난 일 ' + p.unchecked.length + '개를 확인한 것으로 봅니다.', 'Reset the «checked before deploy» baseline to now?\n' + p.unchecked.length + ' unchecked finished task(s) will count as checked.'))) act('/api/projects/' + p.key + '/deploy-baseline', {}, b);
     });
@@ -1875,7 +1965,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   }
   function copyBtn(label, text) {
     var b = el('button', 'btn', label);
-    b.style.cssText = 'font-size:13px;padding:6px 12px;';
+    b.style.cssText = 'font-size:13px;padding:6px 12px;flex:none;white-space:nowrap;';   // 긴 명령 옆에서 «C o p y» 세로로 눌리지 않게
     b.addEventListener('click', function (ev) {
       ev.stopPropagation();
       var orig = b.innerHTML;
@@ -4976,6 +5066,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           });
           btnRow.appendChild(dep);
           if (p.runner) runnerAfter = runnerLine(p);
+          else if (OWN_NOW) { runnerAfter = el('div', 'runner-row'); runnerAfter.style.cssText = 'font-size:12px;margin-top:4px;'; var lg = el('button', 'svc-link', K('⚙ 배포 연결 설정', '⚙ Deploy connection')); lg.type = 'button'; lg.addEventListener('click', function () { openDeploySetup(p); }); runnerAfter.appendChild(lg); }
+        } else if (p.key !== 'server') {
+          var dno = el('button', 'btn dep-off', K('운영 배포 · 연결 안 됨', 'Deploy · not connected')); dno.type = 'button';
+          dno.style.cssText = 'font-size:12px;padding:5px 10px;white-space:nowrap;';
+          dno.title = OWN_NOW ? K('배포할 운영서버가 연결되지 않았어요 — 누르면 연결 설정(배포 스크립트 한 줄 등록 · 없으면 그 방에 만들기 맡기기)', 'No production server connected — click to set it up (register a deploy script, or have the session make one)') : K('배포할 운영서버가 연결되지 않았어요 — 연결은 최종 컨펌자가', 'No production server connected — the final approver sets it up');
+          if (OWN_NOW) dno.addEventListener('click', function () { openDeploySetup(p); }); else dno.disabled = true;
+          btnRow.appendChild(dno);
         }
         var pz = el('button', 'btn', p.paused ? (p.pausedAll ? K('▶ 작업 다시 시작 (전체)', '▶ Restart work (all)') : K('▶ 작업 다시 시작', '▶ Restart work')) : K('⏸ 작업 일시정지', '⏸ Pause work'));
         pz.style.cssText = 'font-size:12px;padding:5px 10px;white-space:nowrap;';

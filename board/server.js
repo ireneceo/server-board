@@ -1302,7 +1302,7 @@ function jobTooLong(sessionId) {
   catch (_) { return false; }
 }
 // 상황판이 방을 세울 때 누가·왜를 적어 둔다(st.stopInfo[sessionId]) — 방 줄에 «멈춘 까닭» 으로 보인다
-const STOP_BY = { user: [' 로 멈춤', '__OWNER__ stopped it with «■ Stop»'], 'doctor-release': ['작업방 자동 점검이 놓아 줌 — 보고까지 끝냈는데 뒤에 남긴 명령 때문에 «일하는 중» 으로 폴더를 잡고 있어서', 'released by the automatic session check — it had reported but a leftover command kept it «Working», holding the folder'],
+const STOP_BY = { user: ['__OWNER__ 가 ■ 중지 버튼으로 멈춤', '__OWNER__ stopped it with «■ Stop»'], 'doctor-release': ['작업방 자동 점검이 놓아 줌 — 보고까지 끝냈는데 뒤에 남긴 명령 때문에 «일하는 중» 으로 폴더를 잡고 있어서', 'released by the automatic session check — it had reported but a leftover command kept it «Working», holding the folder'],
   'doctor-escalate': ['작업방 자동 점검이 2번 깨워도 또 멈춰 세움', 'stopped by the automatic session check after 2 wake-ups did not help'], 'doctor-kick': ['작업방 자동 점검이 깨우려다 다시 붙이지 못함', 'the automatic session check paused it to wake it but could not re-attach'],
   aside: ['허락 창(예/아니오)에서 또 멈춰 비켜 세움', 'set aside — it hit a Yes/No permission prompt again'] };
 function stopWhy(info) {
@@ -2583,7 +2583,7 @@ function deployGuard(key) {
     '- `git stash drop` · `git checkout -- <파일>` · `git reset --hard` 금지.' + (clean ? '' : ' pop 이 충돌하면 손대지 말고 stash 를 남긴 채 ❌ 보고(stash 이름·사본 경로).'),
     '- 배포나 배포 뒤 점검이 실패하면 즉흥 롤백·재시도 금지. ❌ 보고 + 상황판 맨 위(/api/asks)에 되돌리는 명령(스크립트가 알려 준 백업 경로 포함)을 "terminal":["…"] 로 올린다.',
     '- 공지 배너·메일은 하지 않는다. 버전 올리기·릴리즈노트를 손으로 하지 않는다. 배포 스크립트가 버전·새 소식을 스스로 했으면(출력의 «배포 방 커밋: git commit -m … -- <경로>» 줄) 그 줄 그대로 경로 지정 커밋하고 보고에 «새 소식 vX 발행» 한 줄. 스크립트가 안 했으면 보고에 «할 것» 으로 적는다.',
-    '- 이 솔루션에 한도로 못 받은 Fable 대기(상황판 fableWait)가 있어 배포가 막히면: 건마다 작업기록의 자체 검증 숫자를 확인(없으면 돌려 채움)하고, 상황판 맨 위(/api/asks)에 건마다 제목·자체 검증 숫자·검증 안 된 것과 굵은 질문 «**자체 검증만으로 지금 배포할까요?**» 를 올리고 첫 줄 ⏸.  라고 하면 배포하고 보고에 «Fable 미검증(자체 검증·__OWNER__ 확인) 배포: <건 목록>». Fable 대기 항목은 지우지 않는다.',
+    '- 이 솔루션에 한도로 못 받은 Fable 대기(상황판 fableWait)가 있어 배포가 막히면: 건마다 작업기록의 자체 검증 숫자를 확인(없으면 돌려 채움)하고, 상황판 맨 위(/api/asks)에 건마다 제목·자체 검증 숫자·검증 안 된 것과 굵은 질문 «**자체 검증만으로 지금 배포할까요?**» 를 올리고 첫 줄 ⏸. __OWNER__ 가 예라고 답할 때만 배포하고 보고에 «Fable 미검증(자체 검증·__OWNER__ 확인) 배포: <건 목록>». Fable 대기 항목은 지우지 않는다.',
     ...(firstNote ? [firstNote] : [])
   ].join('\n'));
 }
@@ -2971,7 +2971,9 @@ function pageVer() {
     if (m !== pageVerCache.m) {
       const src = fs.readFileSync(INDEX);
       const am = /var PAGE_API = (\d+);/.exec(String(src));
-      pageVerCache = { m, v: crypto.createHash('sha1').update(src).digest('hex').slice(0, 12), api: am ? Number(am[1]) : 0 };
+      // 지문은 «보내는 화면»(서버 이름 등을 채운 뒤) — 원본 파일만 보면 server.js 가 바뀐 재시작에 열린 탭이 그대로라,
+      //   재시작 전 옛 프로그램이 자리표(__SERVER_NAME__)를 안 채운 화면을 계속 보였다
+      pageVerCache = { m, v: crypto.createHash('sha1').update(renderIndex()).digest('hex').slice(0, 12), api: am ? Number(am[1]) : 0 };
     }
     return pageVerCache.v;
   } catch (e) { return 0; }
@@ -3432,7 +3434,7 @@ const TASK_HEADER = T((EN ? [
   '- ✅ 완료 보고에는 «확인할 곳» 절을 넣는다: 개발서버 전체 주소 링크(예: https://dev.example.com/admin/orders)와 그 화면에서 무엇을 확인할지 한 줄씩. 상황판이 링크를 버튼으로 보여 준다. 특정 역할로 봐야 하는 화면이면 줄 끝에 [as=<역할키> <범위>=<번호>] (예: [as=owner ws=6] — 역할키는 그 솔루션 CLAUDE.md) 를 붙이고, 그 줄이 보여 주는 시험 데이터는 지우지 않는다(이름에 [확인용] · 7일 뒤 정리).',
   '- 시작할 때: git status 와 이 솔루션 작업기록(.claude/session-state.md)을 먼저 확인한다(다른 방·도구의 미커밋 변경 덮어쓰기 금지).',
   '- __OWNER__ 답이 필요하면(⏸) 보고 전에 상황판 맨 위에 질문을 올린다(이 방 링크가 붙는다): curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF 다음 줄에 {"room":"<$CLAUDE_JOB_DIR 의 마지막 폴더 이름 = 이 방 번호>","title":"한 줄 제목","question":"무엇을 정해야 하는지·선택지·각 결과","recommend":"권고"} 그다음 줄에 EOF. __OWNER__ 가 이 방에 답하면 저절로 빠진다. __OWNER__ 가 터미널에서 명령을 실행해야 하는 일이면 "terminal":["! 붙여 넣을 명령 그대로"] 도 넣는다(상황판이 «터미널에서 하기» 순서와 복사 버튼으로 보여 준다). 비밀번호를 묻는 명령(sudo · curl … | sh 같은 설치 줄)은 방 안 «!» 로는 실행되지 않으니 «!» 없이 "terminal":["sudo …"] 로 넣는다(상황판이 «서버 창에서 하기» 로 안내). 올린 질문과 마지막 보고는 같은 명령·같은 실행 장소로 쓴다. «!» 명령은 터미널에서 연 이 방 입력칸(claude attach <이 방 번호>)에서만 실행된다 — 상황판 «답하기»·«방 열기» 칸은 글만 전달하니 거기 붙이라고 쓰지 않는다. 보고에는 붙일 곳을 «<솔루션> «<이 방 이름>» 작업방(방 번호 <번호>) — 터미널에서 claude attach <번호> 로 열어 입력칸에» 로 쓰고 명령은 따로 한 줄에.',
-  '- 진행 중인 이 일에 __OWNER__ 만 할 수 있는 행동이 필요하면 둘로 가른다. ① 우리 서버·우리 서비스 안에서 바로 하는 짧은 행동 — 터미널·서버 창에 붙여 넣는 명령(«!»·sudo 같은 비밀번호 명령·운영 접속)·우리 솔루션 관리자 화면 설정·이 방이 기다리는 값 한 줄 답하기 → 따로 «직접 할 일» 카드로 빼지 않는다 — 이 방에서 안내하고 이 방에서 마무리한다: 그 행동에 막히지 않는 일을 먼저 끝까지 하고, 상황판 맨 위에 이 방 행동 질문으로 올린다: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF 다음 줄에 {"room":"<이 방 번호>","act":true,"title":"__OWNER__ 가 할 행동 한 줄(«…하기»)","question":"왜 __OWNER__ 만 할 수 있는지 + 굵은 질문 «**…하고 «했어요» 라고 답해 주실래요?**»","steps":["그대로 따라 할 1단계(화면·메뉴·넣을 값)","2단계"],"links":["https://… 열 화면"],"terminal":["! 붙여 넣을 명령"]} 그다음 줄에 EOF. 보고는 ⏸ — 같은 순서와 굵은 질문. 상황판이 «👉 할 일» 카드와 «✓ 했어요» 버튼(이 방 같은 대화로 감)을 보여 준다. (또는 «!» 명령 결과)로 답하면 먼저 실제로 됐는지 읽기로 확인하고 같은 대화에서 이어서 끝까지 한다(안 됐으면 빠진 것을 새 ⏸ 로). steps 에 «했어요 누르기» 를 쓰지 않는다. ② 우리 서비스(솔루션 화면)도 우리 서버(터미널)도 아닌 곳에서 하는 일 — 외부 서비스 화면(Google·Meta·앱 스토어·결제·계정/키 발급 등)에서 __OWNER__ 가 시간을 따로 내서 하는 일 — 또는 이 방 일과 따로 노는 뒷일(나중 날짜·다른 카드 뒤 — "after":"YYYY-MM-DD"·"waitFor":"<tid>") → «직접 할 일» 카드(/api/todos): 그 앞까지 이 방 일을 끝내고 "apart":"왜 따로인지 한 줄" 과 then(«했어요» 뒤 확인·마무리 — 이 대화 없이도 이어갈 수 있게)을 넣는다(없으면 상황판이 방 카드를 받지 않는다). 보고 ✅ 에 «__OWNER__ 할 일: <제목> — 상황판에 올림». 이미 이 방 행동 질문으로 올린 같은 일을 카드로 옮기면 상황판이 그 질문을 뺀다. 헷갈리면: 우리 서버·우리 서비스 안에서 하는 일이면 ①, 그 밖의 화면에서 하는 일이면 ②. 확인·테스트(«…되는지 보기»·실기기로 보기)는 행동으로 올리지 않는다 — __OWNER__ 는 끝난 일의 «확인할 곳» 을 본다. 짧게 — steps 4줄·한 줄 120자 이하, 화면·버튼·넣을 값만.',
+  '- 진행 중인 이 일에 __OWNER__ 만 할 수 있는 행동이 필요하면 둘로 가른다. ① 우리 서버·우리 서비스 안에서 바로 하는 짧은 행동 — 터미널·서버 창에 붙여 넣는 명령(«!»·sudo 같은 비밀번호 명령·운영 접속)·우리 솔루션 관리자 화면 설정·이 방이 기다리는 값 한 줄 답하기 → 따로 «직접 할 일» 카드로 빼지 않는다 — 이 방에서 안내하고 이 방에서 마무리한다: 그 행동에 막히지 않는 일을 먼저 끝까지 하고, 상황판 맨 위에 이 방 행동 질문으로 올린다: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF 다음 줄에 {"room":"<이 방 번호>","act":true,"title":"__OWNER__ 가 할 행동 한 줄(«…하기»)","question":"왜 __OWNER__ 만 할 수 있는지 + 굵은 질문 «**…하고 «했어요» 라고 답해 주실래요?**»","steps":["그대로 따라 할 1단계(화면·메뉴·넣을 값)","2단계"],"links":["https://… 열 화면"],"terminal":["! 붙여 넣을 명령"]} 그다음 줄에 EOF. 보고는 ⏸ — 같은 순서와 굵은 질문. 상황판이 «👉 할 일» 카드와 «✓ 했어요» 버튼(이 방 같은 대화로 감)을 보여 준다. __OWNER__ 가 답으로 «했어요»(또는 «!» 명령 결과)를 보내면 먼저 실제로 됐는지 읽기로 확인하고 같은 대화에서 이어서 끝까지 한다(안 됐으면 빠진 것을 새 ⏸ 로). steps 에 «했어요 누르기» 를 쓰지 않는다. ② 우리 서비스(솔루션 화면)도 우리 서버(터미널)도 아닌 곳에서 하는 일 — 외부 서비스 화면(Google·Meta·앱 스토어·결제·계정/키 발급 등)에서 __OWNER__ 가 시간을 따로 내서 하는 일 — 또는 이 방 일과 따로 노는 뒷일(나중 날짜·다른 카드 뒤 — "after":"YYYY-MM-DD"·"waitFor":"<tid>") → «직접 할 일» 카드(/api/todos): 그 앞까지 이 방 일을 끝내고 "apart":"왜 따로인지 한 줄" 과 then(«했어요» 뒤 확인·마무리 — 이 대화 없이도 이어갈 수 있게)을 넣는다(없으면 상황판이 방 카드를 받지 않는다). 보고 ✅ 에 «__OWNER__ 할 일: <제목> — 상황판에 올림». 이미 이 방 행동 질문으로 올린 같은 일을 카드로 옮기면 상황판이 그 질문을 뺀다. 헷갈리면: 우리 서버·우리 서비스 안에서 하는 일이면 ①, 그 밖의 화면에서 하는 일이면 ②. 확인·테스트(«…되는지 보기»·실기기로 보기)는 행동으로 올리지 않는다 — __OWNER__ 는 끝난 일의 «확인할 곳» 을 본다. 짧게 — steps 4줄·한 줄 120자 이하, 화면·버튼·넣을 값만.',
   '- 끝났을 때(✅): 마지막 «/개발완료» 커밋 이후 쌓인 일이 크면 — 미커밋 파일 10개 이상 또는 마지막 /개발완료 커밋이 24시간 넘음 — 그리고 `~/dev-server/kit/bin/ai-key-wait 2>/dev/null; claude agents --json` 에 같은 솔루션 폴더의 다른 «busy» 방이 없으면, 이 솔루션의 /개발완료 절차(기록·커밋·백업)를 이어서 실행하고 보고에 적는다. 운영 배포는 하지 않는다.',
   '',
   '[할 일]',
@@ -3940,7 +3942,7 @@ function checkHead(q) {
   const c = q && q.check;
   if (!c || !needsCheck(q)) return '';
   if (c.redo) return K('[시작 전 선검사] 상황판이 «', '[Pre-start check] the board judged «') + (VERDICT_TEXT[c.verdict] || '-') + K('» 으로 뺐다가 «안 됐어요 — 다시 하기» 로 되돌린 일 — 근거: ', '» and removed it, then it was put back with «Not done — redo» — evidence: ') + (c.evidence || '-') + K(' → 근거가 왜 틀렸는지 먼저 보고 빠진 부분을 한다.\n', ' → first see why the evidence was wrong, then do what is missing.\n');
-  if (c.decided === 'go') return K('[시작 전 선검사] ', '[Pre-start check] ') + (VERDICT_TEXT[c.verdict] || '-') + K(' — 근거: ', ' — evidence: ') + (c.evidence || '-') + K(' → . 먼저 근거의 커밋·끝난 일과 겹치는지 확인하고, 겹치는 부분은 빼고 한다.\n', ' → __OWNER__ chose «Do it». First check the overlap with the cited commit/finished task and skip what is already done.\n');
+  if (c.decided === 'go') return K('[시작 전 선검사] ', '[Pre-start check] ') + (VERDICT_TEXT[c.verdict] || '-') + K(' — 근거: ', ' — evidence: ') + (c.evidence || '-') + K(' → __OWNER__ 가 고른 답: «할게요». 먼저 근거의 커밋·끝난 일과 겹치는지 확인하고, 겹치는 부분은 빼고 한다.\n', ' → __OWNER__ chose «Do it». First check the overlap with the cited commit/finished task and skip what is already done.\n');
   if (c.err) return '';
   if (c.verdict && c.verdict !== 'needed') return K('[시작 전 선검사] ', '[Pre-start check] ') + (VERDICT_TEXT[c.verdict] || '-') + K(' — 근거: ', ' — evidence: ') + (c.evidence || '-') + K(' → 짚은 근거를 확인할 수 없어 시작함. 먼저 근거와 겹치는지 확인하고, 이미 된 부분은 빼고 한다(다 됐으면 그렇게 보고).\n', ' → the cited evidence could not be confirmed, so it started. First check the overlap; skip what is done (report so if all done).\n');
   return K('[시작 전 선검사] 필요함 — ', '[Pre-start check] still needed — ') + (c.evidence || '-') + '\n';
@@ -4115,6 +4117,65 @@ async function handleAction(req, res, url, who) {
     writeLog({ action: 'team', members: n.members.map((m) => loginIdOf(m) + ':' + m.role + (m.active ? '' : ':off') + ':' + m.projects.join('+')), approval: n.approval, smallDirect: n.smallDirect, memberTotp: n.memberTotp, memberAnswers: n.memberAnswers, deployConfirm: n.deployConfirm });
     cache.at = 0;
     return send(res, 200, { ok: true, message: K('저장했습니다 — 바로 적용됩니다', 'Saved — applies right away'), risks: teamRisks() });
+  }
+  //
+  const mds = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/deploy-setup$/);
+  if (mds) {
+    const all = loadProjects(), proj = all.find((p) => p.key === mds[1]);
+    if (!proj || proj.key === 'server') return send(res, 404, { ok: false, message: K('솔루션을 찾을 수 없습니다', 'Project not found') });
+    const by = who.name || who.user;
+    const st0 = loadState(), rr0 = (st0.deployRuns || {})[proj.key], lk0 = runner.readLock(), pz0 = st0.paused[proj.key];
+    // 대기열 · 일시정지(준비 방·메모리 기다림·정기 점검 실행기) · 실행기 시작 판정 · 실행 중 · 잠금 — 어느 하나라도면 못 바꿈 (Fable 완료 검증 ①)
+    if (st0.queue.some((q) => q.project === proj.key && (q.gate === 'deploy' || (q.gate === 'check' && (q.steps || []).includes('deploy'))))
+      || (pz0 && (pz0.gate === 'deploy' || pz0.runnerPending || pz0.gateRunner || pz0.runnerCheck || (pz0.gate === 'check' && (pz0.steps || []).includes('deploy'))))
+      || runnerStarting.has(proj.key) || (rr0 && rr0.result === 'running') || (lk0 && lk0.key === proj.key))
+      return send(res, 409, { ok: false, message: K(proj.name + ' 배포가 준비·진행 중이라 지금은 연결 설정을 바꿀 수 없어요 — 끝난 뒤에', proj.name + ' is deploying — change the connection after it finishes') });
+    const next = Object.assign({}, proj);
+    if (body.off === true) {   // 연결 끊기 — 배포 버튼이 «연결 안 됨» 으로 (스크립트·운영은 그대로)
+      if (!proj.prodLabel && !proj.deploy) return send(res, 200, { ok: true, message: K('이미 연결 안 됨이에요', 'Already not connected') });
+      next.prodLabel = null; delete next.deploy; delete next.prodMarker;
+    } else {
+      const label = String(body.prodLabel || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 40) || proj.name + K(' 운영', ' production');
+      const command = String(body.command || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().replace(/\s+/g, ' ');
+      const dryRun = String(body.dryRun || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().replace(/\s+/g, ' ');
+      if (!command) return send(res, 400, { ok: false, message: K('배포 명령을 적어 주세요(그 솔루션 폴더 기준, 예 ./scripts/deploy.sh --auto)', 'Enter the deploy command (relative to the project folder, e.g. ./scripts/deploy.sh --auto)') });
+      if (/[;&|`$<>(){}\\'"*?~]/.test(command + ' ' + dryRun)) return send(res, 400, { ok: false, message: K('명령은 «스크립트 경로 + 인자» 만 — ; & | $ 따옴표 같은 셸 기호는 못 써요', 'Command must be «script path + arguments» only — no shell symbols') });
+      let marker = null;
+      const mu = String(body.markerUrl || '').trim();
+      if (mu) {
+        let u = null; try { u = new URL(mu); } catch (_) {}
+        if (!u || u.protocol !== 'https:') return send(res, 400, { ok: false, message: K('운영 확인 주소는 https:// 로 시작하는 공개 주소여야 해요', 'The production check URL must be a public https:// address') });
+        const mj = String(body.markerJson || '').trim();
+        if (mj && !/^[\w.-]{1,40}$/.test(mj)) return send(res, 400, { ok: false, message: K('JSON 칸 이름은 영문·숫자·_ . - 만(예 built_at)', 'JSON field name: letters, digits, _ . - only (e.g. built_at)') });
+        marker = mj ? { url: u.href, json: mj } : { url: u.href, header: 'last-modified' };
+      }
+      next.prodLabel = label;
+      const oldC = runner.conf(proj), sameScript = oldC && oldC.script === path.resolve(proj.dir, command.split(' ')[0]);
+      next.deploy = Object.assign({}, sameScript ? proj.deploy : {}, { command });
+      if (dryRun) next.deploy.dryRun = dryRun; else delete next.deploy.dryRun;
+      if (marker) next.prodMarker = marker; else delete next.prodMarker;
+      const c = runner.conf(next), pr = runner.confProblems(c);
+      if (pr.length) return send(res, 400, { ok: false, message: pr.join(' · ') });
+      // 링크 파일이면 git 에 커밋된 것은 링크뿐 — 가리키는 파일은 커밋 없이 바뀔 수 있어 받지 않음
+      let isLink = false; try { isLink = fs.lstatSync(c.script).isSymbolicLink(); } catch (_) {}
+      if (isLink) return send(res, 400, { ok: false, message: K('배포 스크립트가 링크 파일이에요 — 실제 스크립트 파일 경로를 넣으세요', 'The deploy script is a symlink — enter the real script file path') });
+      const rel = path.relative(proj.dir, c.script);
+      const tracked = await new Promise((r) => execFile('git', ['-C', proj.dir, 'ls-tree', '--name-only', 'HEAD', '--', rel], { timeout: 10000 }, (e, o) => r(!e && String(o).trim() === rel)));
+      if (!tracked) return send(res, 400, { ok: false, message: K('배포 스크립트가 git 에 커밋되어 있지 않아요: ' + rel + ' — 그 솔루션 방에서 커밋한 뒤 연결하세요(상황판은 커밋된 스크립트만 누름)', 'The deploy script is not committed in git: ' + rel + ' — commit it in that project first') });
+    }
+    // 저장 전 옛 파일을 기록 폴더에 남김(되돌리기용) · 쓰다 끊겨도 반쪽 파일이 안 남게
+    try { fs.mkdirSync(LOG_DIR, { recursive: true }); fs.copyFileSync(PROJECTS_FILE, path.join(LOG_DIR, 'projects-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json')); } catch (_) {}
+    const out = all.map((p) => (p.key === proj.key ? next : p));
+    fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(out, null, 2) + '\n'); fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
+    writeLog({ action: 'deploy-setup', project: proj.key, by, off: body.off === true, prodLabel: next.prodLabel || null, command: next.deploy ? next.deploy.command : null, dryRun: next.deploy && next.deploy.dryRun || null, marker: next.prodMarker ? next.prodMarker.url : null });
+    // 끊기·명령 바뀜 → «첫 실행은 버튼» 다시 · 끊기면 승인도 거둠(같은 칸이 돌아와도 다시 승인 전엔 안 돔) (Fable 완료 검증 ②③)
+    { const s1 = loadState(), ap = (s1.deployApproved || {})[proj.key], nc = body.off === true ? null : runner.conf(next);
+      if (!nc || !ap || ap.hash !== nc.hash) { if (s1.deployScriptHash) delete s1.deployScriptHash[proj.key]; }
+      if (body.off === true && ap) { delete s1.deployApproved[proj.key]; writeLog({ action: 'deploy-revoke', project: proj.key, by, hash: ap.hash }); }
+      saveState(s1); }
+    if (body.off === true) { cache.at = 0; return send(res, 200, { ok: true, message: K(proj.name + ' 운영 배포 연결을 끊었어요 — 배포 버튼은 «연결 안 됨» 으로 보여요(운영서버·스크립트는 그대로)', proj.name + ' disconnected — the Deploy button now shows «not connected»') }); }
+    const a = runner.approve(next, by); cache.at = 0;   // 주인이 화면에서 명령을 보고 넣은 것 = 승인(같은 기록 줄 · 지문)
+    return send(res, 200, { ok: true, message: K('연결했어요 — 상황판이 이 명령만 실행합니다: ', 'Connected — the board runs only this command: ') + a.command + (next.deploy.dryRun ? K(' · 먼저 «시험 배포» 로 확인해 보세요', ' · try «Dry run» first') : '') });
   }
   const mrn = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/deploy-(approve|dry|ack|unhold|baseline|status)$/);
   if (mrn) {
@@ -4680,7 +4741,7 @@ async function handleAction(req, res, url, who) {
     if (prev && rvl && rvl.review && !rvl.settled) { rvl.settled = 'updated'; rvl.settledAt = new Date().toISOString(); }
     saveState(st); cache.at = 0;
     writeLog({ action: 'todo-add', tid, project: proj.key, room, title, updated: prev ? true : undefined, recheck: body.recheck === true || undefined, apart: apart || undefined, movedAsks: movedAsks.length ? movedAsks : undefined });
-    return send(res, 200, { ok: true, tid, movedAsks: movedAsks.length ? movedAsks : undefined, message: T(K('상황판 «__OWNER__ 님이 직접 할 일» 에 올렸습니다 — 기다리지 말고 막히지 않는 일을 계속하세요.  를 누르면 상황판이 ', 'Posted to «For __OWNER__ to do» on the board — do not wait; keep doing the work that is not blocked. When __OWNER__ presses «Done», the board ') +
+    return send(res, 200, { ok: true, tid, movedAsks: movedAsks.length ? movedAsks : undefined, message: T(K('상황판 «__OWNER__ 님이 직접 할 일» 에 올렸습니다 — 기다리지 말고 막히지 않는 일을 계속하세요. __OWNER__ 가 버튼 «했어요» 를 누르면 상황판이 ', 'Posted to «For __OWNER__ to do» on the board — do not wait; keep doing the work that is not blocked. When __OWNER__ presses «Done», the board ') +
       (st.asks[tid].then ? K('«이어서 할 일(then)» 을 이 방(없으면 새 방)에 보냅니다.', 'sends «then» to this session (or a new one).') : K('목록에서 뺍니다(then 이 없어 이어서 할 일은 보내지 않음).', 'removes it (no «then», so nothing is sent).'))) });
   }
   if (url === '/api/todos/done') {
@@ -5545,7 +5606,7 @@ async function handleAction(req, res, url, who) {
 
 const AUTH_ISSUER = 'Server Board';
 const setupPending = new Map();   // nonce → { id, secret, exp } — 인증 앱 등록 중(15분)
-const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline))$/, /^\/api\/deploy-check$/,
+const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup))$/, /^\/api\/deploy-check$/,
   /^\/api\/schedules/, /^\/api\/rooms\/[0-9a-f]{8}\/delete$/, /^\/api\/queue\/[0-9a-z]+\/delete$/, /^\/api\/asks\/[0-9a-z]+\/delete$/, /^\/api\/fable-wait\/fw[0-9a-z]+\/delete$/,
   /^\/api\/ai-login\//, /^\/api\/setup\/(start|reopen|done)$/, /^\/api\/update\/(apply|revert)$/, /^\/api\/auth\/(invite|kick|remove)$/];
 const needsFresh = (who, url) => who.role === 'owner' && who.via !== 'terminal' && SENSITIVE_POST.some((re) => re.test(url)) && !who.fresh;
@@ -5922,6 +5983,17 @@ async function serveReq(req, res, who) {
       if (!canSee(who, key)) return send(res, 403, { ok: false });
       const q = (loadState().inquiries || {})[key] || null;
       return send(res, 200, { ok: true, project: key, items: (q ? q.items || [] : []).map((x) => x.draft ? Object.assign({}, x, { draftId: inqReplyRef(x).split(':').pop() }) : x) });
+    }
+    if (url === '/api/deploy-setup') {   // 운영 배포 연결 창 — 지금 값 + 그 폴더에서 찾은 배포 스크립트 후보(git 에 있는 것) · 주인만
+      if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있어요', 'Owner only') });
+      const proj = loadProjects().find((p) => p.key === (new URL(req.url, ORIGIN).searchParams.get('p') || ''));
+      if (!proj || proj.key === 'server') return send(res, 404, { ok: false });
+      const files = await new Promise((r) => execFile('git', ['-C', proj.dir, 'ls-files'], { timeout: 10000, maxBuffer: 32 * 1024 * 1024 }, (e, o) => r(e ? '' : String(o))));
+      const candidates = files.split('\n').filter((f) => /(^|\/)[^/]*deploy[^/]*\.sh$/i.test(f) && !/(^|\/)(node_modules|vendor|test|tests)\//.test(f) && f.split('/').length <= 3).slice(0, 12)
+        .map((f) => { let x = false; try { fs.accessSync(path.join(proj.dir, f), fs.constants.X_OK); x = true; } catch (_) {} return { path: './' + f, exec: x }; });
+      return send(res, 200, { ok: true, key: proj.key, name: proj.name, dir: proj.dir, connected: !!proj.prodLabel,
+        prodLabel: proj.prodLabel || null, command: proj.deploy ? proj.deploy.command : null, dryRun: proj.deploy && proj.deploy.dryRun || null,
+        marker: proj.prodMarker || null, legacy: !!proj.prodLabel && !proj.deploy, allowedArgs: runner.ALLOWED_ARGS, candidates });
     }
     if (url === '/api/services') {
       const key = new URL(req.url, ORIGIN).searchParams.get('p') || '';
@@ -8044,7 +8116,7 @@ function runnerDone(proj, run) {
     const fixQid = 'q' + Date.now().toString(36);
     if (s2.deployRuns && s2.deployRuns[proj.key] && s2.deployRuns[proj.key].runId === run.runId) s2.deployRuns[proj.key].fixQid = fixQid;   // 버튼이 «원인 고침» 을 알게
     s2.queue.push({ qid: fixQid, project: proj.key, title: K('배포 실패 원인 고치기', 'Fix deploy failure'), createdAt: new Date().toISOString(),
-      task: K('[상황판 배포 실행기 — ' + bad + ']\n상황판이 `' + run.command + '` 을 실행했고 결과가 «' + run.result + '» 였다. 기록: ' + run.log + '\n할 일: 기록을 읽고 원인을 개발서버에서 고쳐 커밋한다. 배포 명령·운영 접속 명령은 실행하지 않는다 — 다시 배포는  버튼이 한다. 운영이 반쯤 바뀌었을 가능성(«모름»)이면 읽기로만 상태를 확인해 보고에 적는다. 보고 첫 줄 규칙 그대로.',
+      task: K('[상황판 배포 실행기 — ' + bad + ']\n상황판이 `' + run.command + '` 을 실행했고 결과가 «' + run.result + '» 였다. 기록: ' + run.log + '\n할 일: 기록을 읽고 원인을 개발서버에서 고쳐 커밋한다. 배포 명령·운영 접속 명령은 실행하지 않는다 — 다시 배포는 __OWNER__ 가 배포 버튼으로 한다. 운영이 반쯤 바뀌었을 가능성(«모름»)이면 읽기로만 상태를 확인해 보고에 적는다. 보고 첫 줄 규칙 그대로.',
         '[Board deploy runner — ' + bad + ']\nThe board ran `' + run.command + '`, result «' + run.result + '». Log: ' + run.log + '\nTask: read the log, fix the cause on the dev server and commit. Do not run the deploy command or production commands — redeploying is the owner\'s «Deploy» button. If production may be half-changed («unknown»), check read-only and report.') });
     saveState(s2);
   } catch (_) {}
@@ -8067,10 +8139,12 @@ function queueReleaseCommit(proj, run) {
   } catch (_) {}
 }
 /** 기록 파일에 주인 승인 줄(같은 지문)이 있나 — state.json 만 고친 승인은 안 믿는다 */
-function approvedInLog(key, hash) {
+function approvedInLog(key, hash) {   // 그 지문의 마지막 줄이 승인일 때만 — 연결 끊기(deploy-revoke) 뒤엔 다시 승인해야 (Fable 완료 검증 ③)
   try {
-    for (const f of fs.readdirSync(LOG_DIR).filter((x) => /^\d{4}-\d\d-\d\d\.log$/.test(x)).sort().reverse())
-      if (fs.readFileSync(path.join(LOG_DIR, f), 'utf8').split('\n').some((l) => l.includes('"deploy-approve"') && l.includes('"project":"' + key + '"') && l.includes('"hash":"' + hash + '"'))) return true;
+    for (const f of fs.readdirSync(LOG_DIR).filter((x) => /^\d{4}-\d\d-\d\d\.log$/.test(x)).sort().reverse()) {
+      const ls = fs.readFileSync(path.join(LOG_DIR, f), 'utf8').split('\n').filter((l) => (l.includes('"deploy-approve"') || l.includes('"deploy-revoke"')) && l.includes('"project":"' + key + '"') && l.includes('"hash":"' + hash + '"'));
+      if (ls.length) return ls[ls.length - 1].includes('"deploy-approve"');
+    }
   } catch (_) {}
   return false;
 }
