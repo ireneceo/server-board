@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.4]
+**Updates**
+- The board version and «check for updates» moved from the bottom of 🌐 Language to a chip next to the server name in the title (v… ↻ — tap to check now; shows «check failed» when the repository cannot be reached)
+
+**Releasing (source server only)**
+- Right after a release is packed (tests and review still running) the box says «packed — checking before push» instead of a red «not pushed»; it turns red only if the push is still missing 30 minutes after packing.
+
 ## [0.6.3]
 **Releasing (source server only)**
 - The board that publishes Server Board now counts board changes not yet released (commits since the last tag, [Unreleased] lines) and shows «Release vX» at the top; about an hour after the last change it queues the release in the server room once a day (`config.json` `"publish": {"auto": false}` turns that off). Installed boards are unaffected — they keep getting the «new version» notice within 6 hours of a release

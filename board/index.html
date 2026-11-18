@@ -608,6 +608,11 @@
   .tools .lbl-short { display: none; }
   .head { margin: 0 0 14px; }
   .head .updbadge { font-size: .5em; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 0; background: var(--amber, #c77700); color: #fff; vertical-align: middle; cursor: pointer; white-space: nowrap; }
+  /* 판 번호·새 판 확인 — 서버 이름 옆 */
+  .head .verchip { font: inherit; font-size: .5em; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); vertical-align: middle; cursor: pointer; white-space: nowrap; }
+  .head .verchip:hover { color: var(--link); border-color: var(--link); }
+  .head .verchip.bad { color: var(--red, #c62828); border-color: currentColor; }
+  .head .verchip:disabled { opacity: .6; cursor: wait; }
   .tunhint { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
   .tunhint .th-t { flex: 1 1 260px; min-width: 0; }
   .tunhint .btn { flex: none; }
@@ -750,7 +755,7 @@
 <button id="totop" type="button"><!--ko-->↑ 맨 위로<!--/ko--><!--en-->↑ Top<!--/en--></button>
 <main>
   <!-- 갱신 시각은 제목 바로 아래 -->
-  <div class="head"><div class="head-t"><h1><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--> <span class="srvname" title="<!--ko-->이 상황판이 도는 서버<!--/ko--><!--en-->The server this board runs on<!--/en-->">__SERVER_NAME__</span> <button type="button" id="updbadge" class="updbadge" hidden></button></h1><span id="pauseslot"></span></div><div class="sub" id="sub"><!--ko-->불러오는 중…<!--/ko--><!--en-->Loading…<!--/en--></div></div>
+  <div class="head"><div class="head-t"><h1><!--ko-->Server 상황판<!--/ko--><!--en-->Server Board<!--/en--> <span class="srvname" title="<!--ko-->이 상황판이 도는 서버<!--/ko--><!--en-->The server this board runs on<!--/en-->">__SERVER_NAME__</span> <button type="button" id="verchip" class="verchip" hidden></button> <button type="button" id="updbadge" class="updbadge" hidden></button></h1><span id="pauseslot"></span></div><div class="sub" id="sub"><!--ko-->불러오는 중…<!--/ko--><!--en-->Loading…<!--/en--></div></div>
   <div id="err"></div>
   <div id="outbox" hidden></div>
   <div class="tools" id="tools">
@@ -825,7 +830,6 @@
       <select id="l-ai"></select>
       <small><!--ko-->AI 가 쓰는 글이라 어느 언어든 됩니다. 상태 기호(✅ ⏸ ❌ 🕓)는 그대로라 상황판 판정은 같습니다. 바꾸면 새로 시작하는 일부터 적용.<!--/ko--><!--en-->The AI writes these, so any language works. Status marks (✅ ⏸ ❌ 🕓) stay the same, so the board reads them the same way. Applies to work started after the change.<!--/en--></small></label>
     <button type="button" class="btn primary" id="l-save"><!--ko-->저장<!--/ko--><!--en-->Save<!--/en--></button>
-    <div id="l-upd" hidden style="margin-top:12px;"><small id="l-upd-t"></small> <button type="button" class="btn" id="l-upd-b"><!--ko-->새 판 확인<!--/ko--><!--en-->Check for updates<!--/en--></button></div>
   </div>
   <div class="langbox" id="notifybox" hidden>
     <div class="nsec" id="n-kinds">
@@ -3673,6 +3677,11 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       box.appendChild(el('small', null, K('올리면 다른 서버 상황판에 6시간 안에 «새 판» 알림이 떠요.', 'Once pushed, other boards show «new version» within 6 hours.')));
       return box;
     }
+    if (!p.pushed && p.packing) {
+      box.appendChild(el('div', 'rname', K('공개판 v' + p.last + ' 묶음 — 올리기 전 확인 중', 'Release v' + p.last + ' packed — checking before push')));
+      box.appendChild(el('small', null, K('공개판 시험·Fable 판정 뒤 공개 저장소에 올려요. 묶은 지 30분이 지나도 안 올라가면 빨갛게 알려요.', 'It is pushed after the public tests and the Fable review. If it is still not pushed 30 minutes after packing, this turns red.')));
+      return box;
+    }
     if (!p.pushed) {
       box.className = 'err';
       box.appendChild(el('div', 'rname', K('공개판 v' + p.last + ' 이 묶여 있는데 공개 저장소에 안 올라갔어요', 'Release v' + p.last + ' is packed but not pushed to the public repository')));
@@ -5264,13 +5273,17 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }
     // SSH 통로로 들어온 기기 — 창을 닫으면 안 열린다는 것·늘 열어 두는 길을 상황판이 먼저 (처음 설정 직후엔 크게)
     var thb = tunHintBox(me); if (thb) { if (thb.big) todo.insertBefore(thb, todo.firstChild); else todo.appendChild(thb); }
-    var lu = document.getElementById('l-upd');
-    if (lu) {
-      lu.hidden = !(OWN && data.update && data.update.current);
-      if (!lu.hidden) {
-        document.getElementById('l-upd-t').textContent = K('상황판 판 ', 'Board version ') + data.update.current + (data.update.checkedAt ? K(' · 마지막 확인 ', ' · last checked ') + new Date(data.update.checkedAt).toLocaleString() : '') + (data.update.newer ? K(' · 새 판 ', ' · new version ') + data.update.latest : /^(fetch|no-origin|git)$/.test(data.update.why || '') ? K(' · 확인 실패', ' · check failed') : '');
-        var lb = document.getElementById('l-upd-b');
-        lb.onclick = function () { lb.disabled = true; post('/api/update/check', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () {}).then(function () { lb.disabled = false; }); };
+    var vc = document.getElementById('verchip');
+    if (vc) {
+      var vu = data.update;
+      vc.hidden = !(OWN && vu && vu.current);
+      if (!vc.hidden && !vc.disabled) {
+        var vbad = !vu.newer && /^(fetch|no-origin|git)$/.test(vu.why || '');
+        vc.classList.toggle('bad', vbad);
+        vc.textContent = 'v' + String(vu.current).replace(/^v/, '') + (vbad ? K(' · 확인 실패 ↻', ' · check failed ↻') : ' ↻');
+        vc.title = K('상황판 판 ', 'Board version ') + vu.current + (vu.checkedAt ? K(' · 마지막 확인 ', ' · last checked ') + new Date(vu.checkedAt).toLocaleString() : '') + (vu.newer ? K(' · 새 판 ', ' · new version ') + vu.latest : '') + K(' — 눌러서 지금 새 판 확인', ' — tap to check for updates now');
+        vc.setAttribute('aria-label', vc.title);
+        vc.onclick = function () { vc.disabled = true; vc.textContent = K('확인 중…', 'Checking…'); post('/api/update/check', {}).then(function (j) { toast(j.message || ''); }).catch(function () {}).then(function () { vc.disabled = false; load(); }); };
       }
     }
 

@@ -76,6 +76,18 @@ test('방금 고친 커밋(1시간 안)·커밋 전 파일이 있으면 자동�
   assert.equal(board.publishView([]).dirty, 1);
 });
 
+test('막 묶고 아직 안 올린 판: 30분 안은 «올리기 전 확인 중»(packing) · 지나면 빨간 «안 올라감»', async () => {
+  const dist = path.join(sb.root, 'dist', 'server-board');
+  commit(dist, 'board/VERSION', '0.6.3\n', 5); G(dist, 'tag', 'v0.6.3');   // 5분 전 묶음 · push 안 함
+  let v = await board.publishScan();
+  assert.equal(v.last, '0.6.3'); assert.equal(v.pushed, false);
+  assert.equal(board.publishView([]).packing, true, '막 묶음 — 오탐 빨강 안 띄움');
+  commit(dist, 'board/VERSION', '0.6.4\n', 45); G(dist, 'tag', 'v0.6.4');   // 45분 전 묶음 · push 안 함
+  v = await board.publishScan();
+  assert.equal(v.last, '0.6.4'); assert.equal(v.pushed, false);
+  assert.equal(board.publishView([]).packing, false, '30분 지나도 안 올라감 → 빨강');
+});
+
 test('설치본(board/VERSION 있음)에선 꺼짐', async () => {
   fs.writeFileSync(path.join(sb.dir, 'VERSION'), '0.6.2\n');
   assert.equal(await board.publishScan(), null);

@@ -507,6 +507,7 @@ function updateView() {
 const PUB_DIST = path.join(UPD_DIR, 'dist', 'server-board');
 const PUB_QUIET_MS = 60 * 60 * 1000;          // 마지막 상황판 고침 커밋 뒤 1시간 조용하면
 const PUB_AUTO_GAP_MS = 20 * 3600 * 1000;     // 자동 내기는 하루 한 번쯤
+const PUB_PACK_MS = 30 * 60 * 1000;
 const PUB_PATHS = ['board/server.js', 'board/index.html', 'board/deploy-runner.js', 'board/auth.js', 'board/auth-cli.js', 'board/gate.js', 'board/cred-guard.js', 'board/key-window.js', 'board/updater.js', 'board/update-runner.js', 'board/config.example.json', 'board/test', 'public', 'kit', 'morning-check.sh', 'bin'];
 let pubCache = { at: 0, v: null, busy: false };
 function pubGit(dir, args) { return new Promise((r) => execFile('git', ['-C', dir].concat(args), { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (e, o) => r(e ? null : String(o || '').trim()))); }
@@ -589,7 +590,8 @@ function publishView(rooms) {
   const st = peekState(); const p = st.publish || {};
   const work = publishWorking(st, rooms);
   const qs = p.qid && (st.qStarted || {})[p.qid];
-  return { last: v.last, lastAt: v.lastAt, pushed: v.pushed, next: v.next, heads: v.heads.slice(0, 12), items: v.items, commits: v.commits, lastCommitAt: v.lastCommitAt, dirty: v.dirty,
+  const packing = !v.pushed && v.lastAt && Date.now() - Date.parse(v.lastAt) < PUB_PACK_MS;
+  return { last: v.last, lastAt: v.lastAt, pushed: v.pushed, packing: !!packing, next: v.next, heads: v.heads.slice(0, 12), items: v.items, commits: v.commits, lastCommitAt: v.lastCommitAt, dirty: v.dirty,
     auto: ((CONFIG.publish || {}).auto) !== false, quietAt: v.lastCommitAt ? new Date(Date.parse(v.lastCommitAt) + PUB_QUIET_MS).toISOString() : null,
     work, workVer: work ? p.ver : null, room: work === 'working' && qs ? qs.id : null, queuedAt: p.at || null };
 }
