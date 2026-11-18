@@ -174,6 +174,41 @@ async function start(proj, opts) {
 function tailOf(file, n) {
   try { const s = fs.readFileSync(file, 'utf8'); return s.replace(/\x1b\[[0-9;]*m/g, '').split('\n').filter((x) => x.trim()).slice(-n).join('\n'); } catch (_) { return ''; }
 }
+/** 실패 원인을 기록에서 읽어 한 줄로 — 맨 위 카드·버튼·고치는 방이 같은 말을 쓰게
+ *  retry = 고치지 않고 다시 눌러도 될 만한 것 */
+function failCause(text, opts) {
+  opts = opts || {};
+  const t = String(text || '').replace(/\x1b\[[0-9;]*m/g, '');
+  const K = (D && D.K) || ((a) => a);
+  const lines = t.split('\n');
+  if (opts.timedOut) return { kind: 'timeout', retry: false, title: K('시간을 넘겨 멈춤', 'Stopped after the time limit'), items: [],
+    hint: K('운영이 반쯤 바뀌었을 수 있어요 — 고치는 방이 읽기로 운영 상태를 확인해요', 'Production may be half-changed — the fix session checks it read-only') };
+  const items = [], names = [];
+  const bi = lines.findIndex((l) => /깨진 항목|Failed items|FAILED:/i.test(l));
+  if (bi >= 0) {
+    for (let i = bi + 1; i < lines.length && items.length < 6; i++) {
+      const m = lines[i].match(/^\s*\d+\.\s+(.+)$/);
+      if (m) { const nx = (lines[i + 1] || '').trim(); names.push(m[1].trim().slice(0, 120)); items.push((m[1].trim() + (nx && !/^\d+\./.test(nx) ? ' — ' + nx : '')).slice(0, 300)); }
+    }
+  }
+  const errLine = (lines.find((l) => /\[ERROR\]|^ERROR|✗ .*실패|FATAL/i.test(l)) || '').replace(/^\s*\[ERROR\]\s*/, '').trim().slice(0, 200);
+  const mem = /heap out of memory|ENOMEM|Cannot allocate memory|^Killed\b|메모리 (부족|모자)/im.test(t);
+  const gate = items.length || (!mem && /게이트|\bgate\b|health-check|검사.*실패/i.test(errLine));
+  if (gate) {
+    const flaky = items.length && items.every((x) => /\b429\b|Too many requests|ECONNRESET|ETIMEDOUT|socket hang up/i.test(x));
+    const what = !errLine ? K('배포 전 검사', 'pre-deploy check') : /health-check/.test(errLine) ? K('배포 전 검사(health-check)', 'Pre-deploy check (health-check)') : errLine.replace(/\s*[—-]\s*배포 중단.*$/, '').replace(/\s*자세히:.*$/, '');
+    return { kind: flaky ? 'flaky' : 'gate', retry: !!flaky, items,
+      title: (what + (items.length ? K(' — ' + items.length + '건 걸림: ', ' — ' + items.length + ' failed: ') + names[0] : '')).slice(0, 160),
+      hint: flaky ? K('요청 횟수 제한(429) 같은 일시적 실패예요 — 몇 분 뒤 다시 누르면 대개 통과해요', 'A temporary failure (rate limit 429 etc.) — pressing again in a few minutes usually passes')
+        : K('운영은 그대로예요. 개발서버의 코드·데이터를 고쳐야 통과해요 — 고치기 전에 다시 누르면 같은 검사에 또 걸려요', 'Production is unchanged. The dev code/data must be fixed first — pressing again before that fails the same check') };
+  }
+  if (mem) return { kind: 'memory', retry: true, items: [], title: K('메모리 부족', 'Out of memory'),
+    hint: K('다른 무거운 일(빌드·시험)이 끝난 뒤 다시 누르면 돼요', 'Press again after other heavy work (builds, tests) finishes') };
+  if (/ssh: connect|Connection (timed out|refused|reset)|Could not resolve|Permission denied \(publickey|운영서버 SSH.*(실패|FAIL)/i.test(t)) return { kind: 'network', retry: true, items: [], title: K('운영서버 접속 실패', 'Could not reach production'),
+    hint: K('몇 분 뒤 다시 누르세요 — 계속되면 운영서버 상태를 봐야 해요', 'Press again in a few minutes — if it keeps failing, production needs a look') };
+  const last = errLine || (lines.filter((l) => l.trim()).slice(-1)[0] || '').trim().slice(0, 200);
+  return { kind: 'other', retry: false, items: [], title: last || K('원인 줄을 못 찾음', 'No error line found'), hint: K('고치는 방이 기록 전체를 읽고 원인을 찾아요', 'The fix session reads the whole log to find the cause') };
+}
 async function finish(proj, c, run, code, sig, timedOut) {
   // running 은 결과를 다 적은 뒤에 지운다 — 표식 확인(최대 2분) 사이에 recover() 가 «모름» 으로 마감하지 않게
   run.end = new Date().toISOString(); run.code = code; run.signal = sig || null;
@@ -193,6 +228,7 @@ async function finish(proj, c, run, code, sig, timedOut) {
   }
   if (timedOut) run.why = D.K(c.timeoutMin + '분 넘어 멈춤 — 운영이 반쯤 바뀌었을 수 있음', 'stopped after ' + c.timeoutMin + ' min — production may be half-changed');
   run.tail = tailOf(run.log, 25);
+  if (run.result === 'fail' || run.result === 'unknown' || run.result === 'dry-fail') run.cause = failCause(tailOf(run.log, 80), { timedOut });
   const st = D.loadState();
   if (run.result === 'ok') {
     st.deployScriptHash = st.deployScriptHash || {}; st.deployScriptHash[proj.key] = scriptsHash(c);
@@ -273,4 +309,4 @@ function summary(proj) {
     last: (st.deployRuns || {})[proj.key] || null, lastDry: (st.deployDry || {})[proj.key] || null,
     holds: Object.values((st.deployHold || {})[proj.key] || {}), scheduledReady: !!((st.deployScriptHash || {})[proj.key]) };
 }
-module.exports = { MEM_WAIT_MS, init, conf, confProblems, check, start, recover, ack, approve, hold, unhold, summary, scriptsHash, readLock, ALLOWED_ARGS, _running: running };
+module.exports = { MEM_WAIT_MS, init, conf, confProblems, check, start, recover, ack, approve, hold, unhold, summary, scriptsHash, readLock, failCause, tailOf, ALLOWED_ARGS, _running: running };

@@ -231,3 +231,12 @@ test('배포 준비 방 — 일시정지를 쥔 동안은 치우지 않음 · �
   assert.equal(board.reportOk('배포 준비 끝'), false);
   assert.equal(board.reportOk(''), false);
 });
+
+test('받을 알림 — 정하지 않았으면 «내가 할 것만»(끝남 끔) · 그래서 일·방마다 «알림 기본» 고르기가 보임', () => {
+  const k = board.notifyKinds();   // 시험 상자 config 에는 notifyKinds 가 없다(새로 설치한 서버와 같음)
+  assert.deepEqual(k, { ask: true, waiting: true, blocked: true, done: false });
+  assert.equal(Object.values(k).every(Boolean), false);   // notifyAll 아님
+  assert.equal(board.notifyWanted('done', 'r1', k, {}), false);
+  assert.equal(board.notifyWanted('done', 'r1', k, { r1: 'all' }), true);   // 이 일만 «끝나도 알림»
+  assert.equal(board.notifyWanted('ask', 'r1', k, { r1: 'off' }), false);
+});

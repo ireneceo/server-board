@@ -98,6 +98,10 @@
   .statline .lim-sub { font-size: 12px; opacity: .85; flex: 1 1 220px; min-width: 0; }
   .statline .lim-btn { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
   .statline .lim-btn:disabled { opacity: .5; cursor: default; }
+  .statline .setup-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; padding: 10px 16px 0; margin-top: 10px; border-top: 1px solid var(--line); }
+  .statline .setup-k { color: var(--green); font-weight: 600; }
+  .statline .setup-t { color: var(--muted); font-size: 12px; }
+  .statline .setup-row .lim-btn { margin-left: auto; color: var(--muted); }
   .statline .doc { grid-column: 1 / -1; font-size: 13px; padding: 10px 16px 0; margin-top: 10px; border-top: 1px solid var(--line); color: var(--muted, inherit); }
   .statline .doc .doc-k { font-weight: 600; color: var(--text, inherit); }
   .statline .doc-ev { margin-top: 6px; }
@@ -667,7 +671,9 @@
   .att-chip.err { border-color: var(--red); background: var(--red-bg); }
   .att-chip.err .sz { color: var(--red); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; }
   .att-chip button { border: 0; background: none; cursor: pointer; color: var(--muted); font: inherit; font-size: 13px; padding: 0 6px; min-height: 24px; }
-  textarea.att-drop { outline: 2px dashed var(--primary); outline-offset: 2px; }
+  .att-zone.att-drop { outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 8px; }
+  body.att-dragging .att-zone { outline: 2px dashed var(--line); outline-offset: 4px; border-radius: 8px; }
+  body.att-dragging .att-zone.att-drop { outline-color: var(--primary); }
   .cs-m .cs-att { display: block; margin-top: 4px; font-size: 12px; opacity: .85; }
   .consultbox .cs-note { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
   .langbox { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -6px 0 16px; font-size: 14px; }
@@ -702,8 +708,26 @@
   .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-ts { width: 14em; }
   .teambox .tm-pj { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
   .teambox .tm-pj label, .teambox .tm-chk { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; cursor: pointer; }
-  .teambox .tm-chk { display: flex; }
+  .teambox .tm-chk { display: block; } .teambox .tm-chk input { vertical-align: middle; margin-right: 4px; }
   .teambox .tm-risk { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
+  /* 계정 넣기 할 일 순서 */
+  .teambox .tm-steps { margin: 6px 0 8px; padding-left: 22px; } .teambox .tm-steps li { margin: 3px 0; }
+  .teambox .tm-more { margin: 0 0 10px; } .teambox .tm-more summary { cursor: pointer; color: var(--muted); } .teambox .tm-more ul { margin: 6px 0; padding-left: 20px; } .teambox .tm-more li { margin: 3px 0; }
+  .teambox .tm-row { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 10px; }
+  .teambox .tm-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .teambox .tm-top .tm-sp { flex: 1 1 0; }
+  .teambox .tm-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 8px; }
+  .teambox .tm-line > span:first-child { color: var(--muted); font-size: 13px; }
+  .teambox .tm-todo { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line); }
+  .teambox .tm-todo > li { display: grid; grid-template-columns: 1.6em 1fr; gap: 0 6px; margin: 6px 0; align-items: start; }
+  .teambox .tm-todo .tm-mk { font-weight: 700; text-align: center; }
+  .teambox .tm-todo li.tm-s-ok .tm-mk { color: var(--green); } .teambox .tm-todo li.tm-s-do .tm-mk { color: var(--blue); } .teambox .tm-todo li.tm-s-wait .tm-mk { color: var(--muted); }
+  .teambox .tm-todo li.tm-s-wait > div { color: var(--muted); }
+  .teambox .tm-todo small { display: block; color: var(--muted); }
+  .teambox .tm-cmd { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  .teambox .tm-cmd code { flex: 1 1 260px; min-width: 0; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 6px; word-break: break-all; font-size: 12.5px; }
+  .teambox .tm-msg { width: 100%; min-height: 220px; font: 13px/1.5 ui-monospace, Menlo, monospace; margin: 6px 0 4px; }
+  .teambox .tm-todo .btn { margin: 2px 6px 2px 0; }
   .ask textarea.prop-text { width: 100%; box-sizing: border-box; font: inherit; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); margin: 6px 0; }
   .ask .prop-meta { color: var(--muted); font-size: 13px; margin: 4px 0; }
   .err { background: var(--red-bg); color: var(--red); padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; }
@@ -756,12 +780,25 @@
   </div>
   <!-- ⚙ 팀·권한 — 서버 계정별 역할·최종 컨펌자 승인·배포 확인 -->
   <div class="langbox teambox" id="teambox" hidden>
-    <p class="tm-intro"><!--ko-->상황판을 쓰는 <b>사람</b>마다 역할을 정합니다. 누구든 <b>자기 아이디·비밀번호로 로그인</b>해야 들어옵니다 — SSH 통로·Tailscale 은 들어오는 길일 뿐 신원이 아닙니다. 아이디 = 서버 계정 이름(없으면 사설망 계정). 상황판을 돌리는 계정(<b id="tm-owner"></b>)은 늘 <b>최종 컨펌자</b>(비밀번호 + 인증 앱)입니다. 사람을 넣고 저장한 뒤 «로그인 링크» 를 그 사람에게 전하면 그 사람이 비밀번호를 정하고 <b>자기 휴대폰 인증 앱</b>을 등록합니다(아래 설정). 인증 앱 등록은 서버마다 따로입니다 — 앱에 «Server Board · 서버 이름» 으로 서버마다 한 줄씩 생깁니다. 작업방(AI)은 늘 질문·할 일·대기열 넣기만 할 수 있습니다.<!--/ko--><!--en-->Set a role for each <b>person</b> who uses this board. Everyone signs in with <b>their own ID and password</b> — the SSH tunnel and Tailscale are only routes, not identity. ID = server account name (or Tailscale login if none). The account running the board (<b id="tm-owner-en"></b>) is always the <b>final approver</b> (password + authenticator app). Add a person, save, then send them the «Sign-in link» so they set their password and register <b>their own authenticator app</b> (setting below). Registration is per server — the app shows one «Server Board · server name» entry per server. AI sessions can only post questions, to-dos and queue tasks.<!--/en--></p>
+    <p class="tm-intro"><!--ko-->상황판을 쓰는 사람마다 계정을 넣고 역할을 정합니다. 이 칸은 최종 컨펌자(<b id="tm-owner"></b>)에게만 보입니다 — 작업방(AI)은 계정을 넣지 못하고 순서만 안내합니다.<!--/ko--><!--en-->Add an account and a role for each person who uses the board. Only the final approver (<b id="tm-owner-en"></b>) sees this panel — AI sessions cannot add accounts, only explain the steps.<!--/en--></p>
+    <ol class="tm-steps">
+      <li><!--ko--><b>들어올 길 마련</b> — 상황판은 인터넷에 열려 있지 않아요. 그 사람의 <b>서버 계정</b>(SSH 통로) 또는 <b>사설망(Tailscale) 초대</b>가 먼저입니다.<!--/ko--><!--en--><b>Give them a route in</b> — the board is not on the internet. They need a <b>server account</b> (SSH tunnel) or a <b>Tailscale invite</b> first.<!--/en--></li>
+      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·아이디·역할·맡을 솔루션.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, ID, role, projects.<!--/en--></li>
+      <li><!--ko--><b>«안내문 복사»</b> → 메신저·메일로 그 사람에게 보내기 — 로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 다 들어 있어요.<!--/ko--><!--en--><b>«Copy invitation»</b> → send it by chat or email — it holds the sign-in link (24 h, single use), how to connect and how to sign in.<!--/en--></li>
+      <li><!--ko-->그 사람이 링크를 열어 비밀번호를 정하고 <b>자기 휴대폰 인증 앱</b>을 등록 → 그 줄에 <b>«✔ 등록 끝»</b> 이 보이면 끝.<!--/ko--><!--en-->They open the link, set a password and register <b>their own authenticator app</b> → the row shows <b>«✔ Registered»</b> and you are done.<!--/en--></li>
+    </ol>
+    <details class="tm-more"><summary><!--ko-->역할·로그인 규칙 자세히<!--/ko--><!--en-->Roles and sign-in rules<!--/en--></summary>
+      <ul>
+        <li><!--ko--><b>최종 컨펌자</b> = 모든 솔루션·모든 버튼(상황판을 돌리는 계정은 늘 최종 컨펌자 · 비밀번호 + 인증 앱) · <b>팀원·디자이너</b> = 맡은 솔루션만 보고, 일은 «제안» 으로 올림(디자이너의 화면 단순 수정 «바로 진행» 은 다음 단계) · <b>보기만</b> = 맡은 솔루션 보기만.<!--/ko--><!--en--><b>Final approver</b> = every project and button (the account running the board is always one · password + authenticator) · <b>Member / Designer</b> = assigned projects only, tasks go up as proposals (designers' direct small UI edits come later) · <b>Viewer</b> = view assigned projects only.<!--/en--></li>
+        <li><!--ko-->누구든 <b>자기 아이디·비밀번호</b>로 로그인합니다 — SSH 통로·Tailscale 은 들어오는 길일 뿐 신원이 아닙니다. 아이디 = 서버 계정 이름(없으면 사설망 로그인 이메일). SSH 통로는 <b>그 사람 자기 계정으로</b> 열어야 로그인됩니다.<!--/ko--><!--en-->Everyone signs in with <b>their own ID and password</b> — the SSH tunnel and Tailscale are routes, not identity. ID = server account name (or Tailscale login). The SSH tunnel must be opened <b>with their own account</b>.<!--/en--></li>
+        <li><!--ko-->인증 앱 등록은 서버마다 따로 — 앱에 «Server Board · 서버 이름» 이 서버마다 한 줄씩 생깁니다.<!--/ko--><!--en-->Authenticator registration is per server — the app shows one «Server Board · server name» entry per server.<!--/en--></li>
+        <li><!--ko-->«켬» 을 끄고 저장하면 그 사람은 바로 로그아웃되고 다시 켤 때까지 못 들어옵니다. 로그인 링크를 다시 만들면 전에 보낸 링크는 안 열립니다.<!--/ko--><!--en-->Untick «On» and save to sign the person out at once until re-enabled. Making a new sign-in link cancels the previous one.<!--/en--></li>
+      </ul>
+    </details>
     <h3><!--ko-->① 팀원<!--/ko--><!--en-->① Team<!--/en--></h3>
     <div id="tm-rows"></div>
     <button type="button" class="btn" id="tm-add">+ <!--ko-->계정 넣기<!--/ko--><!--en-->Add account<!--/en--></button>
-    <small><!--ko-->최종 컨펌자 = 모든 솔루션·모든 버튼 · 팀원·디자이너 = 맡은 솔루션만 보고, 일은 «제안» 으로 올림(디자이너의 화면 단순 수정 «바로 진행» 은 다음 단계) · 보기만 = 맡은 솔루션 보기만 · «켬» 을 끄면 그 사람은 바로 로그아웃되고 다시 켤 때까지 못 들어옴. 사설망(Tailscale) 계정을 적으면 그 계정 기기에서도 같은 역할로 열립니다.<!--/ko--><!--en-->Final approver = every project and button · Member / Designer = see assigned projects only and propose tasks (designers' direct small UI edits come in a later stage) · Viewer = view assigned projects only · Untick «On» to sign the person out at once until re-enabled. Add a Tailscale login to let that person's devices open the board with the same role.<!--/en--></small>
-    <label class="tm-chk"><input type="checkbox" id="tm-mtotp"> <!--ko-->팀원·디자이너·보기만도 <b>자기 휴대폰 인증 앱</b>(6자리)으로 로그인 (권장) — 켜면 «로그인 링크» 를 연 사람이 비밀번호와 함께 자기 인증 앱을 등록합니다. 인증 앱 없이 비밀번호만 정한 사람은 새 링크를 받아야 들어옵니다.<!--/ko--><!--en-->Members, designers and viewers also sign in with <b>their own authenticator app</b> (6 digits) (recommended) — the person opening the «Sign-in link» registers their own app along with a password. Anyone who only set a password needs a new link.<!--/en--></label>
+    <label class="tm-chk"><input type="checkbox" id="tm-mtotp"> <!--ko-->팀원·디자이너·보기만도 <b>자기 휴대폰 인증 앱</b>(6자리)으로 로그인 (권장) — 켜면 안내문의 로그인 링크를 연 사람이 비밀번호와 함께 자기 인증 앱을 등록합니다. 인증 앱 없이 비밀번호만 정한 사람은 새 안내문을 받아야 들어옵니다.<!--/ko--><!--en-->Members, designers and viewers also sign in with <b>their own authenticator app</b> (6 digits) (recommended) — the person opening the invitation's sign-in link registers their own app along with a password. Anyone who only set a password needs a new invitation.<!--/en--></label>
     <div class="nsec"><h3><!--ko-->② 팀원이 넣은 일<!--/ko--><!--en-->② Tasks from members<!--/en--></h3>
       <label class="tm-chk"><input type="checkbox" id="tm-approval"> <!--ko-->최종 컨펌자가 «하기 · 고쳐서 하기 · 안 하기» 를 정한 뒤 시작<!--/ko--><!--en-->Start only after the final approver chooses do / edit & do / don't<!--/en--></label>
       <label class="tm-chk"><input type="checkbox" id="tm-small"> <!--ko-->팀원이 «소규모» 로 표시한 일은 승인 없이 바로<!--/ko--><!--en-->Tasks a member marks «small» start without approval<!--/en--></label>
@@ -1402,7 +1439,25 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     });
   }
   /** 📎 버튼 + 붙인 것 목록 — textarea 에 붙여 넣기·끌어다 놓기도 받음 */
-  function attBox(key, getProject, ta) {
+  function attHasFiles(e) { return !!(e.dataTransfer && [].indexOf.call(e.dataTransfer.types || [], 'Files') >= 0); }
+  function attDragEnd() { document.body.classList.remove('att-dragging'); [].forEach.call(document.querySelectorAll('.att-zone.att-drop'), function (z) { z.classList.remove('att-drop'); }); }
+  // 칸 밖에 놓으면 브라우저가 파일을 이 탭에 열어 상황판이 사라진다 — 막고, 놓을 곳을 알려 준다. 끄는 동안 놓을 수 있는 칸을 점선으로
+  (function () {
+    var leaveT = 0;
+    document.addEventListener('dragover', function (e) {
+      if (!attHasFiles(e)) return;
+      e.preventDefault(); clearTimeout(leaveT); document.body.classList.add('att-dragging');
+      if (!(e.target && e.target.closest && e.target.closest('.att-zone'))) e.dataTransfer.dropEffect = 'none';
+    });
+    document.addEventListener('dragleave', function (e) { if (!e.relatedTarget) leaveT = setTimeout(attDragEnd, 80); });   // 창 밖으로 나감
+    document.addEventListener('drop', function (e) {
+      if (!attHasFiles(e)) return;
+      e.preventDefault(); attDragEnd();
+      toast([].some.call(document.querySelectorAll('.att-zone'), function (z) { return z.offsetParent; }) ? K('점선 칸(«새 일 시키기»·AI 상의 입력칸) 위에 놓아 주세요', 'Drop onto a dashed box («New task» or the AI chat box)') : K('«새 일 시키기» 를 펼친 뒤 그 칸에 놓아 주세요', 'Open «New task» first, then drop into it'), 5000);
+    });
+    document.addEventListener('dragend', attDragEnd);
+  })();
+  function attBox(key, getProject, ta, zoneEl) {
     var row = el('div', 'att-row');
     var inp = el('input'); inp.type = 'file'; inp.multiple = true; inp.hidden = true;
     var b = el('button', 'btn att-pick'); b.type = 'button'; b.appendChild(icon('clip')); b.appendChild(document.createTextNode(' ' + K('첨부', 'Attach')));   // 짧게 한 줄
@@ -1416,9 +1471,19 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var fs = [].filter.call((e.clipboardData && e.clipboardData.files) || [], function () { return true; });
         if (fs.length) { e.preventDefault(); attAdd(key, getProject(), fs); }
       });
-      ta.addEventListener('dragover', function (e) { if (e.dataTransfer && [].indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); ta.classList.add('att-drop'); } });
-      ta.addEventListener('dragleave', function () { ta.classList.remove('att-drop'); });
-      ta.addEventListener('drop', function (e) { ta.classList.remove('att-drop'); if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); attAdd(key, getProject(), e.dataTransfer.files); } });
+    }
+    var zone = zoneEl || (ta && ta.parentNode) || row;
+    if (zone && !zone._attZone) {
+      zone._attZone = true; zone.classList.add('att-zone');
+      zone.addEventListener('dragover', function (e) { if (!attHasFiles(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'copy'; zone.classList.add('att-drop'); });
+      zone.addEventListener('dragleave', function (e) { if (!e.relatedTarget || !zone.contains(e.relatedTarget)) zone.classList.remove('att-drop'); });
+      zone.addEventListener('drop', function (e) {
+        zone.classList.remove('att-drop'); attDragEnd();
+        if (!attHasFiles(e)) return;
+        e.preventDefault(); e.stopPropagation();
+        if (e.dataTransfer.files && e.dataTransfer.files.length) attAdd(key, getProject(), e.dataTransfer.files);
+        else toast(K('폴더는 못 붙여요 — 파일을 골라 놓아 주세요', 'Folders cannot be attached — drop files'));
+      });
     }
     setTimeout(function () { attPaint(key); }, 0);
     return row;
@@ -1693,10 +1758,24 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var lines2 = (j.checks || []).map(function (x) { return (x.ok ? '✓ ' : '✗ ') + x.text; }).join('\n');
         if (!only) { window.alert(j.message + '\n\n' + lines2); return { ok: false }; }
         var opts = [];
+        var lf = j.lastFail, fx = lf && lf.fix, fixing = !!(fx && /^(queued|working|ask)$/.test(fx.state)) && !(lf.cause && lf.cause.retry);
+        var head = '';
+        if (lf && lf.cause) {
+          head = K('지난 배포가 실패한 까닭: ', 'Why the last deploy failed: ') + lf.cause.title + '\n' + (lf.cause.hint || '') + '\n' +
+            (!fx || fx.state === 'none' ? K('고칠 것 없음(일시적 실패)', 'Nothing to fix (temporary failure)')
+              : fx.state === 'done' ? K('✓ 방 ' + fx.room + ' 가 원인을 고쳤어요', '✓ Session ' + fx.room + ' fixed the cause')
+              : fx.state === 'working' ? K('… 방 ' + fx.room + ' 가 지금 고치는 중이에요', '… Session ' + fx.room + ' is fixing it now')
+              : fx.state === 'ask' ? K('⏸ 고치는 방 ' + fx.room + ' 가 __OWNER__ 님 답을 기다려요', '⏸ Fix session ' + fx.room + ' is waiting for your answer')
+              : fx.state === 'queued' ? K('… 고치는 일이 대기열 ' + fx.pos + '번째에서 기다려요', '… The fix is #' + fx.pos + ' in the queue')
+              : K('고치는 방 ' + fx.room + ' 가 끝났어요(✅ 아님): ', 'Fix session ' + fx.room + ' ended (not ✅): ') + (fx.report || '')) + '\n\n';
+        }
+        if (fixing) opts.push({ v: 'wait', rec: true, label: K('고친 뒤에 다시 배포 (지금은 안 누름)', 'Deploy after the fix (not now)'), desc: K('고치는 방이 ✅ 로 끝나면 맨 위·휴대폰으로 «다시 배포» 를 알려 드려요', 'When the fix session ends ✅ you get a «deploy again» notice at the top and on your phone') });
         if (j.fable) opts.push({ v: 'fable', rec: !j.needAck, label: K('자체 검증만으로 배포 (Fable 미검증)', 'Deploy with self-verification only (no Fable review)'), desc: K('Fable 대기는 지우지 않고 한도가 풀리면 사후 검증해요. 누가·언제 눌렀는지 기록돼요', 'Fable waits stay and are reviewed later. Who and when is recorded') });
-        if (j.needAck) opts.push({ v: 'ack', rec: true, label: K('지난 배포 결과를 확인했어요 — 다시 배포', 'I checked the last deploy — deploy again'), desc: K('지난 실패·«모름» 을 확인한 것으로 남기고 다시 누릅니다', 'Marks the last failure/unknown as seen and presses again') });
-        return choose(K('배포 전 확인', 'Before deploying'), j.message + '\n\n' + lines2, opts).then(function (v) {
-          if (!v) return { ok: false };
+        if (j.needAck) opts.push(fixing
+          ? { v: 'ack', warn: true, label: K('그래도 지금 다시 배포', 'Deploy again anyway'), desc: K('아직 안 고쳤으면 같은 검사에 또 걸려 실패해요(운영은 그대로). 고친 것을 알고 있을 때만', 'If not fixed yet it fails the same check again (production unchanged). Only if you know it is fixed') }
+          : { v: 'ack', rec: true, label: K('지난 배포 결과를 확인했어요 — 다시 배포', 'I checked the last deploy — deploy again'), desc: K('지난 실패·«모름» 을 확인한 것으로 남기고 다시 누릅니다', 'Marks the last failure/unknown as seen and presses again') });
+        return choose(K('배포 전 확인', 'Before deploying'), head + j.message + '\n\n' + lines2, opts).then(function (v) {
+          if (!v || v === 'wait') return { ok: false };
           if (j.fable) body.fableOk = true; if (j.needAck) body.ack = true; if (btn) btn.disabled = true;
           return post(url, body).then(step);
         });
@@ -1880,12 +1959,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
     user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
     copy: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
   };
   var GLYPH = { '✓': 'check', '✔': 'check', '✅': 'check', '☑': 'check', '✕': 'x', '✖': 'x', '❌': 'x', '✘': 'x', '✗': 'x', '🗑': 'x',
     '‖': 'pause', '⏸': 'pause', '▶': 'play', '■': 'stop', '◷': 'clock', '🕓': 'clock', '⏳': 'sub', '↩': 'reply', '↻': 'refresh', '↳': 'sub',
-    '⚠': 'alert', '🌐': 'globe', '📱': 'phone', '🔔': 'bell', '💬': 'chat', '👤': 'user', '↗': 'ext', '🔗': 'link', '↑': 'up', '▾': 'cdown', '▸': 'cright', '▴': 'cup', '▲': 'cup', '→': 'right' };
-  var GLYPH_RE = /(✓|✔|✅|☑|✕|✖|❌|✘|✗|🗑|‖|⏸|▶|■|◷|🕓|⏳|↩|↻|↳|⚠|🌐|📱|🔔|💬|👤|↗|🔗|↑|▾|▸|▴|▲|→)[︎️]?/u;
+    '⚠': 'alert', '🌐': 'globe', '📱': 'phone', '🔔': 'bell', '💬': 'chat', '👤': 'user', '↗': 'ext', '🔗': 'link', '↑': 'up', '▾': 'cdown', '▸': 'cright', '▴': 'cup', '▲': 'cup', '→': 'right', '✉': 'mail' };
+  var GLYPH_RE = /(✓|✔|✅|☑|✕|✖|❌|✘|✗|🗑|‖|⏸|▶|■|◷|🕓|⏳|↩|↻|↳|⚠|🌐|📱|🔔|💬|👤|↗|🔗|↑|▾|▸|▴|▲|→|✉)[︎️]?/u;
   var GLYPH_RE_G = new RegExp(GLYPH_RE.source, 'gu');
   var ICON_TPL = {};
   function icon(name) {
@@ -1980,7 +2060,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   var DOCS_URL = '__DOCS_URL__';
   // 맥 자동 통로 — 서버가 정함: connect = 공개판 scripts/connect-mac.sh · legacy = 원본 서버의 옛 스크립트 · 이름·명령은 아래 «다른 기기에서 열기» 칸 채우기에서
   var MAC_TUN = '__MAC_TUN__', BOARD_PORT = '__BOARD_PORT__';
-  var TUN = { alias: 'myserver', label: '', log: '', install: '', diag: '' };
+  var TUN = { alias: 'myserver', label: '', log: '', install: '', diag: '', check: '' };
+  var tunCheckOpen = false;   // 통로 권하기 «이미 깔았어요» 펼침 — 화면을 다시 그려도 유지
   var termOpen = {};   // 펼친 «터미널에서 이 방 열기» — 다시 그려도 유지
   // AI 연결 한 마디 — «서버 상태» 칸 «AI 연결» 에 (claude auth status: 방식·요금제만)
   function aiText(ai) {
@@ -3550,9 +3631,20 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }
     var b2 = el('button', 'btn' + (IS_MAC ? '' : ' primary'), K(IS_MAC ? '휴대폰도 보려면 Tailscale' : '늘 열어 두기 — Tailscale', IS_MAC ? 'Phone too? Tailscale' : 'Keep it open — Tailscale'));
     b2.type = 'button'; b2.onclick = function () { openTun('ts'); }; box.appendChild(b2);
+    // 이미 깐 맥인데 표시가 없을 때(다른 브라우저로 봄·스크립트가 표시 전에 멈춤·옛 스크립트) — 점검 한 줄 + 표시 주소
+    var ck = null;
+    if (IS_MAC && TUN.check) {
+      var b3 = el('button', 'btn', K('이미 깔았어요', 'Already installed'));
+      b3.type = 'button'; box.appendChild(b3);
+      ck = el('div', 'th-ck'); ck.style.cssText = 'flex:1 1 100%;min-width:0;'; ck.hidden = !tunCheckOpen;
+      ck.appendChild(el('div', null, K('깔았는데도 이 칸이 뜨면, 설치 끝에 열린 브라우저가 지금 브라우저와 다르거나(기본 브라우저로 열림) 설치가 표시 단계 전에 멈춘 거예요. 맥 터미널에 아래 한 줄 — ② 가 running 이면 깔려 있는 것이고, → 줄의 주소를 이 브라우저 주소창에 붙여 넣으면 이 칸이 다시 안 떠요. running 이 아니면 «맥 — 늘 열어 두기» 로 다시 까세요(다시 해도 안전).', 'If this shows although you installed it, the browser opened at the end of the install was a different one (the default browser), or the install stopped before that step. Paste this into a Mac terminal — if ② says running it is installed; paste the → address into this browser\'s address bar and this box will not come back. If it is not running, reinstall with «Mac — keep it open» (safe to repeat).')));
+      var ln = el('div', 'rc-line'), pr = document.createElement('pre'); pr.textContent = TUN.check; ln.appendChild(pr); ln.appendChild(copyBtn(K('복사', 'Copy'), TUN.check)); ck.appendChild(ln);
+      b3.onclick = function () { tunCheckOpen = !tunCheckOpen; ck.hidden = !tunCheckOpen; };
+    }
     var x = el('button', 'btn', big ? K('나중에', 'Later') : K('✕ 그만 보기', '✕ Hide'));
     x.type = 'button'; x.onclick = function () { lsSet('board.tunHintOff', String(Date.now())); lsSet('board.justSetup', null); box.remove(); };
     box.appendChild(x);
+    if (ck) box.appendChild(ck);
     return box;
   }
   var UPD_WHY = {
@@ -3572,6 +3664,41 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     'dirty-during': K('되돌리는 사이 누가 파일을 고쳐 멈췄어요 — 손으로 확인 필요', 'Files changed during the rollback — check by hand'),
     'down-after-revert': K('되돌린 뒤에도 상황판이 안 떠요 — 서버에서 pm2 logs dev-board 확인', 'The board is down even after going back — check pm2 logs dev-board on the server')
   };
+  function publishBox(p) {
+    if (!p || (!(p.commits > 0 || p.items > 0) && !p.work && p.pushed)) return null;
+    var box = el('div', 'todo'); box.style.cssText = 'margin:10px 0 0;padding:10px 12px;border-radius:8px;';
+    var tm = function (t) { return t ? new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; };
+    if (p.work) {
+      box.appendChild(el('div', 'rname', K('상황판 공개판 v' + p.workVer + ' 내는 중', 'Releasing Server Board v' + p.workVer) + (p.work === 'queued' ? K(' — 서버 방 차례 기다림', ' — waiting for the server room') : K(' — 서버 방이 묶기·시험·Fable 판정 중', ' — the server room is packing, testing and reviewing'))));
+      box.appendChild(el('small', null, K('올리면 다른 서버 상황판에 6시간 안에 «새 판» 알림이 떠요.', 'Once pushed, other boards show «new version» within 6 hours.')));
+      return box;
+    }
+    if (!p.pushed) {
+      box.className = 'err';
+      box.appendChild(el('div', 'rname', K('공개판 v' + p.last + ' 이 묶여 있는데 공개 저장소에 안 올라갔어요', 'Release v' + p.last + ' is packed but not pushed to the public repository')));
+      box.appendChild(el('small', null, K('다른 서버는 이 판을 못 받아요. 서버 방에서: cd ~/dev-server/dist/server-board && git push origin main v' + p.last, 'Other boards cannot get it. In the server room: cd ~/dev-server/dist/server-board && git push origin main v' + p.last)));
+      return box;
+    }
+    box.appendChild(el('div', 'rname', K('다른 서버에 아직 안 나간 상황판 고침 — 커밋 ' + p.commits + '개', 'Board changes not yet released to other servers — ' + p.commits + ' commits')));
+    box.appendChild(el('div', null, K('마지막 공개판 v' + p.last + ' (' + tm(p.lastAt) + ') · 다른 서버 상황판은 새 판을 내야 «업데이트» 알림을 받아요', 'Last release v' + p.last + ' (' + tm(p.lastAt) + ') · other boards only get an «Update» notice once a new version is released')));
+    if (p.heads && p.heads.length) {
+      var det = document.createElement('details'); var sm = document.createElement('summary'); sm.textContent = K('바뀐 점 (' + p.heads.length + ')', 'What changed (' + p.heads.length + ')'); det.appendChild(sm);
+      var ul = document.createElement('ul'); ul.style.cssText = 'margin:4px 0 0;padding-left:18px;font-size:12px;';
+      p.heads.forEach(function (h) { var li = document.createElement('li'); li.textContent = h; ul.appendChild(li); });
+      det.appendChild(ul); box.appendChild(det);
+    }
+    var row = el('div', 'row'); row.style.marginTop = '6px';
+    var b = el('button', 'btn primary', K('새 판 v' + p.next + ' 내기', 'Release v' + p.next));
+    b.onclick = function () {
+      if (!window.confirm(K('상황판 공개판 v' + p.next + ' 을 낼까요?\n서버 방이 묶기 → 공개판 시험 → Fable 공개 판정 뒤 GitHub 에 올려요(판정이 막히면 안 올림). 올리면 다른 서버 상황판에 «새 판» 알림이 가요.', 'Release Server Board v' + p.next + '?\nThe server room packs it, runs the public tests and a Fable review, then pushes to GitHub (not if the review fails). Other boards then get an «update» notice.'))) return;
+      b.disabled = true; post('/api/publish/queue', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () { b.disabled = false; });
+    };
+    row.appendChild(b); box.appendChild(row);
+    box.appendChild(el('small', null, p.auto ? (p.dirty ? K('자동: 다른 방이 상황판을 고치는 중이라(커밋 전 ' + p.dirty + '개) 끝나면 내요', 'Auto: another session is editing the board (' + p.dirty + ' uncommitted) — releases after that')
+      : K('자동: 마지막 고침 1시간 뒤(' + tm(p.quietAt) + ' 쯤) 서버 방이 하루 한 번 저절로 내요 · 지금 내려면 버튼', 'Auto: about an hour after the last change (' + tm(p.quietAt) + ') the server room releases by itself, once a day · press to release now'))
+      : K('자동 내기 꺼짐(config publish.auto=false) — 버튼으로만', 'Auto release is off (config publish.auto=false) — button only')));
+    return box;
+  }
   function updateBox(u) {
     var manual = 'cd ~/dev-server && git pull --ff-only && pm2 restart dev-board';
     var box, row, b;
@@ -3994,7 +4121,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var f = el('div', 'form');
     var taskArea = draftArea('task:' + p.key, enterLabel(EN ? 'Write the task and press Enter (Shift+Enter for a new line) · commands like /' + CMD.devstart + ' work too' : '할 일을 적고 Enter (줄바꿈 Shift+Enter) · /개발시작 같은 명령도 됨'));
     f.appendChild(taskArea);
-    var attRow = attBox('task:' + p.key, function () { return p.key; }, taskArea); f.appendChild(attRow);
+    var attRow = attBox('task:' + p.key, function () { return p.key; }, taskArea, f); f.appendChild(attRow);
     var go = el('button', 'btn', K('우선 실행 (지금 바로)', 'Run now (first)'));
     var later = el('button', 'btn primary', enterLabel(K('대기열에 넣기 (Enter)', 'Add to queue (Enter)')));
     enterToSubmit(taskArea, later);
@@ -4420,7 +4547,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var isOpen = (function () { try { var v = localStorage.getItem('board.inqOpen.' + p.key); return v == null ? me > 0 : v === '1'; } catch (_) { return me > 0; } })();
     var box = el('div', 'sched inq' + (isOpen ? ' open' : '')); box.setAttribute('data-v', vsig([q, inqDraft, inqClose]));
     var head = el('button', 'nt-head'); head.type = 'button'; head.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    head.appendChild(el('span', 'nt-plus', '✉'));
+    head.appendChild(el('span', 'nt-plus', '✉'));   // ✉ 은 아이콘 표(GLYPH)로 정기 점검 ◷ 과 같은 선 아이콘이 됨 — 글자로 두면 기기마다 색 이모지로 달리 보였음
     head.appendChild(el('span', 'nt-title', K('들어온 문의', 'Inquiries')));
     var sum = el('span', 'sched-sum');
     if (!q) sum.textContent = K('아직 올라온 적 없음', 'not reported yet');
@@ -5059,9 +5186,11 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       stat.appendChild(as);
       // 처음 설정 — 끝났으면 한 줄(다시 펼치기). 이미 쓰던 상황판(existing)은 보이지 않음
       if (data.setup && data.setup.done && data.setup.doneBy !== 'existing') {
-        var su = el('div', 'st ok');
-        su.appendChild(el('div', 'k', K('처음 설정', 'Setup')));
-        su.appendChild(el('div', 'v', '✔ ' + (data.setup.doneAt ? fmt(Date.parse(data.setup.doneAt)) : '')));
+        // 네 번째 칸으로 두면 혼자 다음 줄에 떨어져 이름·시각·버튼이 세 줄로 쌓였다 → 아래 가로 한 줄(✔ 처음 설정 끝남 · 시각 ··· 버튼)
+        var su = el('div', 'setup-row');
+        var sl = el('span', 'setup-k', '✔ ' + K('처음 설정 끝남', 'Setup done'));
+        su.appendChild(sl);
+        if (data.setup.doneAt) su.appendChild(el('span', 'setup-t', fmt(Date.parse(data.setup.doneAt))));
         var sb2 = el('button', 'lim-btn', setupShow ? K('접기', 'Hide') : K('처음 설정 보기', 'Show setup checklist'));
         sb2.onclick = function () { setupShow = !setupShow; renderAgain(); };
         su.appendChild(sb2); stat.appendChild(su);
@@ -5123,6 +5252,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }
     if (data.claudeCheck && data.claudeCheck.ok === false) todo.appendChild(claudeCheckBox(data.claudeCheck));
     if (OWN && data.update) { var ubx = updateBox(data.update); if (ubx) { ubx.id = 'updbox'; todo.appendChild(ubx); } }
+    if (OWN && data.publish) { var pbx = publishBox(data.publish); if (pbx) { pbx.id = 'pubbox'; todo.appendChild(pbx); } }
     var ubg = document.getElementById('updbadge');
     if (ubg) {
       ubg.hidden = !(OWN && data.update && data.update.newer && !data.update.running);
@@ -5259,7 +5389,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             : ds.pending && ds.mem ? K('운영 배포 · 메모리 기다림 · ' + dsMin + '분째 (' + (ds.mem.avail / 1024).toFixed(1) + '/' + (ds.mem.need / 1024).toFixed(1) + 'GB)', 'Deploy · waiting for memory · ' + dsMin + ' min (' + (ds.mem.avail / 1024).toFixed(1) + '/' + (ds.mem.need / 1024).toFixed(1) + 'GB)')
             : ds.pending ? K('운영 배포 · 시작 직전 · ' + dsMin + '분째', 'Deploy · about to start · ' + dsMin + ' min')
             : ds.runner && ds.phase === 'run' ? K('배포 중(상황판 실행) · ' + dsMin + '분째', 'Deploying (board) · ' + dsMin + ' min')
-            : ds.runner && ds.phase === 'fail' ? K('운영 배포 · ✗ ', 'Deploy to production · ✗ ') + (ds.result === 'unknown' ? K('결과 모름 ', 'unknown ') : K('실패 ', 'failed ')) + hm(ds.at) + (ds.fixed ? K(' → 원인 고침 · 다시 배포', ' → cause fixed · deploy again') : '')
+            : ds.runner && ds.phase === 'fail' ? K('운영 배포 · ✗ ', 'Deploy to production · ✗ ') + (ds.result === 'unknown' ? K('결과 모름 ', 'unknown ') : K('실패 ', 'failed ')) + hm(ds.at) + (ds.fixed ? K(' → 원인 고침 · 다시 배포', ' → cause fixed · deploy again') : ds.fix && ds.fix.state === 'working' ? K(' → 고치는 중', ' → fixing') : ds.fix && ds.fix.state === 'queued' ? K(' → 고치기 대기', ' → fix queued') : ds.fix && ds.fix.state === 'ask' ? K(' → 고치는 방 답 기다림', ' → fix waits for you') : '')
             : dsB ? '✗ ' + dsWhat + K(' 못 시작 — ', ' not started — ') + (BLOCK_WORD[dsB.why] || dsB.why) + K(' · ' + dsMin + '분째', ' · ' + dsMin + ' min')
             : ds.phase === 'skip' ? K('운영 배포 · ✗ 정기 점검 건너뜀 ', 'Deploy to production · ✗ check skipped ') + hm(ds.at) + ' (' + (BLOCK_WORD[ds.why] || ds.why) + ')'
             : ds.phase === 'prep' ? dsWhat + K(' 준비 중 · ' + dsMin + '분째', ' preparing · ' + dsMin + ' min')
@@ -5272,7 +5402,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
               : K('배포 준비가 끝나 상황판이 배포 명령을 누르는 중', 'Prep is done — the board is starting the deploy command'))
             : ds.runner ? (ds.phase === 'run' ? K('상황판이 배포 스크립트를 실행하는 중 — 끝나면 운영 표식을 확인하고 일시정지를 풀어요', 'The board is running the deploy script — then it checks the production marker and lifts the pause')
               : ds.phase === 'fail' && ds.fixed ? K('방 ' + ds.fixed.room + ' 가 ' + hm(ds.fixed.at) + ' 에 원인을 고쳤어요(✅ — 그 방 보고에 무엇을 고쳤는지). 운영은 그대로예요 · 누르면 «확인하고 다시 배포»', 'Session ' + ds.fixed.room + ' fixed the cause at ' + hm(ds.fixed.at) + ' (✅ — see its report). Production is unchanged · press to «confirm and deploy again»')
-              : ds.phase === 'fail' ? K('맨 위 카드에 마지막 출력·기록 파일이 있어요. 원인 고치기는 그 솔루션 대기열에 넣었어요 · 다시 누르면 «확인하고 다시 배포»', 'The top card has the last output and log. The fix is queued for the project · press again to «confirm and deploy again»')
+              : ds.phase === 'fail' ? (ds.cause ? K('까닭: ', 'Why: ') + ds.cause.title + ' — ' + ds.cause.hint + '\n' : '') + K('맨 위 카드에 마지막 출력·기록 파일이 있어요. ', 'The top card has the last output and log. ') + (ds.fix && ds.fix.state === 'none' ? K('고칠 것 없음 — 몇 분 뒤 다시 누르세요', 'Nothing to fix — press again in a few minutes') : K('원인 고치기는 그 솔루션 대기열 앞에 넣었어요 — 고치면 알려 드려요', 'The fix is at the front of the project queue — you get a notice when fixed'))
               : K('상황판이 배포했어요', 'The board deployed') + (ds.mins ? K(' (' + ds.mins + '분 걸림)', ' (took ' + ds.mins + ' min)') : '') + K(' · 다시 누르면 새 배포', ' · click to deploy again')) : dsB ? (BLOCK_DO[dsB.why] || '') + dsSkip
             : ds.phase === 'skip' ? K((ds.title || '정기 점검') + ' 을 그날 안에 시작 못 해 건너뛰었어요(' + (BLOCK_WORD[ds.why] || ds.why) + '). 다음 정기 점검 때 다시 해요 · 지금 하려면 다시 누르면 배포', (ds.title || 'Scheduled check') + ' could not start that day and was skipped (' + (BLOCK_WORD[ds.why] || ds.why) + '). It runs at the next scheduled check · click to deploy now')
             : ds.phase === 'prep' && !ds.check ? K('일하던 방을 바로 멈추고 «/배포» 방을 여는 중', 'Stopping working sessions now and opening the «/deploy» session')
@@ -5615,7 +5745,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       + 'elif launchctl print gui/$(id -u)/$L >/dev/null 2>&1; then echo "' + K('✘ 자동 통로가 붙지 못하는 중 — 기록:', '✘ Automatic tunnel cannot connect — log:') + '"; tail -4 ' + TUN.log + '; '
       + 'else echo "' + K('✘ 이 맥에 통로가 없어요(터미널 창이 닫힘) — 다시 열거나, 아래 «늘 열어 두기» 한 줄', '✘ No tunnel on this Mac (the terminal window closed) — reopen it, or use «keep it open» below') + '"; fi; '
       + 'ssh -o BatchMode=yes -o ConnectTimeout=8 ' + tgt + ' true 2>/dev/null && echo "' + K('열쇠 접속: 됨', 'Key login: ok') + '" || echo "' + K('✘ 열쇠 접속 안 됨 — 맥 열쇠를 서버에 등록하거나(암호 걸린 열쇠면 ssh-add --apple-use-keychain) 인터넷 확인', '✘ Key login fails — register the Mac key on the server (passphrase key: ssh-add --apple-use-keychain) or check the internet') + '"';
-    if (!m[1]) { TUN.install = ''; TUN.diag = ''; }   // devSsh 에 사용자@주소가 없으면 복사할 명령을 만들지 않음(자리표 <user> 가 셸 기호로 들어감)
+    TUN.check = 'P=' + PORT_NO + '; echo "' + K('① 상황판 응답(200=됨):', '① Board reply (200=ok):') + ' $(curl -s -m 3 -o /dev/null -w %{http_code} http://localhost:$P/api/ping)"; n=0; '
+      + 'for l in $(launchctl list | awk \'{print $3}\' | grep -E \'^com\\.serverboard\\.tunnel\\.' + (TUN_LEGACY ? '|^' + TUN.label + '$' : '') + '\'); do n=1; '
+      + 's=$(launchctl print gui/$(id -u)/$l 2>/dev/null | awk \'/state =/{sub(/.*state = /,""); print; exit}\'); a=${l#com.serverboard.tunnel.}; case $a in com.*) a=legacy;; esac; m=$s; case $a in legacy|*-$P) ;; *-[0-9]*) m=other;; esac; '
+      + 'echo "② ' + K('자동 통로', 'Automatic tunnel') + ' ${l} — ${s:-?}"; '
+      + '[ "$m" = running ] && echo "   → ' + K('상황판을 보는 브라우저 주소창에 붙여 넣기:', 'Paste into the address bar of the browser you use for the board:') + ' http://localhost:${P}/#autotunnel=${a}"; done; '
+      + '[ $n = 0 ] && echo "② ' + K('✘ 이 맥에는 자동 통로가 없어요 — «맥 — 늘 열어 두기(자동 통로)» 로 까세요', '✘ No automatic tunnel on this Mac — install it with «Mac — keep it open (automatic tunnel)»') + '"; :';
+    if (!m[1]) { TUN.install = ''; TUN.diag = ''; TUN.check = ''; }   // devSsh 에 사용자@주소가 없으면 복사할 명령을 만들지 않음(자리표 <user> 가 셸 기호로 들어감)
     Array.prototype.forEach.call(document.querySelectorAll('.js-port'), function (x) { x.textContent = PORT_NO; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-userhost'), function (x) { x.textContent = user + '@' + host; });
     Array.prototype.forEach.call(document.querySelectorAll('.js-host'), function (x) { x.textContent = host; });
@@ -5769,7 +5905,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     ta.placeholder = enterLabel(K('물어보거나 의논할 것을 적고 Enter (줄바꿈 Shift+Enter)', 'Ask or discuss, then Enter (Shift+Enter for a new line)'));
     csEl('cs-sum').placeholder = K('맡길 일 — 상의 창이 정리해 준 글을 고쳐 넣으세요(이 글이 작업방에 그대로 가요)', 'The task — edit the summary the chat gave you (this text goes to the session as is)');
     csEl('cs-send').addEventListener('click', csSend);
-    ta.parentNode.parentNode.insertBefore(attBox('cs', function () { return cs.project; }, ta), ta.parentNode.nextSibling);
+    ta.parentNode.parentNode.insertBefore(attBox('cs', function () { return cs.project; }, ta, ta.parentNode.parentNode), ta.parentNode.nextSibling);
     enterToSubmit(ta, csEl('cs-send'));
     csEl('cs-new').addEventListener('click', function () {
       if (!cs.project) return toast(K('솔루션을 먼저 골라 주세요', 'Pick a project first'));
@@ -5929,47 +6065,174 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var authInfo = { users: [], sessions: [] };
     var ANS = { own: K('자기가 넣은 일의 방만 (권장)', 'Only sessions of their own tasks (recommended)'), project: K('맡은 솔루션의 모든 방', 'Every session in their projects'), none: K('없음 — 최종 컨펌자만 답함', 'None — only the final approver answers') };
     Array.prototype.forEach.call(document.querySelectorAll('#tm-answers option'), function (o) { o.textContent = ANS[o.value]; });
-    function row(m) {
+    // 한 사람 = 카드 한 장 · 위: 이름·아이디·역할·켬 / 아래: 할 일 4단계(들어올 길 → 저장 → 안내문 보내기 → 그 사람 등록)
+    //
+    function cmdLine(parent, cmd) {
+      var w = el('div', 'tm-cmd'); w.appendChild(el('code', '', cmd));
+      var b = el('button', 'btn', K('복사', 'Copy')); b.type = 'button';
+      b.addEventListener('click', function () { copyText(cmd, function () { toast(K('복사됨', 'Copied')); }, function () { toast(K('복사하지 못했어요 — 글자를 직접 골라 복사하세요', 'Could not copy — select the text')); }); });
+      w.appendChild(b); parent.appendChild(w); return w;
+    }
+    function hhmm(t) { var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+    function row(m, fresh) {
+      var R = (info && info.route) || {};
       var r = el('div', 'tm-row');
-      var u = document.createElement('select'); u.className = 'tm-user';
-      var o0 = document.createElement('option'); o0.value = ''; o0.textContent = K('(사설망 계정만)', '(Tailscale only)'); u.appendChild(o0);
+      var u = document.createElement('select'); u.className = 'tm-user'; u.setAttribute('aria-label', K('아이디', 'ID'));
+      var o0 = document.createElement('option'); o0.value = ''; o0.textContent = K('서버 계정 없음 (사설망만)', 'No server account (Tailscale only)'); u.appendChild(o0);
       info.accounts.filter(function (a) { return !a.owner; }).forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = K('서버 계정 ', 'account ') + a.user; u.appendChild(o); });
       u.value = m.user || '';
-      var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'tm-name'; nm.placeholder = K('이름', 'Name'); nm.value = m.name || '';
-      var rl = document.createElement('select'); rl.className = 'tm-role';
+      var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'tm-name'; nm.placeholder = K('이름', 'Name'); nm.value = m.name || ''; nm.setAttribute('aria-label', K('이름', 'Name'));
+      var rl = document.createElement('select'); rl.className = 'tm-role'; rl.setAttribute('aria-label', K('역할', 'Role'));
       ['member', 'designer', 'viewer', 'owner'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = ROLE[k]; rl.appendChild(o); });
       rl.value = m.role || 'member';
+      var on = document.createElement('label'); on.className = 'tm-on'; var onc = document.createElement('input'); onc.type = 'checkbox'; onc.className = 'tm-active'; onc.checked = m.active !== false;
+      on.appendChild(onc); on.appendChild(document.createTextNode(' ' + K('켬', 'On')));
+      var del = el('button', 'btn', K('빼기', 'Remove')); del.type = 'button';
+      del.addEventListener('click', function () { r.remove(); toast(K('«저장» 을 누르면 빠져요', 'Press «Save» to remove')); });
+      var top = el('div', 'tm-top'); [nm, u, rl, on, el('span', 'tm-sp'), del].forEach(function (x) { top.appendChild(x); }); r.appendChild(top);
       var pj = el('span', 'tm-pj');
       info.projects.forEach(function (p) {
         var l = document.createElement('label'); var c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key;
         c.checked = (m.projects || []).indexOf(p.key) >= 0 || (m.projects || []).indexOf('*') >= 0; l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.name)); pj.appendChild(l);
       });
-      var ts = document.createElement('input'); ts.type = 'text'; ts.className = 'tm-ts'; ts.placeholder = K('사설망 계정(선택) — 예: name@gmail.com', 'Tailscale login (optional)'); ts.value = m.tailscale || '';
-      var del = el('button', 'btn', K('빼기', 'Remove')); del.type = 'button'; del.addEventListener('click', function () { r.remove(); });
-      var on = document.createElement('label'); on.className = 'tm-on'; var onc = document.createElement('input'); onc.type = 'checkbox'; onc.className = 'tm-active'; onc.checked = m.active !== false;
-      on.appendChild(onc); on.appendChild(document.createTextNode(' ' + K('켬', 'On')));
-      var lid = String(m.user || m.tailscale || '').toLowerCase();
-      var ui = authInfo.users.filter(function (x) { return x.id === lid; })[0], ns = authInfo.sessions.filter(function (x) { return x.id === lid; }).length;
-      var needT = (info && info.team && info.team.memberTotp !== false) || m.role === 'owner';
-      var stx = el('span', 'tm-auth', !lid ? '' : !(ui && ui.pwAt) ? K('아직 비밀번호 없음 — «로그인 링크» 를 보내세요', 'no password yet — send a «Sign-in link»')
-        : (ui.totp ? K('비밀번호 ✔ · 인증 앱 ✔ · 접속 ', 'password ✔ · authenticator ✔ · sessions ') + ns
-          : needT ? K('비밀번호 ✔ · ⚠ 인증 앱 없음 — 새 «로그인 링크» 를 보내면 등록해요', 'password ✔ · ⚠ no authenticator — send a new «Sign-in link»') : K('비밀번호 ✔ · 접속 ', 'password ✔ · sessions ') + ns));
-      var inv = el('button', 'btn', K('로그인 링크', 'Sign-in link')); inv.type = 'button';
-      inv.addEventListener('click', function () {
-        if (!lid) return;
-        post('/api/auth/invite', { id: lid }).then(function (j) {
-          if (!j.ok) { toast(j.message || 'error'); return; }
-          var txt = (j.links || []).join('\n');
-          window.prompt(K('이 링크를 ' + (m.name || lid) + ' 님에게 전하세요 — ' + j.hours + '시간 안에 한 번만 쓸 수 있고, 그 사람이 들어오는 길(SSH 통로·Tailscale)에 맞는 주소로 엽니다:', 'Send this to ' + (m.name || lid) + ' — single use within ' + j.hours + ' h; they open the address for their route (SSH tunnel or Tailscale):'), txt);
+      var pjl = el('div', 'tm-line'); pjl.appendChild(el('span', '', K('맡을 솔루션', 'Projects'))); pjl.appendChild(pj); r.appendChild(pjl);
+      var ts = document.createElement('input'); ts.type = 'text'; ts.className = 'tm-ts'; ts.placeholder = 'name@gmail.com'; ts.value = m.tailscale || '';
+      var tsl = el('div', 'tm-line'); tsl.appendChild(el('span', '', K('사설망(Tailscale) 로그인 이메일', 'Tailscale login email'))); tsl.appendChild(ts); r.appendChild(tsl);
+      var todo = el('ol', 'tm-todo'); r.appendChild(todo);
+      var saved = { user: m.user || '', tailscale: m.tailscale || '', role: m.role || 'member', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
+      var msgBox = null;
+      function step(cls, mark, build) { var li = el('li', 'tm-s-' + ({ ok: 'ok', todo: 'do', wait: 'wait' })[cls]); li.appendChild(el('span', 'tm-mk', mark)); var d = el('div'); build(d); li.appendChild(d); todo.appendChild(li); }
+      function curProjects() { return Array.prototype.filter.call(pj.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; }); }
+      function dirty() {
+        return fresh || u.value !== saved.user || ts.value.trim() !== saved.tailscale || rl.value !== saved.role || nm.value.trim() !== saved.name || onc.checked !== saved.active
+          || (rl.value !== 'owner' && curProjects().sort().join(',') !== saved.projects);
+      }
+      function paint() {
+        pjl.style.display = rl.value === 'owner' ? 'none' : '';
+        todo.textContent = '';
+        var user = u.value, mail = ts.value.trim(), lid = (user || mail).toLowerCase();
+        var ui = authInfo.users.filter(function (x) { return x.id === lid; })[0], ns = authInfo.sessions.filter(function (x) { return x.id === lid; }).length;
+        var needT = (info.team && info.team.memberTotp !== false) || rl.value === 'owner';
+        var routeOk = !!user || (!!mail && !!R.tsHost);
+        // ① 들어올 길
+        step(routeOk ? 'ok' : 'todo', routeOk ? '✔' : '1', function (d) {
+          if (user) {
+            var acc = info.accounts.filter(function (a) { return a.user === user; })[0] || {}, home = acc.home || ('/home/' + user);
+            d.appendChild(el('b', '', K('들어올 길: SSH 통로 — 서버 계정 ' + user + ' 있음', 'Route: SSH tunnel — server account ' + user + ' exists')));
+            d.appendChild(el('small', '', K('그 사람의 SSH 공개 열쇠가 이 계정에 들어 있어야 통로가 열려요(상황판은 확인 못 함). 아직이면 그 사람에게 공개 열쇠 한 줄(~/.ssh/id_ed25519.pub)을 받아, 서버 관리자가 서버 창에서 «공개 열쇠» 자리를 바꿔 실행:',
+              'Their SSH public key must be in this account for the tunnel (the board cannot check). If not yet: get their one-line public key (~/.ssh/id_ed25519.pub) and have the server admin run this in a server shell, replacing «PUBLIC KEY»:')));
+            cmdLine(d, "sudo install -d -m 700 -o " + user + " -g $(id -gn " + user + ") " + home + "/.ssh && echo '" + K('공개 열쇠', 'PUBLIC KEY') + "' | sudo tee -a " + home + "/.ssh/authorized_keys >/dev/null && sudo chown " + user + ": " + home + "/.ssh/authorized_keys && sudo chmod 600 " + home + "/.ssh/authorized_keys");
+            if (mail && R.tsHost) d.appendChild(el('small', '', K('사설망 계정도 적어서 Tailscale 로도 들어올 수 있어요(초대는 Tailscale 관리 화면 Users → Invite).', 'Tailscale login also set — they can come in via Tailscale too (invite: Tailscale admin → Users → Invite).')));
+          } else {
+            d.appendChild(el('b', '', R.tsHost ? K('들어올 길: 사설망(Tailscale)', 'Route: Tailscale') : K('들어올 길이 없어요', 'No route in')));
+            if (R.tsHost) {
+              d.appendChild(el('small', '', mail ? K('Tailscale 관리 화면 Users → Invite 로 ' + mail + ' 을 초대했는지 보세요(초대 안 하면 링크가 안 열려요).', 'Make sure ' + mail + ' is invited (Tailscale admin → Users → Invite) — otherwise the link will not open.')
+                : K('위 «사설망 로그인 이메일» 칸에 그 사람의 Tailscale 로그인 이메일을 적고, Tailscale 관리 화면 Users → Invite 로 초대하세요.', 'Fill in their Tailscale login email above and invite them (Tailscale admin → Users → Invite).')));
+              var a = document.createElement('a'); a.href = 'https://login.tailscale.com/admin/users'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = K('Tailscale 관리 화면 열기', 'Open Tailscale admin'); d.appendChild(a);
+            } else d.appendChild(el('small', '', K('이 서버는 Tailscale 주소가 없어 SSH 통로만 쓸 수 있어요. 서버 관리자가 서버 창에서 그 사람 계정을 만든 뒤(아래 «아이디» 자리를 바꿔 실행) 이 칸을 다시 열어 «서버 계정» 에서 고르세요:',
+              'This server has no Tailscale address, so only the SSH tunnel works. Have the server admin create their account (replace «ID»), then reopen this panel and pick it under «server account»:')));
+            if (!R.tsHost) cmdLine(d, 'sudo adduser ' + K('아이디', 'ID'));
+            else d.appendChild(el('small', '', K('SSH 통로로 들어오게 하려면: 서버 관리자가 sudo adduser <아이디> 로 계정을 만든 뒤 이 칸을 다시 열어 고르기.', 'For an SSH tunnel instead: the server admin runs sudo adduser <ID>, then reopen this panel and pick it.')));
+          }
         });
-      });
-      var kick = el('button', 'btn', K('접속 끊기', 'Sign out')); kick.type = 'button';
-      kick.addEventListener('click', function () { if (lid) post('/api/auth/kick', { id: lid }).then(function (j) { toast(j.message || ''); load(); }); });
-      if (!m.user && !m.tailscale) { inv.disabled = true; kick.disabled = true; }
-      function paint() { pj.style.display = rl.value === 'owner' ? 'none' : ''; }
-      rl.addEventListener('change', paint); paint();
-      [u, nm, rl, pj, ts, on, stx, inv, kick, del].forEach(function (x) { r.appendChild(x); });
+        // ② 저장
+        var isDirty = dirty();
+        step(isDirty ? 'todo' : 'ok', isDirty ? '2' : '✔', function (d) {
+          if (!isDirty) { d.appendChild(el('b', '', K('저장됨', 'Saved'))); return; }
+          d.appendChild(el('b', '', fresh ? K('아직 저장 안 함', 'Not saved yet') : K('바뀐 것 저장 안 함', 'Unsaved changes')));
+          if (!lid) d.appendChild(el('small', '', K('서버 계정을 고르거나 사설망 이메일을 적어야 저장돼요.', 'Pick a server account or enter a Tailscale email to save.')));
+          var sb = el('button', 'btn primary', K('저장', 'Save')); sb.type = 'button'; sb.disabled = !lid;
+          sb.addEventListener('click', function () { document.getElementById('tm-save').click(); }); d.appendChild(sb);
+        });
+        // ③ 안내문 보내기 (로그인 링크 포함)
+        var regDone = !!(ui && ui.pwAt) && (!needT || ui.totp);
+        var inv = ui && ui.inviteExp;
+        step(isDirty || !lid ? 'wait' : regDone ? 'ok' : inv ? 'ok' : 'todo', isDirty || !lid ? '3' : regDone || inv ? '✔' : '3', function (d) {
+          d.appendChild(el('b', '', regDone ? K('안내문 보냄 · 등록 끝', 'Invitation used · registered') : inv ? K('안내문(로그인 링크) 만듦 · ' + hhmm(inv) + ' 까지 열림', 'Invitation link made · open until ' + hhmm(inv)) : K('안내문 복사해서 그 사람에게 보내기', 'Copy the invitation and send it')));
+          if (isDirty || !lid) { d.appendChild(el('small', '', K('먼저 저장하면 여기서 안내문을 만들 수 있어요.', 'Save first to make the invitation.'))); return; }
+          if (!onc.checked) { d.appendChild(el('small', '', K('«켬» 이 꺼져 있어 링크를 못 만들어요.', '«On» is off — no link can be made.'))); return; }
+          d.appendChild(el('small', '', regDone ? K('휴대폰을 바꿨거나 비밀번호를 잊었으면 새 안내문을 보내요(비밀번호·인증 앱을 다시 정함).', 'Lost phone or password? Send a new invitation (they set password and app again).')
+            : K('로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 들어 있어요. 메신저·메일로 그 사람에게만 보내세요. 다시 만들면 전에 보낸 링크는 안 열려요.', 'Holds the sign-in link (24 h, single use), how to connect and how to sign in. Send it to that person only. A new one cancels the previous link.')));
+          var b = el('button', 'btn' + (regDone || inv ? '' : ' primary'), inv && !regDone ? K('새 안내문 만들기·복사', 'Make new invitation & copy') : K('안내문 만들기·복사', 'Make invitation & copy')); b.type = 'button';
+          b.addEventListener('click', function () {
+            b.disabled = true;
+            post('/api/auth/invite', { id: lid }).then(function (j) {
+              b.disabled = false;
+              if (!j.ok) { toast(j.message || 'error'); return; }
+              var txt = inviteText({ name: nm.value.trim() || lid, id: lid, user: user, mail: mail, role: rl.value, projects: curProjects(), needT: needT }, j);
+              if (!msgBox) { msgBox = document.createElement('textarea'); msgBox.className = 'tm-msg'; msgBox.readOnly = true; msgBox.setAttribute('aria-label', K('안내문', 'Invitation')); }
+              msgBox.value = txt;
+              copyText(txt, function () { toast(K('안내문을 복사했어요 — 메신저·메일에 붙여 넣어 보내세요', 'Invitation copied — paste it into chat or email')); }, function () { toast(K('아래 안내문을 골라 복사하세요', 'Select the text below and copy it')); });
+              var ex = j.hours ? Date.now() + j.hours * 3600e3 : null; if (ui) ui.inviteExp = ex; else authInfo.users.push({ id: lid, pwAt: null, inviteExp: ex });
+              paint();
+            }).catch(function () { b.disabled = false; toast(K('만들지 못했어요', 'Could not make it')); });
+          });
+          d.appendChild(b);
+          if (msgBox && msgBox.value) {
+            d.appendChild(msgBox);
+            var cb = el('button', 'btn', K('다시 복사', 'Copy again')); cb.type = 'button';
+            cb.addEventListener('click', function () { copyText(msgBox.value, function () { toast(K('복사됨', 'Copied')); }, function () { msgBox.select(); }); }); d.appendChild(cb);
+          }
+        });
+        // ④ 그 사람 등록
+        step(regDone ? 'ok' : 'wait', regDone ? '✔' : '4', function (d) {
+          if (!lid) { d.appendChild(el('b', '', K('그 사람이 링크를 열어 등록', 'They open the link and register'))); return; }
+          d.appendChild(el('b', '', regDone ? K('등록 끝 — 비밀번호 ✔', 'Registered — password ✔') + (ui.totp ? K(' · 인증 앱 ✔', ' · authenticator ✔') : '') + K(' · 지금 접속 ', ' · sessions ') + ns
+            : (ui && ui.pwAt) ? K('비밀번호 ✔ · ⚠ 인증 앱 없음 — 새 안내문을 보내면 등록해요', 'password ✔ · ⚠ no authenticator — send a new invitation')
+            : K('그 사람이 링크를 열어 비밀번호' + (needT ? '·인증 앱' : '') + ' 등록하기를 기다리는 중', 'Waiting for them to open the link and set a password' + (needT ? ' and app' : ''))));
+          if (ui && ui.lastLogin) d.appendChild(el('small', '', K('마지막 로그인 ', 'Last sign-in ') + hhmm(ui.lastLogin)));
+          if (ui && ui.locked) d.appendChild(el('small', '', K('⚠ 비밀번호를 여러 번 틀려 잠깐 막힘(15분)', '⚠ Locked for 15 min after wrong passwords')));
+          if (ns) { var kick = el('button', 'btn', K('접속 끊기', 'Sign out')); kick.type = 'button'; kick.addEventListener('click', function () { post('/api/auth/kick', { id: lid }).then(function (j) { toast(j.message || ''); load(); }); }); d.appendChild(kick); }
+        });
+      }
+      [u, rl, onc].forEach(function (x) { x.addEventListener('change', paint); });
+      Array.prototype.forEach.call(pj.querySelectorAll('input'), function (x) { x.addEventListener('change', paint); });
+      [nm, ts].forEach(function (x) { x.addEventListener('change', paint); });
+      paint();
       rowsEl.appendChild(r);
+      if (fresh) nm.focus();
+    }
+    // 그 사람에게 보낼 안내문 — 들어오는 길·로그인 링크·로그인 순서·규칙 (TEAM-GUIDE 의 요점을 이 사람·이 서버 값으로 채움)
+    function inviteText(p, j) {
+      var R = info.route || {}, srv = R.serverName || 'server', port = R.port || 8800;
+      var links = j.links || [], lLocal = links.filter(function (x) { return /^http:\/\/localhost/.test(x); })[0], lTs = links.filter(function (x) { return /\.ts\.net/.test(x) || /^https:/.test(x); })[0];
+      var viaSsh = !!p.user, viaTs = !!p.mail && !!lTs;
+      var ssh = 'ssh -N -L ' + port + ':127.0.0.1:' + port + ' ' + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'));
+      var pjNames = p.role === 'owner' ? K('모든 솔루션', 'all projects') : info.projects.filter(function (x) { return p.projects.indexOf(x.key) >= 0; }).map(function (x) { return x.name; }).join(', ') || K('(아직 없음)', '(none yet)');
+      var L = [], n = 0;
+      L.push(K('[' + srv + ' 상황판 초대]', '[' + srv + ' board invitation]'));
+      L.push(K(p.name + ' 님, ' + srv + ' 상황판에 넣었어요. 역할: ' + ROLE[p.role] + ' · 맡은 솔루션: ' + pjNames + '.', p.name + ', you have been added to the ' + srv + ' board as «' + ROLE[p.role] + '». Projects: ' + pjNames + '.'));
+      L.push(K('아이디: ' + p.id, 'ID: ' + p.id));
+      L.push('');
+      if (p.needT) { n++; L.push(K(n + ') 휴대폰에 인증 앱 설치 — Google Authenticator 등 아무거나. 본인 휴대폰·본인 앱으로(다른 사람 것 빌리지 않기).', n + ') Install an authenticator app on your phone — Google Authenticator or any. Your own phone and app.')); L.push(''); }
+      n++; L.push(K(n + ') 들어오는 길 켜기 (상황판은 인터넷에 열려 있지 않아요)', n + ') Turn on your route in (the board is not on the internet)'));
+      if (viaSsh) {
+        L.push(K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 처음 한 번: SSH 공개 열쇠를 저에게 보내 주세요(이미 보냈으면 건너뛰기).', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — first time only: send me your SSH public key (skip if already sent).'));
+        L.push(K('      열쇠가 없으면 컴퓨터 터미널에서: ssh-keygen -t ed25519 → 보낼 것 = ~/.ssh/id_ed25519.pub 파일 내용 한 줄(.pub 만!)', '      No key yet? In a terminal: ssh-keygen -t ed25519 → send the one line in ~/.ssh/id_ed25519.pub (only the .pub file!)'));
+        L.push(K('      쓸 때마다: 컴퓨터 터미널에서 아래 명령을 켜 두기(창을 닫으면 끊겨요)', '      Each time: keep this running in a terminal (closing the window disconnects)'));
+        L.push('      ' + ssh);
+        L.push(K('      상황판 주소: http://localhost:' + port, '      Board address: http://localhost:' + port));
+      }
+      if (viaTs) {
+        L.push(K((viaSsh ? '  [B] ' : '  ') + '사설망(Tailscale) — 초대 메일을 받아 ' + p.mail + ' 로 들어간 뒤, 휴대폰·컴퓨터에 Tailscale 앱을 깔고 켜 두기', (viaSsh ? '  [B] ' : '  ') + 'Tailscale — accept the invite email as ' + p.mail + ', install the Tailscale app on your phone or computer and keep it on'));
+        L.push(K('      상황판 주소: https://' + R.tsHost, '      Board address: https://' + R.tsHost));
+      }
+      L.push('');
+      n++; L.push(K(n + ') 길을 켠 채로 아래 링크를 열기 — ' + (j.hours || 24) + '시간 안에 한 번만 열려요', n + ') With the route on, open this link — works once within ' + (j.hours || 24) + ' h'));
+      if (viaSsh && lLocal) L.push('  ' + (viaTs ? K('[A] SSH 통로: ', '[A] SSH tunnel: ') : '') + lLocal);
+      if (viaTs) L.push('  ' + (viaSsh ? K('[B] Tailscale: ', '[B] Tailscale: ') : '') + lTs);
+      L.push(p.needT ? K('  화면 순서대로: 인증 앱 «+» → QR 찍기(휴대폰에서 열었으면 «인증 앱에 넣기») → 앱에 생긴 «Server Board · ' + srv + '» 의 6자리 넣기 → 비밀번호(10자 이상) 정하기 → 예비 코드 10개를 비밀번호 관리 앱이나 종이에 적어 두기',
+        '  Follow the screen: authenticator «+» → scan the QR (on a phone: «Add to authenticator») → enter the 6 digits of «Server Board · ' + srv + '» → set a password (10+ chars) → write down the 10 backup codes (password manager or paper)')
+        : K('  화면 순서대로 비밀번호(10자 이상)를 정하면 바로 들어가요.', '  Set a password (10+ chars) and you are in.'));
+      L.push('');
+      n++; L.push(K(n + ') 다음부터: 길을 켜고 상황판 주소를 열어 아이디 ' + p.id + ' + 비밀번호' + (p.needT ? ' + 인증 앱 6자리' : '') + ' 로 로그인', n + ') From then on: turn on the route, open the board address and sign in with ID ' + p.id + ' + password' + (p.needT ? ' + 6 digits' : '')));
+      L.push('');
+      L.push(K('알아 둘 것', 'Good to know'));
+      if (p.role === 'member' || p.role === 'designer') L.push(K('- 맡은 솔루션만 보여요. 일 요청은 «제안» 으로 올라가 제가 확인한 뒤 시작될 수 있어요.', '- You see only your projects. Requests go up as proposals and may start after I approve.'));
+      if (p.role === 'viewer') L.push(K('- 맡은 솔루션을 보기만 할 수 있어요.', '- You can view your projects only.'));
+      L.push(K('- 요청 글에 비밀번호·열쇠·고객 개인정보를 넣지 마세요(AI 작업방에 그대로 전달돼요).', '- Never put passwords, keys or customer personal data in a request (it goes to the AI session as is).'));
+      L.push(K('- 로그인은 본인만. 링크가 지났거나 휴대폰을 바꿨거나 비밀번호를 잊었으면 새 링크를 요청해 주세요.', '- Your sign-in is yours only. Link expired, new phone or forgot the password? Ask me for a new link.'));
+      return L.join('\n');
     }
     function load() {
       st.textContent = K('불러오는 중…', 'Loading…');
@@ -5978,7 +6241,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         if (!j.ok) { st.textContent = j.message || 'error'; return; }
         info = j; st.textContent = '';
         ['tm-owner', 'tm-owner-en'].forEach(function (id) { var x = document.getElementById(id); if (x) x.textContent = j.ownerUser; });
-        rowsEl.textContent = ''; j.team.members.forEach(row);
+        rowsEl.textContent = ''; j.team.members.forEach(function (m) { row(m, false); });
         if (!j.team.members.length) rowsEl.appendChild(el('p', '', K('아직 팀원이 없습니다 — 지금은 최종 컨펌자 혼자 씁니다.', 'No team members yet — only the final approver uses this board.')));
         document.getElementById('tm-approval').checked = j.team.approval;
         document.getElementById('tm-small').checked = j.team.smallDirect;
@@ -6005,7 +6268,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         rk.appendChild(d);
       });
     }
-    document.getElementById('tm-add').addEventListener('click', function () { if (!info) return; var p = rowsEl.querySelector('p'); if (p) p.remove(); row({ role: 'member', projects: [] }); });
+    document.getElementById('tm-add').addEventListener('click', function () { if (!info) return; var p = rowsEl.querySelector('p'); if (p) p.remove(); row({ role: 'member', projects: [] }, true); });
     document.getElementById('tm-save').addEventListener('click', function () {
       var b = this; if (!info) return;
       var members = Array.prototype.map.call(rowsEl.querySelectorAll('.tm-row'), function (r) {

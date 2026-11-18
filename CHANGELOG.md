@@ -1,5 +1,44 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.6.3]
+**Releasing (source server only)**
+- The board that publishes Server Board now counts board changes not yet released (commits since the last tag, [Unreleased] lines) and shows «Release vX» at the top; about an hour after the last change it queues the release in the server room once a day (`config.json` `"publish": {"auto": false}` turns that off). Installed boards are unaffected — they keep getting the «new version» notice within 6 hours of a release
+
+**⚙ Team — adding a person, step by step**
+- Each person is a card with four steps: ① route in (SSH account + the admin command to add their public key, or Tailscale invite) ② save ③ invitation ④ they register — each shows ✔ or what to do next
+- «Make invitation & copy»: one message to send that person — sign-in link for their route, the SSH tunnel command filled with their ID (or the Tailscale address), sign-in steps and rules. Replaces the bare link pop-up · the card shows until when the link is open
+- Intro shortened to the four steps; role and sign-in details folded under «Roles and sign-in rules»
+
+**Inquiries — icon**
+- The «Inquiries» row icon is now the same line icon as «Scheduled checks» (before, ✉ was left as a text character and showed as a different color emoji per device/browser)
+
+**Status row — setup**
+- After first setup is done, «Setup ✔ time / Show setup checklist» is now one line under the status row (it used to drop to a fourth cell on its own row, stacked in three lines)
+
+**Alerts — default**
+- A board that never set «Alerts to receive» now defaults to «only what needs me» (questions, needs reply, blocked; done off). Before, the default was «everything», which hides the per-task «🔔 Alerts: default / incl. done / off» picker in «New task» and the per-session «Alerts» button — so fresh installs never showed them. Boards that already chose a setting keep it; to get «done» alerts for everything again, press «Everything incl. done» in the Alerts panel (or «incl. done» for one task)
+
+**Attachments**
+- Drag and drop now works anywhere on the «New task» box and the 💬 chat box (not just the small text field). While a file is dragged over the board, the boxes that accept it get a dashed outline; dropping elsewhere no longer opens the file in the tab (and hides the board) — a short note says where to drop instead
+
+**Deploy failures**
+- A failed deploy now says why in one line, read from the deploy log: which pre-deploy check items failed, out of memory, production unreachable, or time limit — on the top card, the deploy button and the confirm box (before, the card only had the last 25 lines of output)
+- The «Fix deploy failure» task goes to the front of that project's queue, and only once: a repeat failure adds its log to the same task instead of queuing another
+- When the fix session ends ✅, the top of the board (and your phone) says «Deploy failure fixed — press Deploy again»
+- Pressing Deploy again while the fix is still queued or working: the confirm box recommends «Deploy after the fix» — before, it recommended deploying again, which failed the same check
+- Temporary failures (rate limit 429, memory, connection) first just say «press again in a few minutes» with no fix task; a second failure in a row queues one. A successful deploy drops fix tasks that have not started
+
+**Adding people (docs)**
+- OPERATIONS §1 now starts with who adds people (final approver only) and step 0 «a route in»: their own server account + SSH key (server admin, sudo) or a Tailscale invite + the Tailscale login field. Before, it began at ⚙ Team & roles, so a new member got a link they could not open
+- TEAM-GUIDE gives the member the actual tunnel command and Tailscale steps (it only said «use the route you were given»); SERVER-GUIDE lists the `team` setting as final-approver-only and adds a «cannot sign in through this route» row; ⚙ Team & roles intro says a route is needed first
+
+**Mac automatic tunnel — «keep it open» kept showing after install**
+- The board only knows a Mac has the automatic tunnel from a one-time mark that the install script leaves by opening the board in the Mac's *default* browser. Using the board in another browser (or an install that stopped before that last step) meant the suggestion never went away, and «✕ Hide» came back after Mac sleep drops
+- The suggestion now has «Already installed»: a one-line Mac check that lists the installed tunnels with their state and, for a running one, the address to paste into this browser once — after that it no longer shows
+- `connect-mac.sh` prints that address at the end for people who use another browser
+
 ## [0.6.2]
 **Inquiries**
 - «Send reply» sits right on each inquiry line that has a draft — it shows the draft in a confirm box and hands it to the project session; no need to open the draft first or go to the admin page. A «Close as done after sending» tick sits next to it (on by default for «Already fixed» / «Reply only»)

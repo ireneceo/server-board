@@ -243,6 +243,8 @@ function useReset(token) {
 const hasUser = (id) => !!(users().users[id] && users().users[id].hash);
 const hasTotp = (id) => !!(users().users[id] && users().users[id].totp);
 function userInfo(id) { const r = users().users[id]; return r ? { id, pwAt: r.pwAt || null, totp: !!r.totp, backupLeft: (r.backup || []).length, lastLogin: r.lastLogin || null, locked: r.lockUntil > now() } : null; }
+/** 아직 안 쓴 로그인 링크가 언제까지 열리는지 — ⚙ 팀·권한 줄에 «링크 보냄 · ~시각까지» */
+function inviteExp(id) { let e = 0; for (const r of Object.values(users().resets)) if (r.id === id && r.exp > now() && r.exp > e) e = r.exp; return e || null; }
 function recovering() { return !!users().recovering; }
 function setRecovering(on) { const u = users(); if (on) u.recovering = new Date().toISOString(); else delete u.recovering; saveUsers(); }
 /** 사용자 지우기(팀에서 뺐을 때) — 비밀번호·인증 앱·세션 모두 */
@@ -255,6 +257,6 @@ module.exports = {
   DIR, USERS, SESS, IDLE_MS, ABS_MS, FRESH_MS, LOCK_FAILS, LOCK_MS,
   pwProblem, setPassword, checkLogin, reverify, newTotpSecret, otpauthUri, totpCheck, totpNow, setTotp, renewBackup,
   createSession, getSession, dropSession, dropSessionKey, dropUserSessions, listSessions, isFresh,
-  makeReset, peekReset, useReset, hasUser, hasTotp, clearTotp, userInfo, recovering, setRecovering, removeUser, resetOwnerFactors,
+  makeReset, peekReset, useReset, inviteExp, hasUser, hasTotp, clearTotp, userInfo, recovering, setRecovering, removeUser, resetOwnerFactors,
   b32enc, b32dec, hotp, sha,
 };

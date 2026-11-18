@@ -181,7 +181,9 @@ for i in $(seq 1 10); do
     say; say "✅ Done — $(t "«${NOW:-$ALIAS}» http://localhost:$PORT (즐겨찾기). 터미널을 닫아도, 맥을 다시 켜도 열려요. 끊겨도 15초 뒤 다시 붙어요." "«${NOW:-$ALIAS}» at http://localhost:$PORT (bookmark it). It stays connected after closing Terminal and after a reboot, and reconnects 15 s after a drop.")"
     say "   $(t "되돌리기: launchctl bootout gui/\$(id -u)/$LABEL; rm $PLIST" "Undo: launchctl bootout gui/\$(id -u)/$LABEL; rm $PLIST")"
     # 이 맥 브라우저에 «자동 통로 있음» 표시 — 상황판이 «늘 열어 두기» 권하기를 멈춤
+    #   기본 브라우저로만 열린다 — 상황판을 다른 브라우저로 보면 그 브라우저엔 표시가 없어 권하기가 계속 뜸 → 그 주소를 알려 줌
     open "http://localhost:$PORT/#autotunnel=$ALIAS" 2>/dev/null
+    say "   $(t "상황판을 다른 브라우저로 보면 그 브라우저 주소창에 한 번: http://localhost:$PORT/#autotunnel=$ALIAS («늘 열어 두기» 권하기가 그만 떠요)" "If you use another browser for the board, open this once there: http://localhost:$PORT/#autotunnel=$ALIAS (stops the «keep it open» suggestion)")"
     FIN=1; exit 0
   fi
   sleep 2

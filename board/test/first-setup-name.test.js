@@ -69,4 +69,5 @@ test('화면: 공개판 자동 통로 안내만 · 포트·통로 종류 채움 
   assert.ok(html.includes('id="updbadge"'), '머리 새 판 배지');
   assert.ok(html.includes('function tunHintBox') && html.includes('#autotunnel='), '통로 권하기 · 자동 통로 표시');
   assert.ok(html.includes("cm.appendChild(rc(TUN.diag))"), '끊김 화면에 바로 진단 한 줄');
+  assert.ok(html.includes('TUN.check = ') && html.includes("K('이미 깔았어요', 'Already installed')"), '통로 권하기에 «이미 깔았어요» 점검 한 줄(다른 브라우저·표시 전 멈춤)');
 });

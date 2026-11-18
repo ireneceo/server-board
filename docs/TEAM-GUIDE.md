@@ -9,7 +9,10 @@
 - **Several servers?** Each server has its own link and registration. The app shows one «Server Board · server name» entry per server — use the one for the server you are signing in to.
 - Lost your phone? A backup code (each works once) gets you in. To register a new phone, ask the final approver for a **new sign-in link** (you set the password again too).
 - If the final approver turned off «Members also use an authenticator» on a server, its link has no app step — password only.
-3. Use the route the final approver gave you (SSH tunnel or Tailscale). Any route gives the same ID and role.
+- **Route in** (the board is not open to the internet — the final approver sets up one of these for you):
+  - SSH tunnel: send the final approver your public key (one line of `~/.ssh/id_ed25519.pub` · none yet? `ssh-keygen -t ed25519`), get a server account, then keep `ssh -N -L <port>:127.0.0.1:<port> <your id>@<server>` running and open `http://localhost:<port>`. The tunnel must be opened **with your own account**
+  - Tailscale: join the tailnet from the final approver's invite, turn on the Tailscale app and open `https://<server>.ts.net`
+  - Any route gives the same ID and role. Open the sign-in link on the address that matches your route (localhost or ts.net).
 4. **👤 name · role** at the top: sign out · change password · new backup codes.
 - After 48 hours idle or 7 days you sign in again.
 - 5 wrong passwords lock you out for 15 minutes. Forgot it? Ask the final approver for a new link.
