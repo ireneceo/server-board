@@ -3,6 +3,8 @@
 # The Mac needs no copy of this repository — the board's «Open on other devices» panel shows this line filled in:
 #   S=$(ssh user@server cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac <alias> user@server[:sshport]
 # or, from a copy of this repository:  bash scripts/connect-mac.sh <alias> [user@server[:sshport]] [port]
+# Piping also works:  ssh user@server 'cat dev-server/scripts/connect-mac.sh' | bash -s <alias> user@server
+#   (the whole script sits in main() and runs only after bash has read it all; every ssh that connects uses -n)
 #   <alias>        Host name for this server in ~/.ssh/config — one per server (the board suggests sb-<name>-<port>)
 #   user@server    used only to add <alias> to ~/.ssh/config when it is missing (the old file is backed up first)
 #   [port]         board port on the server (default: read from the server's board/config.json)
@@ -13,6 +15,20 @@
 #   the board only accepts localhost:<its port>), so if another board already holds the port on this Mac, this stops.
 # Undo:  launchctl bootout gui/$(id -u)/com.serverboard.tunnel.<alias>; rm ~/Library/LaunchAgents/com.serverboard.tunnel.<alias>.plist
 set -u
+STEP="start"; FIN=""
+# 말없이 끝나지 않게 — 끝(✅)까지 못 가고 끝나면 어디서 멈췄는지 한 줄 (✋ 줄이 있으면 그 줄이 까닭)
+on_exit() {
+  rc=$?
+  [ -n "$FIN" ] && return
+  type t >/dev/null 2>&1 || t() { printf '%s' "$2"; }
+  if [ "$rc" = 0 ]; then
+    printf '%s\n' "■ $(t "«$STEP» 단계에서 말없이 끝났어요(끝 ✅ 전). 파이프로 돌렸다면 이렇게 다시: ssh <별명> 'cat dev-server/scripts/connect-mac.sh' > ~/connect-mac.sh && bash ~/connect-mac.sh <별명>" "Ended silently at step «$STEP» (before ✅). If you piped it, run it this way instead: ssh <alias> 'cat dev-server/scripts/connect-mac.sh' > ~/connect-mac.sh && bash ~/connect-mac.sh <alias>")"
+  else
+    printf '%s\n' "■ $(t "«$STEP» 단계에서 멈춤(종료 코드 $rc) — 바로 위 줄이 까닭이에요." "Stopped at step «$STEP» (exit $rc) — the line above says why.")"
+  fi
+}
+trap on_exit EXIT
+main() {
 L=en
 case "${LC_ALL:-}${LANG:-}" in ko*|*ko_KR*) L=ko;; esac
 [ "$L" = en ] && defaults read -g AppleLocale 2>/dev/null | grep -q '^ko' && L=ko
@@ -41,7 +57,7 @@ if [ -n "$TARGET" ]; then
   case "$TH" in ''|*[!A-Za-z0-9._-]*) say "✋ $(t "서버 주소가 이상합니다: «$TARGET»" "Odd server address: «$TARGET»")"; exit 1;; esac
   case "$TP" in *[!0-9]*) say "✋ $(t "SSH 포트가 이상합니다: «$TP»" "Odd SSH port: «$TP»")"; exit 1;; esac
 fi
-say "⓪ $(t "ssh 별명 «$ALIAS»" "ssh alias «$ALIAS»")"
+STEP="⓪"; say "⓪ $(t "ssh 별명 «$ALIAS»" "ssh alias «$ALIAS»")"
 if has_alias; then
   if [ -n "$TARGET" ]; then
     NOWH=$(ssh -G "$ALIAS" 2>/dev/null | awk '$1=="hostname"{print $2; exit}')
@@ -67,13 +83,14 @@ else
   say "   $(t "넣음 (이제 «ssh $ALIAS» 로 접속$([ -f "$CFG.bak-serverboard" ] && echo " · 원래 파일: ~/.ssh/config.bak-serverboard"))" "added (now «ssh $ALIAS» works$([ -f "$CFG.bak-serverboard" ] && echo " · old file: ~/.ssh/config.bak-serverboard"))")"
 fi
 
-say "① $(t '비밀번호 없이 접속되는지' 'Key login check')"
+STEP="①"; say "① $(t '비밀번호 없이 접속되는지' 'Key login check')"
 if ! ssh -n -o BatchMode=yes -o ConnectTimeout=10 "$ALIAS" true 2>/dev/null; then
   say "✋ $(t "«ssh $ALIAS» 가 비밀번호나 열쇠 암호를 물어요 — 뒤에서 도는 통로는 그걸 넣을 수 없어요." "«ssh $ALIAS» needs a password or passphrase. The background tunnel can't type it.")"
   say "   $(t "열쇠가 없으면 ssh-keygen -t ed25519 → cat ~/.ssh/id_ed25519.pub 한 줄을 서버 ~/.ssh/authorized_keys 끝에 · 열쇠에 암호가 있으면 ssh-add --apple-use-keychain ~/.ssh/id_ed25519" "No key? ssh-keygen -t ed25519 → append the line from cat ~/.ssh/id_ed25519.pub to the server's ~/.ssh/authorized_keys · key with a passphrase: ssh-add --apple-use-keychain ~/.ssh/id_ed25519")"
   exit 1
 fi
-say "② $(t '서버의 상황판 포트·이름' 'Board port and name on the server')"
+say "   $(t "됨 · «post-quantum key exchange» 경고가 보이면 무시해도 돼요(서버 ssh 가 오래된 것 · 동작엔 상관없음)" "ok · a «post-quantum key exchange» warning is harmless — the server's ssh is older; it changes nothing")"
+STEP="②"; say "② $(t '서버의 상황판 포트·이름' 'Board port and name on the server')"
 # the name is cleaned the way the board shows it (":" and control characters → space, spaces collapsed, 40 characters)
 INFO=$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "$ALIAS" "PYTHONIOENCODING=utf-8 python3 -c 'import json,os,re
 try: c=json.load(open(os.path.expanduser(\"~/dev-server/board/config.json\")))
@@ -124,7 +141,7 @@ LOG="$HOME/Library/Logs/serverboard-tunnel-$ALIAS.log"
 # If ~/.ssh/config already has LocalForward for this port, don't add a second one (it would fail).
 FWD=""
 ssh -G "$ALIAS" 2>/dev/null | grep -qiE "^localforward ($PORT|127\.0\.0\.1:$PORT|localhost:$PORT) " || FWD="<string>-L</string><string>$PORT:127.0.0.1:$PORT</string>"
-say "③ $(t "자동 통로 등록 ($LABEL)" "Register the tunnel ($LABEL)")"
+STEP="③"; say "③ $(t "자동 통로 등록 ($LABEL)" "Register the tunnel ($LABEL)")"
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 cat > "$PLIST" <<PL
 <?xml version="1.0" encoding="UTF-8"?>
@@ -153,7 +170,7 @@ cat > "$PLIST" <<PL
 PL
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
 launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl load -w "$PLIST" 2>/dev/null
-say "④ $(t '확인 (최대 20초)' 'Check (up to 20 s)')"
+STEP="④"; say "④ $(t '확인 (최대 20초)' 'Check (up to 20 s)')"
 for i in $(seq 1 10); do
   if curl -s -m 5 -o /dev/null -w '%{http_code}' "http://localhost:$PORT/api/ping" | grep -q 200; then
     NOW=$(ping_name "$PORT")
@@ -165,7 +182,7 @@ for i in $(seq 1 10); do
     say "   $(t "되돌리기: launchctl bootout gui/\$(id -u)/$LABEL; rm $PLIST" "Undo: launchctl bootout gui/\$(id -u)/$LABEL; rm $PLIST")"
     # 이 맥 브라우저에 «자동 통로 있음» 표시 — 상황판이 «늘 열어 두기» 권하기를 멈춤
     open "http://localhost:$PORT/#autotunnel=$ALIAS" 2>/dev/null
-    exit 0
+    FIN=1; exit 0
   fi
   sleep 2
 done
@@ -174,3 +191,5 @@ say "   · $(t "이 맥의 다른 앱·창이 $PORT 번을 쓰는 중(닫거나 
 say "   · $(t "서버에서 상황판이 안 돌고 있음: ssh $ALIAS 'pm2 status dev-board'" "the board isn't running on the server: ssh $ALIAS 'pm2 status dev-board'")"
 say "--- $(t '통로 기록 끝부분' 'last tunnel log') ---"; tail -5 "$LOG" 2>/dev/null
 exit 1
+}
+main ${1+"$@"}

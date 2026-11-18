@@ -417,7 +417,9 @@ async function claudeCheckTick() {
 
 const updater = require('./updater');
 const UPD_DIR = path.join(__dirname, '..');
-const UPD_EVERY_MS = 24 * 3600 * 1000;
+const UPD_EVERY_MS = 6 * 3600 * 1000;
+const UPD_RETRY_MS = 3600 * 1000;          // 확인이 실패했으면(연결 못 함 등) 1시간 뒤 다시
+const UPD_FAIL = ['fetch', 'no-origin', 'git'];   // «새 판이 있는지 모름» — 화면이 «최신» 이라 하면 안 되는 것
 let updBusy = false;
 async function updateCheckRun(why) {
   if (updBusy) return null; updBusy = true;
@@ -444,7 +446,17 @@ async function updateCheckRun(why) {
 async function updateTick() {
   const u = peekState().update || {};
   if (u.check && u.check.on === false && u.check.why === 'no-version') return;   // 원본 서버
-  if (!u.check || Date.now() - Date.parse(u.check.checkedAt || 0) > UPD_EVERY_MS) await updateCheckRun('daily');
+  const every = u.check && UPD_FAIL.includes(u.check.why) && !u.check.newer ? UPD_RETRY_MS : UPD_EVERY_MS;
+  if (!u.check || Date.now() - Date.parse(u.check.checkedAt || 0) > every - 60000) await updateCheckRun('daily');
+}
+function updateCheckMessage(c) {
+  if (!c) return K('확인이 이미 도는 중이에요 — 잠시 뒤', 'A check is already running — try again shortly');
+  if (c.newer) return K('새 판 ' + c.latest + ' 이 있어요', 'Version ' + c.latest + ' is available');
+  if (!c.on) return c.why === 'no-origin' ? K('새 판을 확인할 수 없어요 — 이 상황판 폴더에 공개 저장소 주소(git origin)가 없어요', 'Cannot check for updates — this board folder has no public repository address (git origin)')
+    : K('이 상황판은 새 판 받기가 꺼져 있어요', 'Updates are off for this board');
+  if (c.why === 'fetch') return K('새 판을 확인하지 못했어요 — 공개 저장소(GitHub)에 연결 안 됨', 'Could not check for updates — cannot reach the public repository (GitHub)') + (c.err ? ': ' + String(c.err).split('\n').pop().slice(0, 160) : '');
+  if (c.why === 'git') return K('새 판을 확인하지 못했어요 — git 을 읽지 못함', 'Could not check for updates — git could not be read');
+  return K('지금이 최신이에요 (' + c.current + ')', 'You are up to date (' + c.current + ')');
 }
 /** 받기 결과(update-result.json) 읽기 — 켜질 때 + 15초마다 · 새 결과면 기록·알림 한 번 · 중간에 멈춘 받기면 빨간 칸 (Fable ④) */
 function updateBootResult() {
@@ -480,7 +492,7 @@ function updateView() {
   const stalled = updater.stalled(UPD_DIR);
   if (!c && !u.last && !run && !stalled) return null;
   if (c && c.on === false && c.why === 'no-version' && !u.last) return null;   // 원본 서버
-  return { on: c ? c.on : null, current: c ? c.current : null, latest: c ? c.latest || null : null, newer: !!(c && c.newer), canApply: !!(c && c.canApply), why: c ? c.why || null : null,
+  return { on: c ? c.on : null, current: c ? c.current : null, latest: c ? c.latest || null : null, newer: !!(c && c.newer), canApply: !!(c && c.canApply), why: c ? c.why || null : null, repo: String(CONFIG.repoUrl || 'https://github.com/ireneceo/server-board').replace(/\.git$/, ''),
     dirty: c && c.dirty || null, notes: c && c.notes ? String(c.notes).slice(0, 4000) : '', templates: c && c.templates || [], checkedAt: c ? c.checkedAt : null, err: c && c.err ? String(c.err).slice(0, 300) : null,
     running: run ? { at: run.at, mode: run.mode, tag: run.tag } : null, stalled: stalled ? { tag: stalled.tag, phase: stalled.phase, at: stalled.startedAt } : null,
     last: u.last ? { result: u.last.result, why: u.last.why || null, from: u.last.from || null, to: u.last.to || null, at: u.last.at || u.last.startedAt, log: u.last.log || null, templatesQueued: !!u.templatesQueued } : null,
@@ -4969,8 +4981,7 @@ async function handleAction(req, res, url, who) {
   // 새 판 받기 — 주인만(permit: 작업방·팀원 불가) · 받기·되돌리기는 인증 앱 30분 재확인(SENSITIVE_POST)
   if (url === '/api/update/check') {
     const c = await updateCheckRun('button');
-    return send(res, c ? 200 : 409, c ? { ok: true, newer: c.newer, latest: c.latest || null, message: c.newer ? K('새 판 ' + c.latest + ' 이 있어요', 'Version ' + c.latest + ' is available') : c.on ? K('지금이 최신이에요 (' + c.current + ')', 'You are up to date (' + c.current + ')') : K('이 상황판은 새 판 받기가 꺼져 있어요', 'Updates are off for this board') }
-      : { ok: false, message: K('확인이 이미 도는 중이에요 — 잠시 뒤', 'A check is already running — try again shortly') });
+    return send(res, c ? 200 : 409, c ? { ok: true, newer: c.newer, latest: c.latest || null, why: c.why || null, message: updateCheckMessage(c) } : { ok: false, message: updateCheckMessage(null) });
   }
   if (url === '/api/update/apply') {
     const c = await updateCheckRun('apply');   // 누르는 순간 다시 확인 — 그사이 고친 파일·새 태그
@@ -8300,4 +8311,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

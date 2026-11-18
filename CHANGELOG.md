@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.1]
+**Update notices**
+- The board now checks for a new version every 6 hours (was once a day), and 1 hour after a failed check — a new release used to stay invisible until the next day
+- When the check itself fails (cannot reach the public repository · no `git origin` in the board folder), the top of the board says so with a line to run in a server terminal, and «Check for updates» no longer answers «You are up to date» — before, a failed check looked the same as «no new version»
+
+**Mac automatic tunnel**
+- `scripts/connect-mac.sh` no longer ends silently when piped (`ssh <alias> 'cat dev-server/scripts/connect-mac.sh' | bash -s <alias>`): the whole script is read before it runs, so nothing later in it can swallow the rest of the script. 0.5.0 stopped right after «① Key login check» this way (0.6.0 already added `ssh -n`)
+- If the script ends before ✅, its last line now says at which step (⓪–④) it stopped
+- After the key check it says the «post-quantum key exchange» warning from older servers is harmless; the board's install step says so too
+
 ## [0.6.0]
 **Mac: keep the board open without a terminal window**
 - «Open on other devices» → **Mac — always open (automatic tunnel)** is now one box with the four steps in order — key, login without a password, alias, install — each with a check line, how to read it, and a copy button. The install line fetches the script from the server, so the Mac needs no copy of this repository: `S=$(ssh user@server cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac <alias> user@server`

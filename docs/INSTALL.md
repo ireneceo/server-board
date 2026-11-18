@@ -233,7 +233,7 @@ The **terminal** (server commands, opening a session) goes through SSH either wa
 
 | Device | App | Set up once | Every day |
 |---|---|---|---|
-| **Mac** | Terminal / iTerm | Steps 1–3. Optional always-on tunnel: in the board, «Open on other devices» → «Mac — always open (automatic tunnel)» shows 4 short steps with this server's values (or by hand: `S=$(ssh myserver cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac myserver` — the script lives on the server) (reconnects after sleep/reboot) | `ssh myserver` → http://localhost:8800 (with the always-on tunnel, just open the bookmark) |
+| **Mac** | Terminal / iTerm | Steps 1–3. Optional always-on tunnel: in the board, «Open on other devices» → «Mac — always open (automatic tunnel)» shows 4 short steps with this server's values (or by hand: `S=$(ssh myserver cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac myserver` — the script lives on the server · a `post-quantum key exchange` warning on the Mac is harmless) (reconnects after sleep/reboot) | `ssh myserver` → http://localhost:8800 (with the always-on tunnel, just open the bookmark) |
 | **Windows 10/11** | PowerShell (OpenSSH built in) · or PuTTY | Steps 1–3 (config file `C:\Users\<you>\.ssh\config`, no extension). PuTTY: Connection → SSH → Tunnels → source `8800`, destination `127.0.0.1:8800` → Add → save the session | `ssh myserver` (or tunnel only: `ssh -N myserver`) → http://localhost:8800 |
 | **Linux desktop** | Terminal | Steps 1–3, same as Mac | `ssh myserver` → http://localhost:8800 |
 | **iPhone / iPad** | Termius (free) | See below | Open Termius, connect, then the home-screen icon |

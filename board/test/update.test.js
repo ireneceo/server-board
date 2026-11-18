@@ -199,3 +199,38 @@ test('업데이트: 상황판이 결과를 재시작 없이 읽음 · 멈춘 받
     assert.ok(board.needsFresh({ role: 'owner', via: 'tunnel', fresh: false }, '/api/update/revert'));
   } finally { board.server.close(); sb.cleanup(); }
 });
+
+test('업데이트: 확인 실패(연결 못 함)를 «최신» 이라 하지 않음 · 실패면 1시간 뒤 다시 · 6시간마다', async () => {
+  // 설치본처럼 VERSION 있고 origin 이 닿지 않는 곳 → why fetch
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'board-upd2-'));
+  try {
+    fs.mkdirSync(path.join(d, 'board')); fs.writeFileSync(path.join(d, 'board', 'VERSION'), '0.5.0\n');
+    sh(d, 'git init -q && git remote add origin ' + path.join(d, 'no-such-repo'));
+    const c = await up.check(d, {}, {}, '1');
+    assert.strictEqual(c.on, true); assert.strictEqual(c.why, 'fetch'); assert.strictEqual(c.newer, false);
+    sh(d, 'git remote remove origin');
+    const c2 = await up.check(d, {}, {}, '1');
+    assert.strictEqual(c2.on, false); assert.strictEqual(c2.why, 'no-origin');
+    const { loadBoard } = require('./sandbox');
+    const { board, sb } = loadBoard({ lang: 'ko' });
+    try {
+      assert.ok(!/최신/.test(board.updateCheckMessage(c)), board.updateCheckMessage(c));
+      assert.ok(/연결 안 됨/.test(board.updateCheckMessage(c)));
+      assert.ok(/origin/.test(board.updateCheckMessage(c2)) && !/꺼져/.test(board.updateCheckMessage(c2)));
+      assert.ok(/최신/.test(board.updateCheckMessage({ on: true, newer: false, current: '0.6.0', why: null })));
+      // 화면 자료에 실패 까닭이 실림
+      const st = board.loadState(); st.update = { check: Object.assign({}, c, { checkedAt: new Date(Date.now() - 2 * 3600e3).toISOString() }) }; board.saveState(st);
+      assert.strictEqual(board.updateView().why, 'fetch');
+      // 실패 2시간 전 → 다시 확인함(시험 상자는 VERSION 이 없어 no-version 으로 바뀜)
+      await board.updateTick();
+      assert.strictEqual(board.loadState().update.check.why, 'no-version');
+      // 성공 2시간 전 → 다시 안 함 · 7시간 전 → 다시 함
+      const st2 = board.loadState(); st2.update.check = { on: true, why: null, current: '0.6.0', checkedAt: new Date(Date.now() - 2 * 3600e3).toISOString() }; board.saveState(st2);
+      await board.updateTick();
+      assert.strictEqual(board.loadState().update.check.why, null);
+      const st3 = board.loadState(); st3.update.check.checkedAt = new Date(Date.now() - 7 * 3600e3).toISOString(); board.saveState(st3);
+      await board.updateTick();
+      assert.strictEqual(board.loadState().update.check.why, 'no-version');
+    } finally { board.server.close(); sb.cleanup(); }
+  } finally { fs.rmSync(d, { recursive: true, force: true }); }
+});

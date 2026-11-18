@@ -871,7 +871,7 @@
         <li><b>열쇠</b> — 확인:<pre class="js-rc">ls ~/.ssh/id_ed25519.pub</pre>파일 이름이 나오면 건너뛰기 · <code>No such file</code> 이면 만들기(Enter 세 번):<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
         <li><b>비밀번호 없이 접속</b> — 확인:<pre class="js-rc">ssh -o BatchMode=yes <span class="js-sshtgt">user@server</span> echo ok</pre><code>ok</code> → 건너뛰기 · <code>Permission denied</code> → 이 맥의 열쇠가 서버에 없음: <code>cat ~/.ssh/id_ed25519.pub</code> 가 보여 주는 한 줄을 서버의 <code>~/.ssh/authorized_keys</code> 끝에 붙이기(열려 있는 서버 창에서, 또는 서버 관리자에게) · 열쇠에 암호를 걸었으면 <code>ssh-add --apple-use-keychain ~/.ssh/id_ed25519</code> · <code>timed out</code> → 맥 인터넷·서버 주소</li>
         <li><b>별명 <code class="js-alias">myserver</code></b> — 할 것 없음: 다음 줄이 <code>~/.ssh/config</code> 에 없으면 넣어요(원래 파일은 <code>~/.ssh/config.bak-serverboard</code> 로 백업). 서버마다 이름이 달라 다른 서버 상황판과 겹치지 않아요.</li>
-        <li><b>자동 통로 깔기</b> — 먼저 <code>ssh -L</code> 로 연 터미널 창을 닫고(같은 번호를 쥐고 있으면 멈춤), 이 한 줄:<pre class="js-rc js-tuninst"></pre><code>✅ Done</code> 이 나오면 끝 — 브라우저가 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> 를 열어요(즐겨찾기). 터미널을 닫아도, 맥을 다시 켜도 열려요. <code>✋</code> 줄이 나오면 그 줄이 할 일을 알려 줘요. 다시 해도 안전해요.</li>
+        <li><b>자동 통로 깔기</b> — 먼저 <code>ssh -L</code> 로 연 터미널 창을 닫고(같은 번호를 쥐고 있으면 멈춤), 이 한 줄:<pre class="js-rc js-tuninst"></pre><code>✅ Done</code> 이 나오면 끝 — 브라우저가 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> 를 열어요(즐겨찾기). 터미널을 닫아도, 맥을 다시 켜도 열려요. <code>✋</code> 줄이 나오면 그 줄이 할 일을 알려 줘요. 다시 해도 안전해요. <code>post-quantum key exchange</code> 경고는 무시해도 돼요(서버 ssh 가 오래된 것 · 동작엔 상관없음).</li>
       </ol></div><!--/tunC-->
     <p class="cx-note">아이폰 홈 화면 앱은 Safari 와 로그인이 따로예요 — 홈 화면 앱으로 처음 열 때 한 번 더 로그인합니다.</p>
     <div class="cx-fix" id="cx-fix"><b>안 열릴 때</b>
@@ -1012,7 +1012,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         <li><b>Key</b> — check:<pre class="js-rc">ls ~/.ssh/id_ed25519.pub</pre>A file name → skip · <code>No such file</code> → make one (Enter three times):<pre class="js-rc">ssh-keygen -t ed25519</pre></li>
         <li><b>Login without a password</b> — check:<pre class="js-rc">ssh -o BatchMode=yes <span class="js-sshtgt">user@server</span> echo ok</pre><code>ok</code> → skip · <code>Permission denied</code> → this Mac's key is not on the server: append the line <code>cat ~/.ssh/id_ed25519.pub</code> prints to the server's <code>~/.ssh/authorized_keys</code> (from an open server window, or ask the server admin) · key has a passphrase → <code>ssh-add --apple-use-keychain ~/.ssh/id_ed25519</code> · <code>timed out</code> → the Mac's internet or the server address</li>
         <li><b>Alias <code class="js-alias">myserver</code></b> — nothing to do: the next line adds it to <code>~/.ssh/config</code> if missing (the old file is backed up as <code>~/.ssh/config.bak-serverboard</code>). Each server gets its own name, so boards don't collide.</li>
-        <li><b>Install the automatic tunnel</b> — first close the terminal window you opened with <code>ssh -L</code> (it holds the same port), then this one line:<pre class="js-rc js-tuninst"></pre><code>✅ Done</code> means finished — the browser opens <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> (bookmark it). It stays open after closing Terminal and after a reboot. A <code>✋</code> line says what to do. Safe to run again.</li>
+        <li><b>Install the automatic tunnel</b> — first close the terminal window you opened with <code>ssh -L</code> (it holds the same port), then this one line:<pre class="js-rc js-tuninst"></pre><code>✅ Done</code> means finished — the browser opens <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> (bookmark it). It stays open after closing Terminal and after a reboot. A <code>✋</code> line says what to do. Safe to run again. A <code>post-quantum key exchange</code> warning is harmless (the server's ssh is older; nothing breaks).</li>
       </ol></div><!--/tunC-->
     <p class="cx-note">The iPhone home-screen app keeps its own sign-in, separate from Safari — sign in once more the first time you open it from the home screen.</p>
     <div class="cx-fix" id="cx-fix"><b>If it won't open</b>
@@ -3593,6 +3593,21 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       return box;
     }
     var recent = u.last && u.last.at && Date.now() - Date.parse(u.last.at) < (u.last.result === 'done' ? 86400000 : 7 * 86400000);
+    var failed = !u.newer && !u.running && (u.why === 'fetch' || u.why === 'no-origin' || u.why === 'git');
+    if (failed && !recent) {
+      box = el('div', 'err'); box.style.cssText = 'margin:10px 0 0;';
+      box.appendChild(el('div', 'rname', K('상황판 새 판을 확인하지 못하고 있어요', 'The board cannot check for updates') + (u.current ? K(' (지금 ', ' (now ') + u.current + ')' : '')));
+      box.appendChild(el('div', null, u.why === 'no-origin' ? K('이 상황판 폴더에 공개 저장소 주소(git origin)가 없어요', 'This board folder has no public repository address (git origin)') : (UPD_WHY[u.why] || u.why) + (u.err ? ' — ' + String(u.err).split('\n').pop().slice(0, 160) : '')));
+      var fm = el('code', null, u.why === 'no-origin' ? 'cd ~/dev-server && git remote add origin ' + (u.repo || '<repo>') + '.git' : 'cd ~/dev-server && git ls-remote --tags origin');
+      fm.style.cssText = 'display:block;margin-top:4px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:12px;';
+      box.appendChild(el('small', null, u.why === 'no-origin' ? K('서버 창에서(주소를 넣은 뒤 «다시 확인»):', 'In a server terminal (then «Check again»):') : K('서버 창에서 직접 확인(연결 오류가 그대로 나옴):', 'Check directly in a server terminal (shows the connection error):')));
+      box.appendChild(fm);
+      row = el('div', 'row'); row.style.marginTop = '6px';
+      var fb = el('button', 'btn', K('다시 확인', 'Check again'));
+      fb.onclick = function () { fb.disabled = true; post('/api/update/check', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () {}).then(function () { fb.disabled = false; }); };
+      row.appendChild(fb); box.appendChild(row);
+      return box;
+    }
     if (!u.newer && !recent) return null;
     var bad = recent && u.last.result !== 'done' && u.last.result !== 'kept';
     box = el('div', bad ? 'err' : 'todo'); box.style.cssText = 'margin:10px 0 0;padding:10px 12px;border-radius:8px;';
@@ -5030,7 +5045,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     if (lu) {
       lu.hidden = !(OWN && data.update && data.update.current);
       if (!lu.hidden) {
-        document.getElementById('l-upd-t').textContent = K('상황판 판 ', 'Board version ') + data.update.current + (data.update.checkedAt ? K(' · 마지막 확인 ', ' · last checked ') + new Date(data.update.checkedAt).toLocaleString() : '');
+        document.getElementById('l-upd-t').textContent = K('상황판 판 ', 'Board version ') + data.update.current + (data.update.checkedAt ? K(' · 마지막 확인 ', ' · last checked ') + new Date(data.update.checkedAt).toLocaleString() : '') + (data.update.newer ? K(' · 새 판 ', ' · new version ') + data.update.latest : /^(fetch|no-origin|git)$/.test(data.update.why || '') ? K(' · 확인 실패', ' · check failed') : '');
         var lb = document.getElementById('l-upd-b');
         lb.onclick = function () { lb.disabled = true; post('/api/update/check', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () {}).then(function () { lb.disabled = false; }); };
       }

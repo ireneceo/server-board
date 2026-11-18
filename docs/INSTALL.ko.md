@@ -234,7 +234,7 @@ node -e 'const fs=require("fs"),p=require("path"),f=p.join(require("os").homedir
 
 | 기기 | 앱 | 처음 한 번 | 매일 |
 |---|---|---|---|
-| **맥** | 터미널 / iTerm | 1~3단계. 선택: 항상 켜진 통로 — 상황판 «다른 기기에서 열기» → «맥 — 늘 열어 두기(자동 통로)» 에 이 서버 값이 든 4단계가 나옴(손으로: `S=$(ssh myserver cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac myserver` — 스크립트는 서버에 있음)(잠자기·재부팅 뒤 다시 붙음) | `ssh myserver` → http://localhost:8800 (항상 켜진 통로면 즐겨찾기만 열기) |
+| **맥** | 터미널 / iTerm | 1~3단계. 선택: 항상 켜진 통로 — 상황판 «다른 기기에서 열기» → «맥 — 늘 열어 두기(자동 통로)» 에 이 서버 값이 든 4단계가 나옴(손으로: `S=$(ssh myserver cat dev-server/scripts/connect-mac.sh) && bash -c "$S" connect-mac myserver` — 스크립트는 서버에 있음 · 맥에서 `post-quantum key exchange` 경고가 떠도 무시해도 됨)(잠자기·재부팅 뒤 다시 붙음) | `ssh myserver` → http://localhost:8800 (항상 켜진 통로면 즐겨찾기만 열기) |
 | **윈도우 10/11** | PowerShell(OpenSSH 기본) · 또는 PuTTY | 1~3단계(설정 파일 `C:\Users\<이름>\.ssh\config`, 확장자 없음). PuTTY: Connection → SSH → Tunnels → Source `8800`, Destination `127.0.0.1:8800` → Add → 세션 저장 | `ssh myserver`(통로만: `ssh -N myserver`) → http://localhost:8800 |
 | **리눅스 데스크톱** | 터미널 | 1~3단계(맥과 같음) | `ssh myserver` → http://localhost:8800 |
 | **아이폰·아이패드** | Termius(무료) | 아래 | Termius 열어 접속 → 홈 화면 아이콘 |
