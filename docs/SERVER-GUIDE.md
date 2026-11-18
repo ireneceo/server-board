@@ -63,7 +63,7 @@ curl -s -X POST -H 'Content-Type: application/json' -H "Origin: http://localhost
 EOF
 ```
 
-- Each call **replaces** that project's list (closed ones drop off). No open inquiries → `"items":[]`. Could not read production → `{"project":"<key>","ok":false,"note":"why"}`: the previous list stays, marked "could not check".
+- Each call **replaces** that project's list (closed ones drop off). No open inquiries → `"items":[]`. Could not read production → `{"project":"<key>","ok":false,"note":"why"}`: the previous list stays, marked "could not check". When a «reply + close» job handed over by «Send reply» or auto-send finishes with ✅, that line drops off right away instead of waiting for the next list (if a later list still has it, it shows again). Reply jobs skip the queue's pre-check.
 - Max 100 items · `title` 120 chars · `basis` 200 · `next` 120 · `draft` 4,000. `link` must be `https://`.
 - `verdict` is one of five fixed words (Korean, shown translated on an English board): `이미 해결` already fixed · `개발 필요` needs development · `결정 필요` needs a decision · `답장만 필요` reply only · `확인 중` checking. Anything else becomes `확인 중`. `needsOwner` is the field name for "needs the owner".
 
@@ -78,11 +78,13 @@ EOF
 | `queueRef` | the queue `ref` if handed to development | — |
 
 The board turns each line into the same plain **"👉 To do"**, so sessions don't need to word it:
-- line with a draft = **send a reply**: ① "Have the session send it" (owner-only button: queues "send this exact draft" for that project) or ② "Copy draft" → "Open admin page", paste, save.
-- `needsOwner` line without a draft = **read and decide** in the admin page: go ahead, hold or close.
+- line with a draft = **send a reply**: ① "Send reply" right on the line (owner only: shows the draft in a confirm box; confirming queues "send this exact draft" for that project · the "Close as done after sending" tick next to it is on by default for `이미 해결`/`답장만 필요`) or ② "Copy draft" → "Open admin page", paste, save.
+- **Auto-send replies** (top of the inquiry box · owner only · per project · off by default): choose «Already fixed» only, or «Already fixed» + «Reply only», and matching lines (draft + `needsOwner`) are queued like ① as soon as the list arrives (closing included; the task says "the owner did not read this — check every fact against production"). Once per inquiry (a changed draft goes again only by button). Turning it on applies to the current list too. So sessions must set `verdict` strictly from evidence — with auto on, `이미 해결` means "send".
+- `needsOwner` line without a draft = **read and decide** in the admin page: go ahead, hold or close. A `확인 중` line shows as «Not judged yet» (it does not mean someone is checking it) and gets **«Ask the session to investigate»** (owner only): it queues an «investigate and recommend only» job for that project (ref `look:<number>` · no pre-check · once per inquiry per 7 days). The session reads the original with the established read-only inquiry query, checks whether it is already fixed and why, re-posts the list through the same inquiry step with that line's `verdict`/`basis` (and a draft) updated, and reports a recommendation. No reply, status/approval change, production write or development.
+- A handed-over line (reply or investigation) shows where it is: «#N in the <project> queue» (a session opens only when the one working in that folder finishes — one per project) or «session <id>».
 - everything else = nothing to do.
 
-**A session that receives "send this reply"**: the task text is authoritative. In short: only through the project's **established reply path** (`Reply path` in its settings) · dry-run, then apply · don't change the status · if a fact in the draft is not true in production records, the customer wrote again, or there is no reply path for that kind, **don't send; report ⏸**. The board never queues the same draft twice (a changed draft can be handed over again).
+**A session that receives "send this reply" (button or auto)**: the task text is authoritative. In short: only through the project's **established reply path** (`Reply path` in its settings) · dry-run, then apply · if the task says close, close it as done through the same path (no close path → leave the status and report) · otherwise don't change the status · if a fact in the draft is not true in production records, the customer wrote again, or there is no reply path for that kind, **don't send; report ⏸**. The board never queues the same draft twice (a changed draft can be handed over again).
 
 Fill these two lines in the project's "Dev command settings" (new templates have them; add them to older installs):
 ```
@@ -108,7 +110,7 @@ Every write needs the header `Origin: http://localhost:<port>`. Buttons a sessio
 
 | You see | Meaning | Do |
 |---|---|---|
-| Inquiry "send a reply" | the session wrote a draft | read it → "Have the session send it" or "Copy draft" → admin page |
+| Inquiry "send a reply" | the session wrote a draft | "Send reply" on the line → read the draft in the confirm box → OK (no admin page needed) · for routine kinds, "Auto-send replies" at the top of the box |
 | Inquiry "read and decide" | needs the owner's call | decide in the admin page · unsure: ask that project's session "recommend what to do with <ref>" |
 | Inquiries "could not check" | the session couldn't read production (list below is the previous one) | see that session's report, usually production read access |
 | No inquiries box on a card | `inquiries` not set | server session: set `inquiries` (the inquiry section heading, or `true`) |

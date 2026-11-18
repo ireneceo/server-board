@@ -364,6 +364,9 @@
   .inq-how.quiet { border-left-color: var(--line); color: var(--muted); font-size: 12px; }
   .inq-draft { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; font-size: 12px; border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
   .inq-warn { font-size: 12px; color: var(--red); font-weight: 600; }
+  .inq-auto { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+  .inq-auto select { font: inherit; font-size: 12px; max-width: 100%; }
+  .inq-close { font-size: 12px; display: inline-flex; align-items: center; gap: 2px; cursor: pointer; }
   /* 정기 실행 칸 */
   .sched { border-bottom: 1px solid var(--line); font-size: 13px; }
   .sched .nt-head { min-height: 40px; padding: 8px 16px; }
@@ -4384,14 +4387,38 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     bt.appendChild(ok); bt.appendChild(no); f.appendChild(bt);
     return f;
   }
+  var inqClose = {};   // ref → 보낸 뒤 완료로 닫기 체크(없으면 판단으로 기본값)
   var inqDraft = {};   // ref → {text, id} 초안 글과 그 지문(펼칠 때 GET 으로 받음 — 보낼 때 이 지문을 보냄, Fable 완료 검증 ①)
-  var INQ_V = { '이미 해결': ['done', 'Already fixed'], '개발 필요': ['dev', 'Needs development'], '결정 필요': ['decide', 'Needs a decision'], '답장만 필요': ['reply', 'Reply only'], '확인 중': ['', 'Checking'] };
-  function inqDo(x) { return !x.needsOwner ? 'none' : x.hasDraft && !x.handedAt ? 'reply' : x.handedAt ? 'none' : 'decide'; }
+  var INQ_V = { '이미 해결': ['done', 'Already fixed'], '개발 필요': ['dev', 'Needs development'], '결정 필요': ['decide', 'Needs a decision'], '답장만 필요': ['reply', 'Reply only'], '확인 중': ['', 'Not judged yet', '아직 판단 없음'] };   // 낱말 «확인 중» 은 «누가 확인하고 있음» 으로 읽혀 멈춘 줄로 보였음 — 화면에선 «아직 판단 없음»
+  function inqDo(x) { return !x.needsOwner ? 'none' : x.hasDraft && !x.handedAt ? 'reply' : x.handedAt || x.lookAt ? 'none' : 'decide'; }
+  /** 맡긴 일이 지금 어디 있는지 — 대기열 N번째(그 솔루션 폴더에서 일하는 방이 끝나야 방이 열림) · 방 번호 */
+  function inqWhereText(p, x, pre, head, tail) {
+    var w = x[pre + 'Wait'], r = x[pre + 'Room'];
+    var mid = w ? K(' — 지금 ' + p.name + ' 대기열 ' + w + '번째예요. 그 폴더에서 일하는 방이 끝나면 차례대로 방이 열려요(한 솔루션에 한 방씩)', ' — now #' + w + ' in the ' + p.name + ' queue; it becomes a session when the one working in that folder finishes')
+      : r ? K(' — 방 ' + r + ' 에서 하는 중이거나 끝냈어요', ' — session ' + r + ' is on it or done') : '';
+    return head + mid + ' · ' + tail;
+  }
+  function inqCloseOn(x, key) { var k = key + '|' + x.ref; return k in inqClose ? !!inqClose[k] : (x.verdict === '이미 해결' || x.verdict === '답장만 필요'); }
+  /** 답장 보내기 — 지금 초안을 새로 받아 확인 창에 그대로 보여 주고, 확인하면 그 지문으로 맡김(옛 글을 보고 새 글을 보내지 않게) */
+  function inqSend(p, x, dk, btn) {
+    btn.disabled = true;
+    fetch('/api/inquiries?p=' + encodeURIComponent(p.key), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      btn.disabled = false;
+      var f = (j.items || []).filter(function (y) { return y.ref === x.ref; })[0];
+      if (!f || !f.draft) { toast(K('초안이 없어졌어요 — 다음 문의 확인 때 바뀌어요', 'The draft is gone')); return; }
+      inqDraft[dk] = { text: f.draft, id: f.draftId }; renderAgain();
+      var close = inqCloseOn(x, p.key);
+      var t = f.draft.length > 1200 ? f.draft.slice(0, 1200) + K('\n… (아래 칸에 전문)', '\n… (full text below)') : f.draft;
+      if (!window.confirm(K(x.ref + ' 고객에게 이 글을 그대로 보낼까요?' + (close ? ' 보낸 뒤 완료로 닫아요.' : '') + '\n─────────\n' + t + '\n─────────\n' + p.name + ' 방이 정해진 답글 길로 보내고 보고해요. 초안 속 사실이 운영 기록과 다르거나 답글 길이 없으면 보내지 않고 물어봐요.',
+        'Send this to the customer of ' + x.ref + ' as is?' + (close ? ' It is closed as done afterwards.' : '') + '\n─────────\n' + t + '\n─────────\nThe ' + p.name + ' session sends it through the project\'s reply path and reports. If a fact is wrong or there is no reply path, it asks instead.'))) return;
+      act('/api/inquiries/reply', { project: p.key, ref: x.ref, draftId: f.draftId, close: close }, btn);
+    }).catch(function () { btn.disabled = false; toast(K('초안을 못 받았어요', 'Could not load the draft')); });
+  }
   function inquiryBox(p, q) {
     var items = (q && q.items) || [];
-    var me = items.filter(function (x) { return x.needsOwner; }).length;
+    var me = items.filter(function (x) { return inqDo(x) !== 'none'; }).length;
     var isOpen = (function () { try { var v = localStorage.getItem('board.inqOpen.' + p.key); return v == null ? me > 0 : v === '1'; } catch (_) { return me > 0; } })();
-    var box = el('div', 'sched inq' + (isOpen ? ' open' : '')); box.setAttribute('data-v', vsig([q, inqDraft]));
+    var box = el('div', 'sched inq' + (isOpen ? ' open' : '')); box.setAttribute('data-v', vsig([q, inqDraft, inqClose]));
     var head = el('button', 'nt-head'); head.type = 'button'; head.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     head.appendChild(el('span', 'nt-plus', '✉'));
     head.appendChild(el('span', 'nt-title', K('들어온 문의', 'Inquiries')));
@@ -4418,8 +4445,27 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var body = el('div', 'sched-body');
     if (q && q.failAt) body.appendChild(el('div', 'inq-warn', K('확인 못 함 ', 'Could not check ') + tzTime(Date.parse(q.failAt)) + (q.failNote ? ' — ' + q.failNote : '') + K(' · 아래는 지난번 목록', ' · below is the previous list')));
     if (q && q.note) body.appendChild(el('div', 'sched-note', q.note));
+    if (OWN_NOW && q) {   // 답장 자동 보내기
+      var ar = el('label', 'inq-auto'); ar.appendChild(el('b', '', K('답장 자동 보내기', 'Auto-send replies')));
+      var sel = document.createElement('select');
+      [[0, K('끔 — 내가 누를 때만', 'Off — only when I press')], [1, K('«이미 해결» 은 자동', 'Auto for «Already fixed»')], [2, K('«이미 해결»·«답장만 필요» 자동', 'Auto for «Already fixed» + «Reply only»')]].forEach(function (o) {
+        var op = document.createElement('option'); op.value = String(o[0]); op.textContent = o[1]; if ((q.auto | 0) === o[0]) op.selected = true; sel.appendChild(op);
+      });
+      sel.addEventListener('change', function () {
+        var lv = Number(sel.value);
+        if (lv && !window.confirm(K(p.name + ' — 앞으로 ' + (lv === 1 ? '«이미 해결»' : '«이미 해결»·«답장만 필요»') + ' 문의는 방이 쓴 초안을 내가 읽지 않고 바로 고객에게 보내고 완료로 닫아요.\n\n방은 보내기 전에 초안 속 사실을 운영 기록과 대조하고, 다르면 보내지 않고 물어봐요. 한 문의에 자동은 한 번만 · 한 번 확인에 5건·하루 20건까지(넘으면 버튼으로). 지금 목록(하루 안에 확인한 것)에 해당하는 것도 바로 보내요.\n\n켤까요?',
+          p.name + ' — from now on, drafts for ' + (lv === 1 ? '«Already fixed»' : '«Already fixed» / «Reply only»') + ' inquiries are sent to the customer without you reading them, then closed.\n\nThe session checks every fact against production first and asks instead if anything differs. Once per inquiry · at most 5 per check and 20 a day (the rest by button). Matching items in the current list (if checked within a day) go out now.\n\nTurn it on?'))) { sel.value = String(q.auto | 0); return; }
+        act('/api/inquiries/auto', { project: p.key, level: lv }, sel);
+      });
+      ar.appendChild(sel);
+      body.appendChild(ar);
+      if (q.auto && q.autoHeld && q.autoHeld.length) body.appendChild(el('div', 'inq-warn', K('자동 한도(한 번 ' + q.autoMax[0] + '건·하루 ' + q.autoMax[1] + '건)를 넘어 안 보낸 ' + q.autoHeld.length + '건: ' + q.autoHeld.join(', ') + ' — 아래 «답장 보내기» 로', q.autoHeld.length + ' over the auto limit (' + q.autoMax[0] + ' per check · ' + q.autoMax[1] + ' a day): ' + q.autoHeld.join(', ') + ' — use «Send reply» below')));
+      body.appendChild(el('div', 'sched-note', (q.auto | 0) ? K('켜짐 — 해당 문의는 목록에 올라오는 대로 방이 사실 확인 → 답글 → 완료로 닫기까지 하고 보고해요. 나머지는 아래 버튼으로.', 'On — matching inquiries are checked, replied to and closed by the session as they come in. The rest: use the buttons below.')
+        : K('꺼짐 — 초안은 아래 «답장 보내기» 를 누를 때만 나가요.', 'Off — drafts go out only when you press «Send reply» below.')));
+    }
     if (!q) body.appendChild(el('div', 'sched-note', K('이 솔루션 방이 문의를 확인하면 여기에 1건 1줄로 올라와요(개발 시작·정기 점검 «문의 가져오기»).', 'When this project\'s session checks inquiries they appear here, one per line.')));
     else if (!items.length) body.appendChild(el('div', 'sched-note', K('열린 문의 없음', 'No open inquiries')));
+    if (q && q.closedN) body.appendChild(el('div', 'sched-note', K('방이 답장하고 완료로 닫은 ' + q.closedN + '건은 목록에서 뺐어요', q.closedN + ' replied and closed by the session — removed from the list')));
     items.forEach(function (x) {
       var v = INQ_V[x.verdict] || ['', x.verdict];
       var card = el('div', 'inq-item' + (inqDo(x) !== 'none' ? ' me' : ''));
@@ -4428,7 +4474,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       if (x.kind) top.appendChild(el('span', '', ((EN ? { support: 'System', landing: 'Landing', auto: 'Auto report', feedback: 'Feedback', inquiry: 'Question' } : { support: '시스템 문의', landing: '랜딩 문의', auto: '자동 신고', feedback: '피드백', inquiry: '문의' })[x.kind]) || x.kind));
       if (x.at) top.appendChild(el('span', '', x.at));
       if (x.who) top.appendChild(el('span', '', x.who));
-      top.appendChild(el('span', 'inq-v ' + v[0], EN ? v[1] : x.verdict));
+      var vb = el('span', 'inq-v ' + v[0], EN ? v[1] : (v[2] || x.verdict));
+      if (x.verdict === '확인 중') vb.title = K('아무도 조사·판단하지 않은 문의예요(조사 중이라는 뜻이 아님). 자동 조사는 새로 들어온 피드백만 해요.', 'Nobody has investigated or judged this yet — it does not mean someone is checking it.');
+      top.appendChild(vb);
       card.appendChild(top);
       card.appendChild(el('div', 'inq-title', x.title));
       function line(lbl, t, cls) { if (!t) return; var d = el('div', 'inq-line' + (cls ? ' ' + cls : '')); d.appendChild(el('b', '', lbl)); d.appendChild(document.createTextNode(simple(t))); card.appendChild(d); }
@@ -4440,12 +4488,18 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var how = el('div', 'inq-how' + (todo === 'none' ? ' quiet' : ''));
       how.appendChild(el('b', '', todo === 'none' ? K('할 일 없음', 'Nothing to do') : K('👉 할 일', '👉 To do')));
       how.appendChild(document.createTextNode(' ' + (todo === 'reply'
-        ? K('고객에게 답장 — 초안을 읽고 둘 중 하나: ① «방에 답장 맡기기»(방이 이 초안 그대로 답글을 달고 보고) ② «초안 복사» → «관리자 화면 열기» 에서 답글 칸에 붙여 넣고 저장. 보낸 문의는 다음 문의 확인 때 목록에서 빠져요.',
-            'Reply to the customer — read the draft, then either ① «Have the session send it» (it sends this exact draft and reports) or ② «Copy draft» → «Open admin page», paste into the reply box and save. Sent items drop off at the next inquiry check.')
+        ? (OWN_NOW ? K('고객에게 답장 — «답장 보내기» 를 누르면 초안을 보여 주고, «확인» 하면 방이 그 글 그대로 답글을 달고' + (inqCloseOn(x, p.key) ? ' 완료로 닫고' : '') + ' 보고해요. 관리자 화면에 갈 필요 없어요.',
+            'Reply to the customer — press «Send reply», read the draft it shows, confirm, and the session posts it as is' + (inqCloseOn(x, p.key) ? ', closes the inquiry' : '') + ' and reports. No need to open the admin page.')
+          : K('고객에게 답장 — 최종 컨펌자가 «답장 보내기» 로 보내요. 직접 하려면 «초안 복사» → «관리자 화면 열기» 에 붙여 넣고 저장.', 'Reply to the customer — the final approver sends it with «Send reply». To do it yourself: «Copy draft» → «Open admin page», paste and save.'))
+        : !x.hasDraft && x.lookAt
+        ? inqWhereText(p, x, 'look', K('방에 조사를 맡겼어요(' + tzTime(Date.parse(x.lookAt)) + ')', 'Investigation handed to the session (' + tzTime(Date.parse(x.lookAt)) + ')'), K('끝나면 방이 이 줄의 판단을 고치고 권고를 보고해요', 'when done the session updates this line and reports a recommendation'))
+        : todo === 'decide' && x.verdict === '확인 중'
+        ? K('아직 아무도 이 건을 조사·판단하지 않았어요(자동 조사는 새로 들어온 피드백만 해서 오래된 건은 그대로 멈춰 있어요). «방에 조사 맡기기» 를 누르면 ' + p.name + ' 방이 이미 고쳐졌는지·원인을 조사해 이 줄의 판단을 고치고 권고를 보고해요(답장·상태 변경·개발은 안 함). 직접 정하려면 «관리자 화면 열기».',
+            'Nobody has investigated or judged this yet (auto-investigation only covers new feedback, so older items just sit here). Press «Ask the session to investigate» — the ' + p.name + ' session checks whether it is already fixed and why, updates this line and reports a recommendation (no reply, status change or development). To decide yourself: «Open admin page».')
         : todo === 'decide'
         ? K('«관리자 화면 열기» 에서 읽고 진행(개발·답장)할지 보류·닫을지 정하세요 — 정하면 다음 문의 확인 때 대기열에 들어가거나 목록에서 빠져요. 모르겠으면 이 솔루션 방에 «' + x.ref + ' 어떻게 할지 권고해 줘» 라고 맡기세요.',
             'Open the admin page, read it and decide: go ahead (develop/reply) or hold/close — the next inquiry check queues it or drops it. Unsure? Ask this project\'s session «recommend what to do with ' + x.ref + '».')
-        : x.handedAt ? K('방에 답장을 맡겼어요(' + tzTime(Date.parse(x.handedAt)) + ') — 보낸 뒤 다음 문의 확인 때 빠져요', 'Reply handed to the session (' + tzTime(Date.parse(x.handedAt)) + ') — drops off after the next inquiry check')
+        : x.handedAt ? inqWhereText(p, x, 'handed', K((x.handedAuto ? '자동 보내기로 ' : '') + '방에 답장을 맡겼어요(' + tzTime(Date.parse(x.handedAt)) + (x.handedClose ? ' · 보낸 뒤 완료로 닫음' : '') + ')', 'Reply handed to the session' + (x.handedAuto ? ' automatically' : '') + ' (' + tzTime(Date.parse(x.handedAt)) + (x.handedClose ? ' · then closed' : '') + ')'), x.handedClose ? K('방이 ✅ 로 끝내면 이 줄은 바로 빠져요', 'this line goes away as soon as the session finishes with ✅') : K('방 보고에 보낸 글이 있어요', 'the session report shows what was sent'))
         : K('방이 처리 중이거나 볼 것만 있어요', 'The session handles it — for your information'))));
       card.appendChild(how);
       var acts = el('div', 'sched-acts');
@@ -4456,6 +4510,19 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           inqDraft[dk] = f && f.draft ? { text: f.draft, id: f.draftId } : { text: K('(초안이 없어졌어요 — 다음 확인 때 바뀜)', '(draft no longer there)'), id: null }; then();
         }).catch(function () { toast(K('초안을 못 받았어요', 'Could not load the draft')); });
       };
+      if (todo === 'decide' && OWN_NOW && !x.lookAt) {
+        var lb = el('button', 'btn primary', K('방에 조사 맡기기', 'Ask the session to investigate'));
+        lb.addEventListener('click', function () { act('/api/inquiries/look', { project: p.key, ref: x.ref }, lb); });
+        acts.appendChild(lb);
+      }
+      if (todo === 'reply' && OWN_NOW && x.draftId) {   // 관리자 화면에 가지 않고 여기서 바로
+        var sb = el('button', 'btn primary', K('답장 보내기', 'Send reply'));
+        sb.addEventListener('click', function () { inqSend(p, x, dk, sb); });
+        acts.appendChild(sb);
+        var cl = el('label', 'inq-close'); var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = inqCloseOn(x, p.key);
+        cb.addEventListener('change', function () { inqClose[dk] = cb.checked; renderAgain(); });
+        cl.appendChild(cb); cl.appendChild(document.createTextNode(K(' 보낸 뒤 완료로 닫기', ' Close as done after sending'))); acts.appendChild(cl);
+      }
       if (x.hasDraft) {
         var db = el('button', 'lnk', inqDraft[dk] ? K('답장 초안 접기', 'Hide reply draft') : K('답장 초안 보기', 'Show reply draft'));
         db.addEventListener('click', function () { if (inqDraft[dk]) { delete inqDraft[dk]; renderAgain(); return; } loadDraft(renderAgain); });
@@ -4473,11 +4540,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var da = el('div', 'sched-acts');
         da.appendChild(copyBtn(K('초안 복사', 'Copy draft'), function () { return inqDraft[dk].text; }));
         if (OWN_NOW && x.needsOwner && !x.handedAt && inqDraft[dk].id) {
-          var hb = el('button', 'btn primary', K('방에 답장 맡기기', 'Have the session send it'));
-          hb.addEventListener('click', function () {
-            if (!window.confirm(K(x.ref + ' 고객에게 위 초안을 글자 그대로 답장할까요?\n\n' + p.name + ' 방이 정해진 답글 길로 보내고 보고해요(상태는 안 바꿈). 초안 속 사실이 운영 기록과 다르거나 답글 길이 없으면 보내지 않고 물어봐요.', 'Send the draft above to the customer of ' + x.ref + ' word for word?\n\nThe ' + p.name + ' session sends it through the project\'s reply path and reports (status unchanged). If a fact in it is wrong or there is no reply path, it asks instead.'))) return;
-            act('/api/inquiries/reply', { project: p.key, ref: x.ref, draftId: inqDraft[dk].id }, hb).then(function (j) { if (j && j.message) toast(j.message); });
-          });
+          var hb = el('button', 'btn primary', K('이 초안으로 답장 보내기', 'Send this draft'));
+          hb.addEventListener('click', function () { inqSend(p, x, dk, hb); });
           da.appendChild(hb);
         }
         card.appendChild(da);
@@ -4540,7 +4604,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     return box;
   }
 
-  var setupShow = false;
+  var setupShow = false, setupSshOpen = false;
   function renderSetup(data) {
     var live = document.getElementById('setup'); if (!live) return;
     var box = live.cloneNode(false);
@@ -4569,16 +4633,45 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         parent.appendChild(r);
       };
       // 0) 서버 창 열기 — 이 서버 주소가 든 ssh 한 줄
+      // — 서버가 지금 열린 ssh 창(터미널 붙은 접속)을
+      //   직접 세어(sshWins) 있으면 ✔ 로 접고, 못 찾았어도 «건너뛰기» 로 접는다(이 브라우저에 기억 · «접속 줄 보기» 로 다시)
       if (todoItems.some(function (x) { return (x.steps || x.cmds || []).length; })) {
-        var so = el('div', 'setup-item bad setup-open');
-        var soh = el('div', 'setup-h'); soh.appendChild(el('span', 'setup-ic', '▶')); soh.appendChild(el('b', '', K('먼저 — 서버 창 열기', 'First — open a server window'))); so.appendChild(soh);
-        stepRow(so, K('맥은 «터미널» 앱, 윈도우는 «PowerShell» 을 열고 이 줄을 붙여 넣고 Enter. 처음이면 «yes» 치고 Enter · 비밀번호를 물으면 이 서버 계정 비밀번호. 이미 서버 창이 열려 있으면 건너뛰기',
-          'Open «Terminal» on a Mac or «PowerShell» on Windows, paste this line and press Enter. The first time, type «yes» and Enter · if asked for a password, use this server account\'s password. Skip if a server window is already open'),
-          s.ssh || '');
-        if (s.ssh && s.sshPrivate) so.appendChild(el('div', 'setup-why', K('△ 이 주소는 사설 주소예요 — 클라우드 서버라 밖에서 안 닿으면 늘 서버에 들어가던 그 명령(공인 주소·접속 도구)을 쓰세요.', '△ This is a private address — if it does not reach this cloud server from outside, use the command you always use to log in (public address or your usual tool).')));
-        so.appendChild(el('div', 'setup-why', K('맨 끝 줄이 «…$» 로 바뀌면 그 창이 «서버 창» 이에요 — 아래 명령은 모두 여기에 붙여 넣습니다(상황판 방 입력칸 아님). 메뉴가 뜨면 아무것도 고르지 말고 Enter.',
-          'When the last line ends in «…$», that window is the «server window» — paste every command below there (not into a session\'s input box). If a menu appears, press Enter without choosing.')));
-        if (!s.ssh) so.appendChild(el('div', 'setup-why', K('이 서버 주소를 몰라요 — 늘 서버에 들어가던 그 명령을 쓰세요.', 'This server\'s address is unknown — use the command you always use to log in to it.')));
+        var sw = s.sshWins, winOpen = !!(sw && sw.n > 0);
+        var skipped = lsGet('board.setupSshSkip') === '1';
+        var folded = (winOpen || skipped) && !setupSshOpen;
+        var so = el('div', 'setup-item setup-open' + (winOpen ? ' ok' : skipped ? ' warn' : ' bad') + (folded ? ' folded' : ''));
+        var soh = el('div', 'setup-h');
+        soh.appendChild(el('span', 'setup-ic', winOpen ? '✔' : skipped ? '–' : '▶'));
+        soh.appendChild(el('b', '', winOpen ? K('서버 창 — 열려 있어요', 'Server window — open') : skipped ? K('서버 창 열기 — 건너뜀', 'Open a server window — skipped') : K('먼저 — 서버 창 열기', 'First — open a server window')));
+        if (winOpen) soh.appendChild(el('span', 'setup-det', (EN ? sw.n + ' open now' : '지금 ' + sw.n + '개') + (sw.since ? K(' · 가장 오래된 것 ', ' · oldest since ') + fmt(sw.since) : '')));
+        so.appendChild(soh);
+        if (folded) {
+          so.appendChild(el('div', 'setup-why', winOpen
+            ? K('이 서버에 터미널로 들어온 창이 있어요 — 아래 명령은 그 창(맨 끝 «…$»)에 붙여 넣으세요. 창이 여러 개면 아무 창이나 돼요.', 'A terminal is logged in to this server — paste the commands below into that window (last line ends in «…$»). Any of them will do.')
+            : K('이미 연 서버 창에 아래 명령을 붙여 넣으세요.', 'Paste the commands below into the server window you already have open.')));
+          var sb = el('button', 'btn small', K('접속 줄 보기', 'Show the login line'));
+          sb.onclick = function () { setupSshOpen = true; renderAgain(); };
+          var sbr = el('div', 'row'); sbr.style.marginTop = '6px'; sbr.appendChild(sb); so.appendChild(sbr);
+        } else {
+          stepRow(so, K('맥은 «터미널» 앱, 윈도우는 «PowerShell» 을 열고 이 줄을 붙여 넣고 Enter. 처음이면 «yes» 치고 Enter · 비밀번호를 물으면 이 서버 계정 비밀번호.',
+            'Open «Terminal» on a Mac or «PowerShell» on Windows, paste this line and press Enter. The first time, type «yes» and Enter · if asked for a password, use this server account\'s password.'),
+            s.ssh || '');
+          if (s.ssh && s.sshSeen) so.appendChild(el('div', 'setup-why', K('이 주소는 지금 이 서버에 들어와 있는 접속이 실제로 쓰는 주소예요.', 'This is the address that current logins to this server actually use.')));
+          if (s.ssh && s.sshPrivate) so.appendChild(el('div', 'setup-why', K('△ 이 주소는 사설 주소예요 — 클라우드 서버라 밖에서 안 닿으면 늘 서버에 들어가던 그 명령(공인 주소·접속 도구)을 쓰세요.', '△ This is a private address — if it does not reach this cloud server from outside, use the command you always use to log in (public address or your usual tool).')));
+          so.appendChild(el('div', 'setup-why', K('맨 끝 줄이 «…$» 로 바뀌면 그 창이 «서버 창» 이에요 — 아래 명령은 모두 여기에 붙여 넣습니다(상황판 방 입력칸 아님). 메뉴가 뜨면 아무것도 고르지 말고 Enter. 창을 열면 10초쯤 뒤 상황판이 알아서 «열려 있어요» 로 접어요.',
+            'When the last line ends in «…$», that window is the «server window» — paste every command below there (not into a session\'s input box). If a menu appears, press Enter without choosing. Once it is open the board folds this step into «open» by itself (about 10 s).')));
+          if (!s.ssh) so.appendChild(el('div', 'setup-why', K('이 서버 주소를 몰라요 — 늘 서버에 들어가던 그 명령을 쓰세요.', 'This server\'s address is unknown — use the command you always use to log in to it.')));
+          var kr = el('div', 'row'); kr.style.marginTop = '6px';
+          if (winOpen || skipped) {
+            var hb0 = el('button', 'btn small', K('접기', 'Hide')); hb0.onclick = function () { setupSshOpen = false; renderAgain(); }; kr.appendChild(hb0);
+          } else {
+            var kb = el('button', 'btn small', K('이미 열려 있어요 — 건너뛰기', 'Already open — skip'));
+            kb.title = K('상황판이 창을 못 찾는 경우(다른 접속 도구·윈도우 PuTTY 등) — 이 브라우저에 기억해요', 'For windows the board cannot detect (other tools, PuTTY…) — remembered in this browser');
+            kb.onclick = function () { lsSet('board.setupSshSkip', '1'); setupSshOpen = false; renderAgain(); };
+            kr.appendChild(kb);
+          }
+          so.appendChild(kr);
+        }
         ul0 = so;
       }
       var ul = el('div', 'setup-items');

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.2]
+**Inquiries**
+- «Send reply» sits right on each inquiry line that has a draft — it shows the draft in a confirm box and hands it to the project session; no need to open the draft first or go to the admin page. A «Close as done after sending» tick sits next to it (on by default for «Already fixed» / «Reply only»)
+- New per-project «Auto-send replies» setting at the top of the inquiry box (owner only, off by default): «Already fixed» only, or «Already fixed» + «Reply only». Matching drafts are handed to the session as soon as the list arrives — once per inquiry; the session still checks every fact against production before sending
+- A line disappears from the inquiry box as soon as its «reply + close» session finishes with ✅ (it used to stay until the next inquiry check). If a later list still has it open, it shows again
+- Lines nobody has judged (`확인 중`) now read «Not judged yet» instead of «Checking», and get «Ask the session to investigate»: the project session checks whether it is already fixed and why, updates the line and reports a recommendation (no reply, status change or development)
+- Handed-over lines show where the job is: «#N in the queue» (waits until the session working in that folder finishes) or the session id
+- Fix: reply hand-offs no longer go through the queue's «is this still needed?» pre-check — it read «the fix is done» as «the reply is done» and dropped replies unsent. Replies dropped that way are handed over again automatically when the same draft is still in the list
+**First setup**
+- «Open a server window» now checks for itself: when a terminal is already logged in to this server (an ssh login with a terminal — not a tunnel), the step folds into «✔ Server window — open». If the board cannot see it (other tools), «Already open — skip» folds it and is remembered in that browser; «Show the login line» opens it again
+- The `ssh` line now uses the address (and port, `-p`) that current logins to this server actually use, before guessing from network cards
+- Fix (0.6.0–0.6.1): «Finish setup with AI» always stopped with «Not logged in to Claude yet», even when the list showed «Log in to Claude ✔». It now reads the same login check as the list
+
 ## [0.6.1]
 **Update notices**
 - The board now checks for a new version every 6 hours (was once a day), and 1 hour after a failed check — a new release used to stay invisible until the next day
