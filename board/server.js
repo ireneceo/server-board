@@ -562,14 +562,19 @@ function publishQueue(why) {
   writeLog({ action: 'publish-queued', qid, ver: v.next, from: v.last, why, commits: v.commits, items: v.items });
   return { ok: true, qid };
 }
-/** 맡긴 내기가 아직 대기열·작업 중인가 → 'queued' | 'working' | null (6시간 지나면 끝난 것으로) */
+/** 맡긴 내기가 아직 대기열·작업 중인가 → 'queued' | 'working' | null (6시간 지나면 끝난 것으로)
+ *  → 끝난 일은 짧은 번호로도 맞추고, 방 목록은 숨기기 전 전체(cache.allRooms)로 본다 */
 function publishWorking(st, rooms) {
   const p = st.publish || {}; if (!p.qid) return null;
   if ((st.queue || []).some((q) => q.qid === p.qid)) return 'queued';
   const qs = (st.qStarted || {})[p.qid];
-  if (qs && Date.now() - Date.parse(qs.at) < 6 * 3600 * 1000 && !((st.completed || {})[qs.id])) {
-    const r = (rooms || (cache.data && cache.data.rooms) || []).find((x) => x.id === qs.id);
-    if (!r || !(r.status && r.status.code === 'done' && !r.turnOpen)) return 'working';
+  if (qs && Date.now() - Date.parse(qs.at) < 6 * 3600 * 1000) {
+    if (Object.values(st.completed || {}).some((c) => c && (c.id === qs.id || c.sessionId === qs.id))) return null;
+    const list = rooms || cache.allRooms || null;
+    if (!list) return 'working';   // 방 목록을 아직 못 읽음 — 겹쳐 넣지 않게
+    const r = list.find((x) => x.id === qs.id);
+    if (!r) return null;   // 전체 목록에 없음 = 방이 끝나 사라짐
+    if (!(r.status && r.status.code === 'done' && !r.turnOpen)) return 'working';
   }
   return null;
 }
@@ -3070,7 +3075,7 @@ async function buildBoard0(gen) {
       ...devInfo[p.key] })),
     rooms: visible
   };
-  cache.data = data; if (gen === cache.gen) cache._at = now;   // 계산 중에 바뀌었으면 다음 요청이 새로 계산
+  cache.data = data; cache.allRooms = agents.ok ? rooms : null; if (gen === cache.gen) cache._at = now;   // allRooms = 숨기기 전 전체(공개판 «내는 중» 판단용)   // 계산 중에 바뀌었으면 다음 요청이 새로 계산
   return data;
 }
 
@@ -4546,6 +4551,73 @@ async function handleAction(req, res, url, who) {
     saveState(st); cache.at = 0;
     writeLog({ action: 'backup-restore-queued', project: proj.key, by, qid, copy: cp.path, kind });
     return send(res, 200, { ok: true, qid, message: K(proj.name + ' 대기열에 «복원 요청» 을 넣었어요 — 그 방이 덮기 전에 확인을 물어요', 'Queued a «restore request» for ' + proj.name + ' — the session will ask before overwriting') });
+  }
+  // 원격 저장소 연결 — 주인만(AGENT_POST 에 없음 · SENSITIVE_POST 인증 앱 재확인) · 열쇠 만들기 / 확인하고 그 솔루션 대기열에 (BACKUP_STRUCTURE.md 13절 · Fable 수정 후 PASS)
+  const mgc = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/git-(key|connect)$/);
+  if (mgc) {
+    const proj = loadProjects().find((p) => p.key === mgc[1]);
+    if (!proj) return send(res, 404, { ok: false, message: K('솔루션을 찾을 수 없습니다', 'Project not found') });
+    let by = who.name || who.user;
+    const g = await backup.gitStatus(proj.dir, 24);
+    if (!(g.state === 'none')) return send(res, 409, { ok: false, message: K('이미 원격 저장소가 연결돼 있어요(또는 git 을 읽지 못함) — 연결은 원격이 없을 때만', 'A remote is already connected (or git cannot be read) — connecting is only for projects with no remote') });
+    if (mgc[2] === 'key') {
+      const k = await backup.makeKey(proj.key, serverLabel());
+      writeLog({ action: 'git-key', project: proj.key, by, ok: k.ok, why: k.why || undefined });
+      if (!k.ok) return send(res, 400, { ok: false, message: K('열쇠를 만들거나 읽지 못했어요(', 'Could not create or read the key (') + k.why + ') — ' + (k.path || '') });
+      return send(res, 200, { ok: true, pub: k.pub });
+    }
+    const st0 = loadState(), ref = 'remote:' + proj.key;
+    if (st0.queue.some((q) => q.ref === ref)) return send(res, 409, { ok: false, message: K('연결 일이 이미 ' + proj.name + ' 대기열에 있어요', 'A connect task is already in the ' + proj.name + ' queue') });
+    const r = await backup.checkRemote(proj.key, body.repo);
+    const WHY = {
+      repo: K('저장소 주소는 «주인/이름» (예: myname/studyapp)', 'Repository must be «owner/name» (e.g. myname/studyapp)'),
+      public: K('이 저장소는 공개(Public)예요 — 코드가 누구에게나 보여요. GitHub 에서 Settings → Danger Zone → Change visibility 로 Private 로 바꾼 뒤 다시 확인하세요', 'This repository is Public — anyone can read the code. Make it Private (Settings → Danger Zone → Change visibility) and check again'),
+      denied: K('GitHub 가 이 열쇠로 그 저장소를 열어 주지 않았어요 — ① 저장소 이름(주인/이름)이 맞는지 ② 그 저장소 Settings → Deploy keys 에 위 열쇠를 넣었는지 보세요', 'GitHub did not open that repository with this key — check ① the name (owner/name) ② that the key above is under that repository\'s Settings → Deploy keys'),
+      notfound: K('저장소를 찾지 못했어요 — 이름이 맞는지, 그 저장소에 열쇠를 넣었는지 보세요', 'Repository not found — check the name and that the key was added to that repository'),
+      hostkey: K('GitHub 서버 열쇠가 상황판이 아는 값과 달라요 — 연결하지 않아요. 상황판 새 판이 필요할 수 있어요', 'GitHub\'s server key differs from the one the board knows — not connecting. A newer board version may be needed'),
+      net: K('GitHub 에 연결하지 못했어요(인터넷·방화벽) — 잠시 뒤 다시', 'Could not reach GitHub (network/firewall) — try again later'),
+      hosts: K('호스트 열쇠 파일을 쓰지 못했어요(~/.ssh)', 'Could not write the host key file (~/.ssh)'),
+      account: K('이 열쇠가 GitHub «계정» 열쇠로 들어가 있어요 — 모든 저장소가 열려요. 계정 Settings → SSH keys 에서 지우고, 그 저장소 Settings → Deploy keys 에 넣으세요', 'This key was added as an account key — it opens every repository. Remove it from account Settings → SSH keys and add it under the repository\'s Settings → Deploy keys'),
+      otherrepo: K('이 열쇠는 다른 저장소의 Deploy key 로 들어가 있어요 — 이 저장소에 넣으세요', 'This key is a deploy key of another repository — add it to this one'),
+    };
+    writeLog({ action: 'git-check', project: proj.key, by, repo: r.repo || null, ok: r.ok, why: r.why || undefined, empty: r.empty });
+    if (!r.ok) return send(res, 400, { ok: false, why: r.why, message: (WHY[r.why] || (K('열쇠 문제: ', 'Key problem: ') + r.why)) + (r.err ? ' · ' + String(r.err).slice(0, 160) : '') });
+    const at = new Date().toISOString();
+    if (loadState().queue.some((q) => q.ref === ref)) return send(res, 409, { ok: false, message: K('연결 일이 이미 ' + proj.name + ' 대기열에 있어요', 'A connect task is already in the ' + proj.name + ' queue') });
+    try { fs.mkdirSync(LOG_DIR, { recursive: true }); fs.copyFileSync(PROJECTS_FILE, path.join(LOG_DIR, 'projects-' + at.replace(/[:.]/g, '-') + '.json')); } catch (_) {}
+    // 확인(최대 1분) 사이에 저장된 다른 설정을 덮지 않게 — 쓰기 직전에 다시 읽고 remote 칸만 (Fable 완료 ②)
+    const out = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8'));
+    out.forEach((p) => { if (p.key === proj.key) p.remote = { repo: r.repo, by, at, empty: r.empty }; });
+    fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(out, null, 2) + '\n'); fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
+    const cmd = backup.sshCommand(proj.key), url0 = 'git@github.com:' + r.repo + '.git';
+    const nm = String(proj.name).replace(/[^\p{L}\p{N} ._-]/gu, '').slice(0, 40) || proj.key;   // 일 글 안 명령에 들어감 — 따옴표·$·백틱 없앰
+    by = String(by).replace(/[\u0000-\u001f]/g, ' ').slice(0, 60);
+    const task = K('[상황판 — 원격 연결] ' + proj.name + ' 를 GitHub 비공개 저장소 ' + r.repo + ' 에 잇고 첫 올리기 — ' + OWNER + ' 가 상황판 «백업 → 코드 사본» 에서 맡김 (' + by + ' · ' + at + ')\n' +
+      '- 허락 범위: 이 일은 ' + OWNER + ' 의 «이번 첫 커밋·첫 push 1회» 지시다. 그 뒤 커밋 규칙(예: «커밋은 __OWNER__ 지시 때만»)은 그대로다.\n' +
+      '- 먼저 대조: ~/dev-server/projects.json 의 ' + proj.key + '.remote.repo 가 «' + r.repo + '» 인지 — 다르면 아무것도 하지 말고 ⏸.\n' +
+      '- 상황판이 확인한 것: 저장소가 비공개(인증 없는 https 로 안 읽힘) · 이 서버 전용 열쇠로 읽힘 · ' + (r.empty ? '빈 저장소' : '비어 있지 않음 — 원격 이력을 덮지 말고 ⏸ 로 어떻게 할지 묻는다') + '. 쓰기 권한은 첫 push 에서야 확인됨 — 거절되면 ⏸ «Deploy key 의 Allow write access 체크» 안내.\n' +
+      '- git 준비: git 폴더가 아니면 git init -b main · 다른 원격이 이미 있으면 바꾸지 말고 ⏸ · 작성자는 폴더 설정으로(개인 메일 아님): git config user.name "' + nm + ' dev" · git config user.email "dev@' + proj.key + '.invalid"\n' +
+      '- 올리기 전 거르기(비밀이 GitHub 으로 나가는 것이 가장 큰 위험): .gitignore 에 .env 와 .env.*(.env.example 빼고)·.claude/·node_modules/·빌드 결과·backups/·logs/·uploads/·*.sql·*.dump·*.sqlite*·*.key·*.pem·id_* 를 더한다 → git add → `git grep --cached -nIE` 로 스테이징 전체에서 password=·secret·api_key·BEGIN .*PRIVATE KEY·sk-·ghp_·AIza·AKIA·xox·://아이디:비번@·JWT 값 찾기 · ecosystem*.config.js 의 env 값 · 개인정보 든 시드/CSV · 50MB 넘는 파일(GitHub 100MB 한도). 커밋이 이미 있는 솔루션이면 전체 이력도 같은 검사. 하나라도 의심되면 올리지 않고 ⏸.\n' +
+      '- 개인 열쇠 파일(~/.ssh/board-git-*)은 읽거나 출력하지 않는다 · 무시 목록에 .npmrc·.netrc·*.p12·*.pfx·서비스 계정 json 도.\n' +
+      '- 로컬 커밋까지만 → 올릴 파일 목록 요약·거르기 결과로 Fable 완료 검증 1회 → PASS 때만 push(그 가지 하나만 — --all·--mirror·--tags 금지).\n' +
+      '- 원격 잇기: git remote add origin ' + url0 + ' · git config core.sshCommand "' + cmd + '" · push 직전에 인증 없는 https 확인을 다시(`GIT_TERMINAL_PROMPT=0 git -c credential.helper= ls-remote https://github.com/' + r.repo + '.git` 가 성공하면 공개 → 멈추고 ⏸) · git push -u origin <가지> — force 금지.\n' +
+      '- 끝나면 보고: 올린 커밋·파일 수·거르기 결과 · 그 솔루션 개발완료에 push 단계가 없으면 그 사실 한 줄.',
+      '[Board — connect remote] Connect ' + proj.name + ' to the private GitHub repository ' + r.repo + ' and push the first time — requested by the owner from the board «Backup → Code copy» (' + by + ' · ' + at + ')\n' +
+      '- Scope of permission: this task is the owner\'s instruction for «this first commit and first push, once». Later commit rules (e.g. «commit only on the owner\'s instruction») stay as they are.\n' +
+      '- First compare: ~/dev-server/projects.json ' + proj.key + '.remote.repo must be «' + r.repo + '» — otherwise do nothing and ask (⏸).\n' +
+      '- The board checked: the repository is private (not readable over https without auth) · readable with this server\'s own key · ' + (r.empty ? 'empty' : 'not empty — do not overwrite remote history; ask (⏸)') + '. Write access is only proven by the first push — if rejected, ask (⏸) to tick «Allow write access» on the deploy key.\n' +
+      '- Prepare git: if not a git folder, git init -b main · if another remote exists, do not change it — ask (⏸) · author via folder config (not a personal email): git config user.name "' + nm + ' dev" · git config user.email "dev@' + proj.key + '.invalid"\n' +
+      '- Filter before pushing (secrets leaking to GitHub is the main risk): add .env and .env.* (except .env.example), .claude/, node_modules/, build output, backups/, logs/, uploads/, *.sql, *.dump, *.sqlite*, *.key, *.pem, id_* to .gitignore → git add → `git grep --cached -nIE` over everything staged for password=, secret, api_key, BEGIN .*PRIVATE KEY, sk-, ghp_, AIza, AKIA, xox, ://user:pass@, JWT values · env values in ecosystem*.config.js · seeds/CSV with personal data · files over 50MB (GitHub limit 100MB). If commits already exist, run the same checks over the whole history. Anything suspicious → do not push; ask (⏸).\n' +
+      '- Never read or print the private key files (~/.ssh/board-git-*) · also ignore .npmrc, .netrc, *.p12, *.pfx, service-account json.\n' +
+      '- Commit locally only → one Fable completion review with the file list summary and filter results → push only on PASS (that one branch only — no --all, --mirror or --tags).\n' +
+      '- Connect: git remote add origin ' + url0 + ' · git config core.sshCommand "' + cmd + '" · right before pushing, re-check unauthenticated https (`GIT_TERMINAL_PROMPT=0 git -c credential.helper= ls-remote https://github.com/' + r.repo + '.git` succeeding means public → stop and ask) · git push -u origin <branch> — never force.\n' +
+      '- Report: commits and file counts pushed, filter results · one line if this project\'s dev-done has no push step.');
+    const st = loadState();
+    const qid = 'rmt' + Date.now().toString(36);
+    st.queue.push({ qid, project: proj.key, task, title: K('GitHub 연결: ', 'Connect GitHub: ') + r.repo.slice(0, 40), ref, createdAt: at });
+    saveState(st); cache.at = 0; delete backupMem[proj.key];
+    writeLog({ action: 'git-connect-queued', project: proj.key, by, qid, repo: r.repo });
+    return send(res, 200, { ok: true, qid, repo: r.repo, empty: r.empty, message: K('확인됨 — ' + proj.name + ' 대기열에 «GitHub 연결·첫 올리기» 를 넣었어요(그 방이 비밀 거르기·Fable 확인 뒤 올려요)', 'Verified — queued «connect GitHub and first push» for ' + proj.name + ' (the session filters secrets and gets a Fable check before pushing)') });
   }
   const mrn = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/deploy-(approve|dry|ack|unhold|baseline|status)$/);
   if (mrn) {
@@ -6023,7 +6095,7 @@ async function handleAction(req, res, url, who) {
 
 const AUTH_ISSUER = 'Server Board';
 const setupPending = new Map();   // nonce → { id, secret, exp } — 인증 앱 등록 중(15분)
-const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup)|backup-(setup|approve|run|restore))$/, /^\/api\/deploy-check$/,
+const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup)|backup-(setup|approve|run|restore)|git-(key|connect))$/, /^\/api\/deploy-check$/,
   /^\/api\/schedules/, /^\/api\/rooms\/[0-9a-f]{8}\/delete$/, /^\/api\/queue\/[0-9a-z]+\/delete$/, /^\/api\/asks\/[0-9a-z]+\/delete$/, /^\/api\/fable-wait\/fw[0-9a-z]+\/delete$/,
   /^\/api\/ai-login\//, /^\/api\/setup\/(start|reopen|done)$/, /^\/api\/update\/(apply|revert)$/, /^\/api\/auth\/(invite|kick|remove)$/, /^\/api\/inquiries\/auto$/];
 const needsFresh = (who, url) => who.role === 'owner' && who.via !== 'terminal' && SENSITIVE_POST.some((re) => re.test(url)) && !who.fresh;
@@ -6436,6 +6508,13 @@ async function serveReq(req, res, who) {
       const v = on ? Object.assign({}, (backupMem[proj.key] || {}).v || {}, { approved: backup.isApproved(proj) }) : { level: 'none' };
       if (!own) { delete v.log; delete v.command; v.git = gitForViewer(v.git); v.problems = (v.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')); return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, on }, v)); }
       return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, dir: proj.dir, on, raw: proj.backup || null, approvedBy: backup.approvedOf(proj.key), tail: await backup.runTail(proj.key) }, v));
+    }
+    if (url === '/api/git-connect') {   // 원격 연결 창 — 주인만 · 공개 열쇠(.pub)·등록된 저장소·대기열에 있는지
+      if (!isOwner(who)) return send(res, 403, { ok: false });
+      const proj = loadProjects().find((p) => p.key === (new URL(req.url, ORIGIN).searchParams.get('p') || ''));
+      if (!proj) return send(res, 404, { ok: false });
+      const k = backup.keyInfo(proj.key);
+      return send(res, 200, { ok: true, key: k.ok ? { pub: k.pub } : { why: k.why }, remote: proj.remote || null, queued: loadState().queue.some((q) => q.ref === 'remote:' + proj.key), git: await backup.gitStatus(proj.dir, 24) });
     }
     if (url === '/api/backup-copies') {   // 복원 요청 고르기 — 등록 폴더 맨 위 항목(이름·시각·크기) · 주인만
       if (!isOwner(who)) return send(res, 403, { ok: false });

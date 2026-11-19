@@ -184,3 +184,48 @@ test('코드 사본 — git 아님·커밋 0·원격 없음·올림·안 올린 
   s = await bk.status(P(), true); assert.equal(s.git, null); assert.equal(s.level, 'warn');
   a[0].dir = dir0; delete a[0].backup; fs.writeFileSync(PJ, JSON.stringify(a));
 });
+
+// 원격 저장소 연결 — 열쇠·주소 검사·주인만·대기열 일 (BACKUP_STRUCTURE.md 13절 · Fable 수정 후 PASS)
+test('원격 연결 — 주소 거르기 · 열쇠(덮지 않음·600·.pub 만) · ssh 명령은 다른 설정·열쇠로 안 샘 · AI 방 403 · 원격 있으면 409 · 확인 뒤 대기열(허락 범위·force 금지)', async () => {
+  const bk = board.backup;
+  assert.equal(bk.repoClean('https://github.com/a/b.git'), 'a/b');
+  for (const bad of ['a/..', 'a/.git', '-a/b', 'a/b;rm -rf', 'a/b/c', 'a b/c', '']) assert.equal(bk.repoClean(bad), null, bad);
+  const D0 = path.join(sb.root, 'gconn'); fs.mkdirSync(D0, { recursive: true });
+  const a = JSON.parse(fs.readFileSync(PJ, 'utf8')); const dir0 = a[0].dir; a[0].dir = D0; delete a[0].backup; fs.writeFileSync(PJ, JSON.stringify(a));
+  await new Promise((r) => board.server.listen(0, '127.0.0.1', r));
+  try {
+    for (const x of ['key', 'connect']) assert.equal((await call('POST', '/api/projects/demo/git-' + x, 'agent', { repo: 'a/b' })).code, 403, 'AI 방 ' + x);
+    assert.equal((await call('GET', '/api/git-connect?p=demo', 'agent')).code, 403);
+    let r = await call('POST', '/api/projects/demo/git-key', 'terminal', {});
+    assert.equal(r.code, 200, JSON.stringify(r.j)); assert.match(r.j.pub, /^ssh-ed25519 /); assert.ok(!/PRIVATE/.test(JSON.stringify(r.j)));
+    const kf = bk.keyPath('demo'); assert.equal(fs.statSync(kf).mode & 0o777, 0o600);
+    const before = fs.readFileSync(kf, 'utf8');
+    r = await call('POST', '/api/projects/demo/git-key', 'terminal', {}); assert.equal(r.code, 200); assert.equal(fs.readFileSync(kf, 'utf8'), before, '다시 눌러도 덮지 않음');
+    const cmd = bk.sshCommand('demo');
+    for (const o of ['-F /dev/null', 'IdentitiesOnly=yes', 'IdentityAgent=none', 'BatchMode=yes', 'StrictHostKeyChecking=yes', 'GlobalKnownHostsFile=/dev/null']) assert.ok(cmd.includes(o), o);
+    fs.chmodSync(kf, 0o644); assert.equal(bk.keyInfo('demo').why, 'perm'); fs.chmodSync(kf, 0o600);
+    // 확인(네트워크 없이) — 공개면 거절 · 성공이면 projects.json remote · 대기열 일
+    const real = bk.checkRemote;
+    bk.checkRemote = async (k, repo) => (bk.repoClean(repo) === 'o/pub' ? { ok: false, why: 'public', repo: 'o/pub' } : { ok: true, repo: bk.repoClean(repo), empty: true });
+    try {
+      r = await call('POST', '/api/projects/demo/git-connect', 'terminal', { repo: 'o/pub' }); assert.equal(r.code, 400); assert.match(r.j.message, /공개|Public/);
+      r = await call('POST', '/api/projects/demo/git-connect', 'terminal', { repo: 'https://github.com/o/priv.git' });
+      assert.equal(r.code, 200, JSON.stringify(r.j)); assert.equal(P().remote.repo, 'o/priv'); assert.equal(P().remote.key, undefined, '열쇠 경로는 저장 안 함');
+      const q = board.loadState().queue.find((x) => x.qid === r.j.qid);
+      assert.match(q.task, /^\[상황판 — 원격 연결\]/); assert.match(q.task, /첫 커밋·첫 push 1회/); assert.match(q.task, /force 금지/); assert.match(q.task, /git grep --cached/); assert.match(q.task, /Fable 완료 검증/);
+      assert.ok(!q.task.includes('BEGIN OPENSSH'), '개인 열쇠 내용 없음');
+      assert.equal((await call('POST', '/api/projects/demo/git-connect', 'terminal', { repo: 'o/priv' })).code, 409, '겹침');
+      r = await call('GET', '/api/git-connect?p=demo', 'terminal'); assert.equal(r.j.queued, true); assert.match(r.j.key.pub, /^ssh-ed25519/);
+    } finally { bk.checkRemote = real; }
+    // 원격이 이미 있으면 409
+    const { execFileSync } = require('child_process');
+    execFileSync('git', ['init', '-q', D0]); execFileSync('git', ['-C', D0, 'remote', 'add', 'origin', '/nowhere.git']);
+    execFileSync('git', ['-C', D0, '-c', 'user.name=t', '-c', 'user.email=t@x', 'commit', '-q', '--allow-empty', '-m', 'x']);
+    execFileSync('git', ['-C', D0, 'update-ref', 'refs/remotes/origin/master', 'HEAD']);
+    execFileSync('git', ['-C', D0, 'branch', '-q', '-u', 'origin/master']);
+    assert.equal((await call('POST', '/api/projects/demo/git-key', 'terminal', {})).code, 409);
+  } finally {
+    board.server.close();
+    const b = JSON.parse(fs.readFileSync(PJ, 'utf8')); b[0].dir = dir0; delete b[0].remote; fs.writeFileSync(PJ, JSON.stringify(b));
+  }
+});

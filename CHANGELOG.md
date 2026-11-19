@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.6.6]
+**Backups**
+- «Connect to GitHub…» for a project with no remote: the board creates a per-project deploy key, shows the steps, refuses public repositories, checks the connection with that key only (pinned GitHub host key), then queues the first commit and push for that project's session (secret filtering and a review before pushing; never force)
+
+**Project cards**
+- The card head is tidier: three labelled summary lines (Dev · Prod · Backup) that show only what needs a look in colour; the deploy-runner line, per-copy backup lines and their small buttons move into one «More ▾» box (closed by default, remembered per project in this browser)
+
+**Releasing (source server only)**
+- «Release vX» no longer gets stuck answering «a release is already queued or running» after the previous release session was marked done (it looked for that session in the on-screen list, which hides finished sessions)
+
 ## [0.6.5]
 **Backups**
 - New «Backup» line on each project card: newest copy on this server, «sent to another server» (from this server's backup log) and copies received from another server — red when stale or missing, yellow when nothing is kept off this server. Works for a single server (leave sent/received empty) and for two servers that swap copies; the board never connects to the other server

@@ -555,10 +555,20 @@
   .modal-bg { position: fixed; inset: 0; background: rgba(10,20,40,.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
   .modal { background: var(--panel); color: var(--text); border-radius: 14px; max-width: 520px; width: 100%; padding: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: 90vh; overflow-y: auto; }
   .modal h3 { margin: 0 0 6px; font-size: 17px; }
-  .inforow { display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; }
-  .inforow > span { flex: 1 1 auto; min-width: 0; }
   .svc-link { all: unset; flex: none; cursor: pointer; font-size: 11px; color: var(--link); white-space: nowrap; }
   .svc-link:hover, .svc-link:focus-visible { text-decoration: underline; }
+  /* 카드 머리 요약(개발·운영·백업) + «자세히» 상자 */
+  .csum { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: 10px; row-gap: 3px; width: 100%; align-items: baseline; }
+  .csum .k, .cmore > .k { font-size: 11px; font-weight: 600; color: var(--muted); opacity: .8; white-space: nowrap; }
+  .csum .v { min-width: 0; overflow-wrap: anywhere; line-height: 1.45; }
+  .csum .v > span { display: inline-block; max-width: 100%; }
+  .csum .x { display: flex; gap: 10px; justify-self: end; }
+  .cc-g { color: var(--green); } .cc-w { color: var(--amber); } .cc-b { color: var(--red); } .cc-n { color: var(--muted); font-style: italic; }
+  .cmore { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 10px; row-gap: 10px; width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--gray-bg); align-items: baseline; }
+  .cmore[hidden] { display: none; }
+  .cm-body { min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
+  .cm-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+  .cardbtns .cm-tog { align-self: center; padding: 4px 2px; font-size: 12px; }
   .svc-modal { max-width: 600px; }
   .svc-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .svc-hd h3 { margin: 0; }
@@ -1727,30 +1737,59 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     if (g.ahead) return (g.state === 'bad' ? '✗ ' : '◐ ') + nm + K(' 안 올린 커밋 ', ': ') + g.ahead + K('개', ' commits not pushed') + (g.oldest ? ' (' + bkHrs(g.oldest) + ')' : '');
     return '✔ ' + nm + K(' 올림', ' pushed') + (g.synced ? ' ' + hm(g.synced) : '');
   }
-  function backupLine(p) {
-    var b = p.backup, row = el('div', 'runner-row bk-row');
-    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:4px;';
-    var txt;
-    if (!b) txt = K('백업 · 등록 안 됨', 'Backup · not registered');
-    else if (b.level === 'loading') txt = K('백업 · 재는 중…', 'Backup · checking…');
-    else if (b.level === 'unapproved') txt = K('백업 · 설정 바뀜 — 최종 컨펌자 확인 전', 'Backup · settings changed — awaiting the final approver');
-    else {
-      var parts = (b.rows || []).map(bkRowText);
-      txt = K('백업 ', 'Backup ') + (b.level === 'bad' ? '● ' : b.level === 'warn' ? '◐ ' : '● ') + parts.join(' · ');
-      if (!b.offsite) txt += K(' · 서버 밖 사본 없음', ' · no copy off this server');
-      if (b.git) txt += ' · ' + gitText(b.git);
-      if (b.run && b.run.result === 'running') txt += K(' · 지금 백업 중…', ' · backing up now…');
-      else if (b.run && b.run.result === 'fail') txt += K(' · 지금 백업 실패 ', ' · backup-now failed ') + hm(Date.parse(b.run.end));
-      if (OWN_NOW && b.approved === false) txt += K(' · 승인 필요', ' · needs approval');
+  function runnerAttn(p) {
+    var R = p.runner, out = [];
+    if (!R) return out;
+    if (!R.approved) out.push(['w', R.approvedChanged ? K('명령 바뀜 — 다시 승인', 'command changed — re-approve') : K('명령 승인 전', 'command not approved')]);
+    var lr = R.last;
+    if (lr && lr.end && (lr.result === 'fail' || lr.result === 'unknown') && !lr.ackAt) out.push(['b', K('✗ 지난 실행 ', '✗ last run ') + (lr.result === 'unknown' ? K('결과 모름 ', 'unknown ') : K('실패 ', 'failed ')) + fmt(Date.parse(lr.end))]);
+    if (R.holds && R.holds.length) out.push(['w', K('막음 ', 'held ') + R.holds.length, R.holds.map(function (h) { return '«' + h.reason + '»'; }).join(' · ')]);
+    return out;
+  }
+  function backupSum(p) {
+    var b = p.backup;
+    if (!b) return [K('등록 안 됨', 'not registered')];
+    if (b.level === 'loading') return [K('재는 중…', 'checking…')];
+    if (b.level === 'unapproved') return [['w', K('설정 바뀜 — 최종 컨펌자 확인 전', 'settings changed — awaiting the final approver')]];
+    var out = [], bad = (b.rows || []).filter(function (r) { return r.state !== 'ok'; });
+    if (!bad.length) out.push(['g', K('● 모두 새것', '● all fresh'), (b.rows || []).map(bkRowText).join('\n')]);
+    else bad.forEach(function (r) { out.push([r.state === 'unknown' ? 'n' : 'b', bkRowText(r)]); });
+    if (!b.offsite) out.push(['w', K('서버 밖 사본 없음', 'no copy off this server')]);
+    var g = b.git;
+    if (g) {
+      var nm = g.where ? g.where.host : K('코드', 'Code');
+      if (g.state === 'unknown') out.push(['n', K('코드 사본 ?', 'code copy ?'), gitText(g)]);
+      else if (g.state === 'none' || g.why === 'noupstream') out.push(['w', K('코드 사본 없음', 'no code copy'), gitText(g)]);
+      else if (g.ahead) out.push([g.state === 'bad' ? 'b' : 'w', nm + K(' 안 올린 커밋 ', ' unpushed ') + g.ahead + (g.oldest ? ' (' + bkHrs(g.oldest) + ')' : ''), gitText(g)]);
+      else out.push(['g', nm + ' ✔', gitText(g)]);
     }
-    var sp = el('span', null, txt);
-    if (b && (b.level === 'bad' || (b.run && b.run.result === 'fail'))) sp.style.color = 'var(--red, #c0392b)';
-    else if (b && b.level === 'warn') sp.style.color = 'var(--amber, #b7791f)';
-    else if (b && b.level === 'ok') sp.style.color = 'var(--green, #2f855a)';
-    row.appendChild(sp);
+    if (b.run && b.run.result === 'running') out.push(K('지금 백업 중…', 'backing up now…'));
+    else if (b.run && b.run.result === 'fail') out.push(['b', K('지금 백업 실패 ', 'backup-now failed ') + hm(Date.parse(b.run.end))]);
+    if (OWN_NOW && b.approved === false) out.push(['w', K('승인 필요', 'needs approval'), K('«열기» → «이 설정 승인»', '«Open» → «Approve these settings»')]);
+    return out;
+  }
+  // «자세히» 펼침 — 솔루션마다 이 브라우저에 기억(기본 접힘)
+  function cardMoreOpen(k) { try { return localStorage.getItem('board.cardMore.' + k) === '1'; } catch (_) { return false; } }
+  function cardMoreSet(k, v) { try { localStorage.setItem('board.cardMore.' + k, v ? '1' : '0'); } catch (_) {} }
+  // 백업 «자세히» — 칸마다 한 줄(이 서버 사본·보냄·받은 사본·코드 사본) + 열기
+  function backupLine(p) {
+    var b = p.backup, row = el('div', 'runner-row bk-row cm-body'), btns = el('div', 'cm-btns');
+    function line(t, cls) { var d = el('div', cls || null, t); row.appendChild(d); return d; }
+    if (!b) line(K('등록 안 됨 — 사본 폴더·보내는 기록을 등록하면 여기에 보여요', 'Not registered — register copy folders and send logs to see them here'));
+    else if (b.level === 'loading') line(K('재는 중…', 'Checking…'));
+    else if (b.level === 'unapproved') line(K('설정 바뀜 — 최종 컨펌자 확인 전', 'Settings changed — awaiting the final approver'), 'cc-w');
+    else {
+      (b.rows || []).forEach(function (r) { line(bkRowText(r), r.state === 'ok' ? null : r.state === 'unknown' ? 'cc-n' : 'cc-b'); });
+      if (!b.offsite) line(K('◐ 서버 밖 사본 없음(디스크가 망가지면 같이 잃음)', '◐ No copy off this server (lost with the disk)'), 'cc-w');
+      if (b.git) line(gitText(b.git), b.git.state === 'bad' || b.git.state === 'none' || b.git.why === 'noupstream' ? 'cc-' + (b.git.state === 'bad' ? 'b' : 'w') : b.git.ahead ? 'cc-w' : b.git.state === 'unknown' ? 'cc-n' : null);
+      if (b.run && b.run.result === 'running') line(K('지금 백업 중…', 'Backing up now…'));
+      else if (b.run && b.run.result === 'fail') line(K('지금 백업 실패 ', 'Backup-now failed ') + hm(Date.parse(b.run.end)), 'cc-b');
+      if (OWN_NOW && b.approved === false) line(K('승인 필요 — «열기» 에서 «이 설정 승인»', 'Needs approval — «Open» → «Approve these settings»'), 'cc-w');
+    }
     if (OWN_NOW || (b && b.level !== 'unapproved')) {
-      var o = el('button', 'svc-link', b ? K('열기', 'Open') : K('⚙ 등록', '⚙ Register')); o.type = 'button';
-      o.addEventListener('click', function () { openBackup(p); }); row.appendChild(o);
+      var o = el('button', 'btn', b ? K('열기 — 지금 백업·복원 요청·경로', 'Open — back up now · restore · paths') : K('⚙ 등록', '⚙ Register')); o.type = 'button';
+      o.style.cssText = 'font-size:11px;padding:3px 8px;';
+      o.addEventListener('click', function () { openBackup(p); }); btns.appendChild(o); row.appendChild(btns);
     }
     return row;
   }
@@ -1806,6 +1845,11 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           if (gl.length) gi.appendChild(el('div', 'svc-u', gl.join(' · ')));
           if (g.state === 'none') gi.appendChild(el('div', 'svc-n warn', K('⚠ 이 코드는 원격 저장소에 없어요 — 사본은 이 서버 디스크와 백업 묶음뿐이에요(이력·되돌리기 없음).', '⚠ This code is not in any remote repository — the only copies are this server\'s disk and the backup archives (no history to roll back to).')));
           else gi.appendChild(el('div', 'svc-w', K('올리기는 ' + p.name + ' «개발완료» 가 해요(기록·커밋·백업·올리기 — 그 솔루션 규칙대로). 숫자는 이 서버 기준이라 원격에 묻지 않아요.', 'Pushing is done by ' + p.name + '\'s «dev done» (log · commit · backup · push — by that project\'s rules). Counts are from this server; the remote is not queried.')));
+          if (OWN_NOW && g.state === 'none') {
+            var cb = el('button', 'btn', K('GitHub 에 연결…', 'Connect to GitHub…')); cb.type = 'button';
+            cb.addEventListener('click', function () { connectForm(); });
+            var cr0 = el('div', 'dsu-act'); cr0.appendChild(cb); gi.appendChild(cr0);
+          }
           if (OWN_NOW && g.state !== 'none' && (g.ahead || g.dirty)) {
             var gb = el('button', 'btn', K('개발완료 시작(올리기 포함)', 'Start dev done (includes push)')); gb.type = 'button';
             gb.addEventListener('click', function () { if (window.confirm(K(p.name + ' 의 개발완료를 실행할까요? 기록 정리·커밋·백업·GitHub 올리기를 하는 방이 새로 열립니다. 운영 배포는 하지 않습니다.', 'Run dev done for ' + p.name + '? A new session opens to tidy the log, commit, back up and push. It does not deploy to production.'))) gateAct('/api/projects/' + p.key + '/devdone', {}, gb).then(function () { done(); }); });
@@ -1855,6 +1899,50 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           b2.appendChild(f); document.body.appendChild(b2); ta.focus();
         });
       }
+      // 원격 저장소 연결 — 열쇠 만들기 → GitHub 에서 비공개 저장소·Deploy key → 주소 넣고 확인 → 그 방 대기열 (BACKUP_STRUCTURE.md 13절)
+      function connectForm() {
+        fetch('/api/git-connect?p=' + encodeURIComponent(p.key), { cache: 'no-store' }).then(function (x) { return x.json(); }).then(function (c) {
+          if (!c.ok) { toast(K('연결 정보를 못 읽었습니다', 'Could not load connection info')); return; }
+          var b2 = el('div', 'modal-bg'); var f = el('div', 'modal svc-modal dsu');
+          var h2 = el('div', 'svc-hd'); h2.appendChild(el('h3', null, p.name + K(' · GitHub 에 연결', ' · Connect to GitHub'))); var x2 = el('button', 'svc-x', '×'); x2.type = 'button'; h2.appendChild(x2); f.appendChild(h2);
+          function close() { b2.remove(); }
+          x2.addEventListener('click', close); b2.addEventListener('click', function (ev) { if (ev.target === b2) close(); });
+          f.appendChild(el('div', 'mmsg', K('상황판은 이 솔루션 전용 열쇠를 만들고 확인만 해요. 첫 커밋·올리기는 ' + p.name + ' 방이 비밀 파일을 거르고 Fable 확인을 받은 뒤 해요. 이 열쇠는 GitHub 저장소 하나에만 쓰여요.', 'The board only creates a key for this project and checks the connection. The ' + p.name + ' session does the first commit and push after filtering secrets and a Fable check. The key works for one GitHub repository only.')));
+          if (c.queued) f.appendChild(el('div', 'svc-n', K('✔ 연결 확인됨' + (c.remote ? ' (' + c.remote.repo + ')' : '') + ' — ' + p.name + ' 대기열에서 첫 올리기를 기다리는 중이에요.', '✔ Verified' + (c.remote ? ' (' + c.remote.repo + ')' : '') + ' — waiting in the ' + p.name + ' queue for the first push.')));
+          if (!c.key.pub) {
+            if (c.key.why !== 'none') f.appendChild(el('div', 'svc-n warn', K('⚠ 열쇠 파일이 이상해요(', '⚠ Key file problem (') + c.key.why + K(') — ~/.ssh/board-git-' + p.key + ' 를 확인하세요', ') — check ~/.ssh/board-git-' + p.key)));
+            else {
+              var mk = el('button', 'btn', K('1. 이 솔루션 전용 열쇠 만들기', '1. Create a key for this project')); mk.type = 'button';
+              mk.addEventListener('click', function () { act('/api/projects/' + p.key + '/git-key', {}, mk).then(function (r) { if (r && r.ok) { close(); connectForm(); } }); });
+              var mr = el('div', 'dsu-act'); mr.appendChild(mk); f.appendChild(mr);
+            }
+          } else {
+            f.appendChild(el('div', 'svc-sec', K('GitHub 에서 할 일', 'On GitHub')));
+            var ol = document.createElement('ol'); ol.style.cssText = 'margin:4px 0 8px 18px;padding:0;font-size:13px;line-height:1.6;';
+            [K('github.com/new — 이름 넣고 **Private** 선택 · README 넣지 않음(빈 저장소) → Create', 'github.com/new — name it, choose **Private** · no README (empty repo) → Create'),
+             K('그 저장소 Settings → Deploy keys → Add deploy key → 아래 열쇠 붙여 넣기 · **Allow write access** 체크 → Add key', 'That repo\'s Settings → Deploy keys → Add deploy key → paste the key below · tick **Allow write access** → Add key'),
+             K('아래에 저장소 주소(주인/이름) 넣고 «연결 확인»', 'Enter the repository (owner/name) below and press «Check connection»')].forEach(function (t) {
+              var li = document.createElement('li'); t.split('**').forEach(function (part, i) { li.appendChild(i % 2 ? el('b', null, part) : document.createTextNode(part)); }); ol.appendChild(li);
+            });
+            f.appendChild(ol);
+            var lk = document.createElement('a'); lk.href = 'https://github.com/new'; lk.target = '_blank'; lk.rel = 'noopener'; lk.className = 'svc-link'; lk.textContent = K('GitHub 새 저장소 열기 ↗', 'Open GitHub new repository ↗'); f.appendChild(lk);
+            var pk = document.createElement('textarea'); pk.readOnly = true; pk.rows = 3; pk.className = 'dsu-note'; pk.style.cssText = 'width:100%;font-family:monospace;font-size:11px;margin-top:6px;'; pk.value = c.key.pub; f.appendChild(pk);
+            var cp = el('button', 'btn', K('열쇠 복사', 'Copy key')); cp.type = 'button';
+            cp.addEventListener('click', function () { pk.select(); try { (navigator.clipboard ? navigator.clipboard.writeText(pk.value) : Promise.reject()).then(function () { toast(K('복사했어요', 'Copied')); }, function () { document.execCommand('copy'); toast(K('복사했어요', 'Copied')); }); } catch (_) { document.execCommand('copy'); } });
+            var cpr = el('div', 'dsu-act'); cpr.appendChild(cp); f.appendChild(cpr);
+            var rw = el('label', 'dsu-f'); rw.appendChild(el('b', null, K('저장소 (주인/이름)', 'Repository (owner/name)')));
+            var ri = document.createElement('input'); ri.type = 'text'; ri.placeholder = 'myname/' + p.key; ri.autocomplete = 'off'; ri.spellcheck = false; ri.value = c.remote ? c.remote.repo : ''; rw.appendChild(ri); f.appendChild(rw);
+            var ck = el('button', 'btn', K('연결 확인 → ' + p.name + ' 방에 첫 올리기 맡기기', 'Check connection → hand the first push to ' + p.name)); ck.type = 'button'; ck.disabled = !!c.queued;
+            ck.addEventListener('click', function () {
+              if (!ri.value.trim()) { toast(K('저장소 주소를 넣어 주세요', 'Enter the repository')); ri.focus(); return; }
+              act('/api/projects/' + p.key + '/git-connect', { repo: ri.value }, ck).then(function (r) { if (r && r.ok) { close(); done(); } });
+            });
+            var ckr = el('div', 'dsu-act'); ckr.appendChild(ck); f.appendChild(ckr);
+            f.appendChild(el('div', 'svc-w', K('확인하는 것: 공개 저장소면 거절 · 이 열쇠로만 읽히는지 · 빈 저장소인지. 끊으려면 GitHub 에서 그 Deploy key 를 지우고 이 서버의 ~/.ssh/board-git-' + p.key + ' 파일 두 개를 지우세요.', 'Checks: refuses a public repo · readable with this key only · whether it is empty. To disconnect, delete the deploy key on GitHub and the two ~/.ssh/board-git-' + p.key + ' files on this server.')));
+          }
+          b2.appendChild(f); document.body.appendChild(b2);
+        }).catch(function () { toast(K('연결 정보를 못 읽었습니다', 'Could not load connection info')); });
+      }
       function setupForm() {
         var raw = j.raw || {};
         m.appendChild(el('div', 'mmsg', K('경로만 등록해요. 상황판은 다른 서버에 접속하지 않고, 파일 이름·크기·시각만 봐요(내용은 안 읽음). 한 서버만 쓰면 «보냄»·«받은 사본» 은 비워 두세요.', 'Register paths only. The board never connects to other servers and reads only names, sizes and times. On a single server leave «sent» and «received» empty.')));
@@ -1892,14 +1980,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }).catch(function () { toast(K('백업 현황을 못 읽었습니다', 'Could not load backup status')); });
   }
   function runnerLine(p) {
-    var R = p.runner, row = el('div', 'runner-row');
-    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:4px;';
-    var lr = R.last, txt = K('배포 실행: 상황판', 'Deploys run by: board') + (R.approved ? '' : R.approvedChanged ? K(' · 명령 바뀜 — 다시 승인 필요', ' · command changed — approve again') : K(' · 명령 승인 전(배포 버튼에서 승인)', ' · command not approved yet (approve via Deploy)'));
+    var R = p.runner, row = el('div', 'runner-row cm-body'), btns = el('div', 'cm-btns');
+    var lr = R.last, txt = K('실행: 상황판', 'Run by: board') + (R.approved ? '' : R.approvedChanged ? K(' · 명령 바뀜 — 다시 승인 필요', ' · command changed — approve again') : K(' · 명령 승인 전(배포 버튼에서 승인)', ' · command not approved yet (approve via Deploy)'));
     if (lr && lr.end) txt += K(' · 마지막 ', ' · last ') + (lr.result === 'ok' ? '✓ ' : '✗ ' + (lr.result === 'unknown' ? K('모름 ', 'unknown ') : K('실패 ', 'failed '))) + fmt(Date.parse(lr.end)) + (lr.ackAt ? K('(확인함)', ' (seen)') : '');
     if (!R.scheduledReady && R.approved) txt += K(' · 정기 점검은 버튼으로 한 번 나간 뒤부터', ' · scheduled checks start after one button deploy');
     if (R.lastDry && R.lastDry.end) txt += K(' · 시험 ', ' · dry run ') + (R.lastDry.result === 'dry-ok' ? '✓ ' : '✗ ') + fmt(Date.parse(R.lastDry.end));
-    row.appendChild(el('span', null, txt));
-    function small(label, tip, fn) { var b = el('button', 'btn', label); b.type = 'button'; b.style.cssText = 'font-size:11px;padding:3px 8px;'; b.title = tip; b.addEventListener('click', function () { fn(b); }); row.appendChild(b); }
+    row.appendChild(el('div', null, txt)); row.appendChild(btns);
+    function small(label, tip, fn) { var b = el('button', 'btn', label); b.type = 'button'; b.style.cssText = 'font-size:11px;padding:3px 8px;'; b.title = tip; b.addEventListener('click', function () { fn(b); }); btns.appendChild(b); }
     if (R.approved) small(K('시험 배포', 'Dry run'), R.dry ? K('운영을 바꾸지 않고 조건 판정 + 스크립트 --dry-run', 'Checks conditions and runs the script with --dry-run — production unchanged') : K('조건 판정만(이 스크립트는 --dry-run 없음)', 'Checks conditions only (no --dry-run in this script)'), function (b) {
       b.disabled = true;
       post('/api/projects/' + p.key + '/deploy-dry', {}).then(function (j) {
@@ -5528,32 +5615,41 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var dv = el('div', 'row');
         dv.style.cssText = 'padding:8px 16px 10px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);flex-direction:column;align-items:flex-start;gap:6px;';
         var btnRow = el('div', 'cardbtns');
-        var info = EN ? (p.lastDevDone ? ('Last dev-done ' + fmt(Date.parse(p.lastDevDone.at)) + (p.lastDevDone.by === 'git' ? '' : ' (in progress?)') + ' · confirmed since: ' + p.confirmedSince)
-                                 : ('No dev-done yet · confirmed: ' + p.confirmedSince))
-          : p.lastDevDone ? ('최종 개발완료 ' + fmt(Date.parse(p.lastDevDone.at)) + (p.lastDevDone.by === 'git' ? '' : '(진행 중?)') + ' · 이후 확인 ' + p.confirmedSince + '건')
-                                 : ('개발완료 기록 없음 · 확인 ' + p.confirmedSince + '건');
-        var infoEl = el('span', null, info);
-        infoEl.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;';
-        infoEl.title = p.lastDevDone ? (p.lastDevDone.by === 'git' ? K('git 기록의 개발완료 커밋 기준', 'Based on the dev-done commit in git history') : K('상황판 버튼으로 시작 — 아직 진행 중일 수 있음', 'Started from the board button — may still be running')) : '';
-        // 오른쪽에 작게 «외부 서비스 n» — 누르면 유/무료·알아 둘 것 창
-        if (p.svcCount) {
-          var infoRow = el('div', 'inforow'); infoRow.appendChild(infoEl);
-          var sv = el('button', 'svc-link', K('외부 서비스 ', 'Services ') + p.svcCount); sv.type = 'button';
+        // 카드 머리 요약 — 이름표(개발·운영·백업) + 짧은 상태 · 손볼 것만 색 글씨로, 자세한 줄·작은 버튼은 «자세히» 로 접음
+        //
+        var sum = el('div', 'csum');
+        function sumRow(k, parts, right) {
+          sum.appendChild(el('span', 'k', k));
+          var v = el('span', 'v');
+          parts.forEach(function (x, i) {
+            if (i) v.appendChild(document.createTextNode(' · '));
+            if (typeof x === 'string') v.appendChild(document.createTextNode(x));
+            else { var c = el('span', 'cc-' + x[0], x[1]); if (x[2]) c.title = x[2]; v.appendChild(c); }
+          });
+          sum.appendChild(v);
+          var r = el('span', 'x'); if (right) r.appendChild(right); sum.appendChild(r);
+          return v;
+        }
+        var devTxt = EN ? (p.lastDevDone ? 'Dev-done ' + fmt(Date.parse(p.lastDevDone.at)) + (p.lastDevDone.by === 'git' ? '' : ' (in progress?)') : 'No dev-done yet') : p.lastDevDone ? '개발완료 ' + fmt(Date.parse(p.lastDevDone.at)) + (p.lastDevDone.by === 'git' ? '' : '(진행 중?)') : '개발완료 기록 없음';
+        var sv = null;
+        if (p.svcCount) {   // 오른쪽에 작게 «외부 서비스 n» — 누르면 유/무료·알아 둘 것 창
+          sv = el('button', 'svc-link', K('외부 서비스 ', 'Services ') + p.svcCount); sv.type = 'button';
           sv.title = K('이 솔루션이 쓰는 외부 서비스 — 유료/무료·알아 둘 것', 'External services this project uses — paid/free · notes');
           sv.addEventListener('click', function () { openServices(p); });
-          infoRow.appendChild(sv); dv.appendChild(infoRow);
-        } else dv.appendChild(infoEl);
-        // 운영 배포 시각 — 개발완료 줄 바로 아래 · 개발완료 줄과 같은 회색 정보 줄(빨강·⚠ 없음)
-        if (p.prodDeploy) {
-          var pd = p.prodDeploy, pdAt = pd.at ? Date.parse(pd.at) : 0;
-          var pdText = pdAt ? (K('운영 배포 ', 'Production deploy ') + fmt(pdAt) + (pd.behind == null ? '' : pd.behind > 0 ? K(' · 이후 커밋 ' + pd.behind + '건', ' · ' + pd.behind + ' commit(s) since') : K(' · 최신', ' · up to date')))
-            : K('운영 배포 시각 모름', 'Production deploy time unknown');
-          var pdEl = el('span', null, pdText);
-          pdEl.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;';
-          pdEl.title = K('운영 사이트가 공개로 내는 화면 빌드 시각 기준(10분마다 확인' + (pd.checkedAt ? ' · 마지막 확인 ' + fmt(Date.parse(pd.checkedAt)) : '') + ') · «이후 커밋» 은 그 시각 뒤 커밋 수(어림)' + (pd.error ? ' · 지난 확인 실패: ' + pd.error : ''),
-            'Build time the production site publishes (checked every 10 min' + (pd.checkedAt ? ' · last ' + fmt(Date.parse(pd.checkedAt)) : '') + ') · «commits since» = commits after that time (approx.)' + (pd.error ? ' · last check failed: ' + pd.error : ''));
-          dv.appendChild(pdEl);
         }
+        var devV = sumRow(K('개발', 'Dev'), [devTxt, K('이후 확인 ' + p.confirmedSince + '건', 'confirmed since: ' + p.confirmedSince)], sv);
+        devV.title = p.lastDevDone ? (p.lastDevDone.by === 'git' ? K('git 기록의 개발완료 커밋 기준', 'Based on the dev-done commit in git history') : K('상황판 버튼으로 시작 — 아직 진행 중일 수 있음', 'Started from the board button — may still be running')) : '';
+        // 운영 배포 시각 — 회색 정보 줄(빨강·⚠ 없음) · 손볼 것(승인 전·지난 실행 실패·막음)만 색
+        if (p.prodDeploy || p.runner) {
+          var pd = p.prodDeploy || {}, pdAt = pd.at ? Date.parse(pd.at) : 0;
+          var opParts = [pdAt ? K('배포 ', 'Deployed ') + fmt(pdAt) + (pd.behind == null ? '' : pd.behind > 0 ? K(' · 이후 커밋 ' + pd.behind + '건', ' · ' + pd.behind + ' commit(s) since') : K(' · 최신', ' · up to date')) : K('배포 시각 모름', 'Deploy time unknown')];
+          runnerAttn(p).forEach(function (c) { opParts.push(c); });
+          var opV = sumRow(K('운영', 'Prod'), opParts);
+          if (p.prodDeploy) opV.title = K('운영 사이트가 공개로 내는 화면 빌드 시각 기준(10분마다 확인' + (pd.checkedAt ? ' · 마지막 확인 ' + fmt(Date.parse(pd.checkedAt)) : '') + ') · «이후 커밋» 은 그 시각 뒤 커밋 수(어림)' + (pd.error ? ' · 지난 확인 실패: ' + pd.error : ''),
+            'Build time the production site publishes (checked every 10 min' + (pd.checkedAt ? ' · last ' + fmt(Date.parse(pd.checkedAt)) : '') + ') · «commits since» = commits after that time (approx.)' + (pd.error ? ' · last check failed: ' + pd.error : ''));
+        }
+        if (p.backup || OWN_NOW) sumRow(K('백업', 'Backup'), backupSum(p));
+        dv.appendChild(sum);
         if (p.paused) dv.appendChild(el('span', null, K('⏸ 작업 일시정지 중', '⏸ Work paused') + (p.pausedAll ? K('(모든 솔루션)', ' (all projects)') : '') + (p.parkedCount ? (EN ? ' · ' + p.parkedCount + ' session(s) saved and stopped' : ' · 저장하고 멈춘 방 ' + p.parkedCount + '개') : '')));
         if (!p.noDevDone) {
           var ddBtn = el('button', 'btn', K('개발완료', 'Dev done'));
@@ -5643,7 +5739,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           });
           btnRow.appendChild(dep);
           if (p.runner) runnerAfter = runnerLine(p);
-          else if (OWN_NOW) { runnerAfter = el('div', 'runner-row'); runnerAfter.style.cssText = 'font-size:12px;margin-top:4px;'; var lg = el('button', 'svc-link', K('⚙ 배포 연결 설정', '⚙ Deploy connection')); lg.type = 'button'; lg.addEventListener('click', function () { openDeploySetup(p); }); runnerAfter.appendChild(lg); }
+          else if (OWN_NOW) { runnerAfter = el('div', 'runner-row cm-body'); var lg = el('button', 'svc-link', K('⚙ 배포 연결 설정', '⚙ Deploy connection')); lg.type = 'button'; lg.addEventListener('click', function () { openDeploySetup(p); }); runnerAfter.appendChild(lg); }
         } else if (p.key !== 'server') {
           var dno = el('button', 'btn dep-off', K('운영 배포 · 연결 안 됨', 'Deploy · not connected')); dno.type = 'button';
           dno.style.cssText = 'font-size:12px;padding:5px 10px;white-space:nowrap;';
@@ -5659,8 +5755,16 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         });
         btnRow.appendChild(pz);
         dv.appendChild(btnRow);
-        if (runnerAfter) dv.appendChild(runnerAfter);
-        if (p.backup || OWN_NOW) dv.appendChild(backupLine(p));
+        // «자세히» — 배포 실행·백업 줄과 작은 버튼(시험 배포·연결 설정·기준선·백업 열기)을 한 상자에 · 펼침 상태는 이 브라우저에 기억
+        var more = el('div', 'cmore');
+        if (runnerAfter) { more.appendChild(el('span', 'k', K('운영 배포', 'Deploy'))); more.appendChild(runnerAfter); }
+        if (p.backup || OWN_NOW) { more.appendChild(el('span', 'k', K('백업', 'Backup'))); more.appendChild(backupLine(p)); }
+        if (more.childNodes.length) {
+          var mOpen = cardMoreOpen(p.key), mt = el('button', 'svc-link'); mt.type = 'button';
+          var mSet = function () { mt.textContent = mOpen ? K('접기 ▴', 'Less ▴') : K('자세히 ▾', 'More ▾'); mt.setAttribute('aria-expanded', mOpen ? 'true' : 'false'); more.hidden = !mOpen; };
+          mt.addEventListener('click', function () { mOpen = !mOpen; cardMoreSet(p.key, mOpen); mSet(); });
+          mt.classList.add('cm-tog'); mSet(); btnRow.appendChild(mt); dv.appendChild(more);
+        }
         card.appendChild(dv);
         // 정기 점검은 카드 머리 버튼 바로 아래, 그 아래 «새 일 시키기»
         if (p.schedSteps && p.schedSteps.length) card.appendChild(schedBox(p, (data.schedules || []).filter(function (s) { return s.project === p.key; })));

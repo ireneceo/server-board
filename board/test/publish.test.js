@@ -63,6 +63,23 @@ test('원본 서버: 태그 뒤 고침 커밋 → 칸 보임 · 조용하면 자
   assert.equal(board.publishQueue('button').ok, true, '버튼은 바로');
 });
 
+test('지난 내기 방을 «끝난 일» 로 확인(화면에서 숨김)한 뒤에도 버튼이 «이미 맡김» 으로 막히지 않음 (2026-11-19)', () => {
+  const st = board.loadState(); st.queue = []; const at = new Date().toISOString();
+  st.publish = { qid: 'pubX', ver: '0.6.3', from: '0.6.2', why: 'button', at };
+  st.qStarted = Object.assign({}, st.qStarted, { pubX: { id: 'abcd1234', at } });
+  st.completed = Object.assign({}, st.completed, { 'abcd1234-0000-0000-0000-000000000000': { sessionId: 'abcd1234-0000-0000-0000-000000000000', id: 'abcd1234', confirmedAt: at } });
+  board.saveState(st);
+  assert.equal(board.publishView([]).work, null);
+  const r = board.publishQueue('button');
+  assert.equal(r.ok, true, '끝난 일로 확인된 방은 «내는 중» 아님');
+  // 끝난 일 표시가 없어도, 방이 전체 목록에서 «끝남» 이면 내는 중 아님 · 일하는 중이면 막음
+  const s2 = board.loadState(); s2.queue = []; s2.completed = {}; s2.publish = { qid: 'pubY', ver: '0.6.3', at }; s2.qStarted.pubY = { id: 'ef567890', at }; board.saveState(s2);
+  assert.equal(board.publishView([{ id: 'ef567890', status: { code: 'working' } }]).work, 'working');
+  assert.equal(board.publishView([{ id: 'ef567890', status: { code: 'done' } }]).work, null);
+  assert.equal(board.publishView([]).work, null, '전체 목록에 없음 = 끝나 사라짐');
+  const s3 = board.loadState(); s3.queue = []; s3.publish = {}; board.saveState(s3);
+});
+
 test('방금 고친 커밋(1시간 안)·커밋 전 파일이 있으면 자동으로 안 넣음', async () => {
   const root = sb.root;
   let st = board.loadState(); st.queue = []; st.publish = {}; board.saveState(st);

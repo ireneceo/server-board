@@ -193,6 +193,84 @@ async function gitStatus(dir, every) {
   return { state: stale ? 'bad' : 'ok', why: stale ? 'stale' : ahead ? 'ahead' : null, branch, up, where, ahead, behind, synced, oldest, dirty, lastCommit };
 }
 
+/**
+ * 원격 저장소 «연결» — BACKUP_STRUCTURE.md 13절
+ *   상황판이 하는 것: 솔루션 전용 deploy key 만들기(.pub 만 읽음) · 비공개인지 · 그 열쇠로 읽히는지 확인. 폴더 안 일(init·커밋·push)은 그 솔루션 방.
+ *   GitHub 저장소 하나짜리 열쇠라 1절 «열쇠를 갖지 않는다» 의 예외 — 끊기: GitHub 에서 Deploy key 지우기 + ~/.ssh/board-git-<key>* 지우기.
+ */
+const GITHUB_HOSTKEY = 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
+const SAFE_PATH = /^[A-Za-z0-9._\/-]+$/;
+const keyPath = (key) => path.join(D.home, '.ssh', 'board-git-' + String(key));
+const hostsPath = () => path.join(D.home, '.ssh', 'board-github_known_hosts');
+function repoClean(r) {
+  const v = String(r || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/^git@github\.com:/i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+  const m = v.match(/^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/);
+  if (!m || ['.', '..', '.git'].includes(m[2]) || m[2].includes('..')) return null;
+  return m[1] + '/' + m[2];
+}
+/** 열쇠 상태 — 경로는 항상 key 에서 계산(저장값 안 믿음) · 링크 아님·600·내 것 · .pub 만 읽음 */
+function keyInfo(key) {
+  if (!/^[a-z0-9_-]+$/.test(String(key))) return { ok: false, why: 'badkey' };
+  const f = keyPath(key);
+  if (!SAFE_PATH.test(f)) return { ok: false, why: 'badpath', path: f };
+  let st; try { st = fs.lstatSync(f); } catch (_) { return { ok: false, why: 'none', path: f }; }
+  if (st.isSymbolicLink() || !st.isFile()) return { ok: false, why: 'notfile', path: f };
+  if ((st.mode & 0o077) !== 0) return { ok: false, why: 'perm', path: f };
+  if (typeof process.getuid === 'function' && st.uid !== process.getuid()) return { ok: false, why: 'owner', path: f };
+  let pub = ''; try { const ps = fs.lstatSync(f + '.pub'); if (!ps.isSymbolicLink()) pub = fs.readFileSync(f + '.pub', 'utf8').trim(); } catch (_) {}
+  if (!/^ssh-ed25519 [A-Za-z0-9+\/=]+( [^\n]*)?$/.test(pub)) return { ok: false, why: 'nopub', path: f };
+  return { ok: true, path: f, pub };
+}
+function makeKey(key, label) {
+  const k = keyInfo(key);
+  if (k.ok) return Promise.resolve(k);
+  if (k.why !== 'none') return Promise.resolve(k);   // 무엇이든 이미 있으면 덮지 않음
+  try { fs.mkdirSync(path.join(D.home, '.ssh'), { recursive: true, mode: 0o700 }); } catch (_) {}
+  const comment = 'board-git-' + key + '@' + (String(label || 'server').replace(/[^A-Za-z0-9.-]/g, '').slice(0, 40) || 'server');
+  return new Promise((ok) => {
+    const c = execFile('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', comment, '-f', keyPath(key)], { timeout: 20000, env: { PATH: process.env.PATH, HOME: D.home } }, () => ok(keyInfo(key)));
+    try { c.stdin.end(); } catch (_) {}   // 덮어쓰기 물음이 나오면 바로 실패로 끝남
+  });
+}
+/** 방이 폴더 git 설정에 넣을 ssh 명령 — 다른 열쇠·ssh 설정·에이전트로 새지 않게 */
+function sshCommand(key) {
+  const f = keyPath(key), h = hostsPath();
+  if (!SAFE_PATH.test(f) || !SAFE_PATH.test(h)) return null;
+  return 'ssh -F /dev/null -i ' + f + ' -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o UserKnownHostsFile=' + h + ' -o GlobalKnownHostsFile=/dev/null -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519';
+}
+function gitOut(args, env, cwd) {
+  return new Promise((ok) => execFile('git', args, { cwd: cwd || require('os').tmpdir(), timeout: 25000, maxBuffer: 4 * 1024 * 1024, env: Object.assign({ PATH: process.env.PATH, HOME: D.home, LANG: 'C', GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_ASKPASS: '/bin/false', SSH_ASKPASS: '/bin/false' }, env || {}) },
+    (e, out, err) => ok({ ok: !e, out: String(out || ''), err: String(err || '') })));
+}
+/** 인증 없이 https 로 읽히면 공개 저장소 → 거절 (Fable ①) — { public: true|false|null(모름) } */
+async function isPublic(repo) {
+  const r = await gitOut(['-c', 'credential.helper=', 'ls-remote', '--', 'https://github.com/' + repo + '.git']);
+  if (r.ok) return { public: true };
+  if (/terminal prompts disabled|could not read Username|Authentication failed|Repository not found/i.test(r.err)) return { public: false };   // 그 밖(403·한도·프록시)은 모름 = 거절 (Fable 완료 ①)
+  return { public: null, err: r.err.split('\n').filter(Boolean).pop() || '' };
+}
+/** 연결 확인 — 공개면 거절 · 그 열쇠로만 ssh ls-remote · 빈 저장소인지 */
+async function checkRemote(key, repoIn) {
+  const repo = repoClean(repoIn);
+  if (!repo) return { ok: false, why: 'repo' };
+  const k = keyInfo(key); if (!k.ok) return { ok: false, why: 'key:' + k.why };
+  const cmd = sshCommand(key); if (!cmd) return { ok: false, why: 'key:badpath' };
+  try { fs.writeFileSync(hostsPath(), GITHUB_HOSTKEY + '\n', { mode: 0o644 }); } catch (_) { return { ok: false, why: 'hosts' }; }
+  const pv = await isPublic(repo);
+  if (pv.public === true) return { ok: false, why: 'public', repo };
+  if (pv.public === null) return { ok: false, why: 'net', repo, err: pv.err };
+  const r = await gitOut(['ls-remote', '--', 'git@github.com:' + repo + '.git'], { GIT_SSH_COMMAND: cmd });
+  if (!r.ok) {
+    const e = r.err;
+    return { ok: false, repo, why: /Host key verification failed|REMOTE HOST IDENTIFICATION/i.test(e) ? 'hostkey' : /Permission denied|publickey/i.test(e) ? 'denied' : /not found|does not exist|access rights/i.test(e) ? 'notfound' : 'net', err: e.split('\n').filter(Boolean).pop() || '' };
+  }
+  // 계정 열쇠로 잘못 넣으면 모든 저장소가 열림 — ssh -T 인사가 «Hi 주인/저장소!» 여야 deploy key
+  const hi = await new Promise((ok) => execFile('ssh', cmd.split(' ').slice(1).concat(['-T', 'git@github.com']), { timeout: 20000, env: { PATH: process.env.PATH, HOME: D.home } }, (e, o, er) => ok(String(o || '') + String(er || ''))));
+  const m = hi.match(/Hi ([^!\s]+)!/);
+  if (m && m[1].toLowerCase() !== repo.toLowerCase()) return { ok: false, repo, why: m[1].includes('/') ? 'otherrepo' : 'account' };
+  return { ok: true, repo, empty: !r.out.trim() };
+}
+
 const statusCache = {};
 /** 솔루션 하나의 현황 — { level: ok|warn|bad|none, rows:[…], offsite, problems, approved } */
 async function status(proj, force) {
@@ -335,4 +413,4 @@ async function copies(proj, kind, idx) {
   return { label: x.label, items: r.items.slice(0, 60).map((i) => ({ name: i.name, t: i.t, size: i.size, dir: i.dir })) };
 }
 
-module.exports = { init, conf, problems, fingerprint, isApproved, approve, approvedOf, status, runNow, runTail, bootSweep, pickCopy, copies, listTop, sentAt, nameDate, otherRunning, pathBad, gitStatus, repoName, running, _cache: statusCache };
+module.exports = { init, conf, problems, fingerprint, isApproved, approve, approvedOf, status, runNow, runTail, bootSweep, pickCopy, copies, listTop, sentAt, nameDate, otherRunning, pathBad, gitStatus, repoName, repoClean, keyInfo, makeKey, sshCommand, isPublic, checkRemote, keyPath, GITHUB_HOSTKEY, running, _cache: statusCache };
