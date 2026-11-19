@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.8]
+**Dev done**
+- Pressing «Dev done» while another session in that project is working queued it silently — the card kept showing «N unpushed commits» and nothing else, so it looked like dev done had failed. The card now shows «dev done queued — starts when «session» finishes» (or «dev done running · N min») next to the dev line, the button reads «Dev done queued», the backup line says «→ dev done pushes», and the backup window explains that «Back up now» makes file/DB copies only and never pushes to GitHub
+
 ## [0.6.7]
 **Deploy**
 - Auto redeploy after a fixed failure (`deploy.autoRetry` + `deploy.gateFiles`, off by default): when a deploy you started fails a pre-deploy check, the fix session queued at the front ends ✅ and the board redeploys by itself after a 5-minute notice card (close it to stop). Temporary failures (rate limit, memory, connection) retry once 5 minutes later without a fix. Only within 6 h of your press, at most twice, and only if production is untouched, the deploy/check files did not change and no other session's work slipped in — otherwise the card says why and waits for your button
