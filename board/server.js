@@ -71,6 +71,7 @@ const CMD = EN ? { devstart: 'dev-start', devdone: 'dev-done', deploy: 'deploy' 
 const GATE_NAME_RE = new RegExp('^\\/(' + CMD.deploy + '|' + CMD.devdone + ')');
 const DEPLOY_NAME_RE = new RegExp('^\\/' + CMD.deploy);
 const runner = require('./deploy-runner');
+const backup = require('./backup');
 const auth = require('./auth');
 const gate = require('./gate');
 /** 상황판이 방에 넣는 글의 머리 — 사람 말이 아님 */
@@ -3064,12 +3065,36 @@ async function buildBoard0(gen) {
         .concat(scoutHold(p, rooms, projects, st, limit, now))
         .concat(!holdingRooms(rooms, p.key, now).length && wokeRecently(p.key, now, rooms) ? [K('다음 일을 막 시작했어요 — 방이 목록에 잡히는 중(몇 초)', 'Next task just started — waiting for it to appear in the list (a few seconds)')] : []),
       runner: runner.conf(p) ? runner.summary(p) : null,
+      backup: backupView(p),
       prodDeploy: p.prodMarker ? Object.assign({}, (st.prodSeen || {})[p.key] || {}, prodErr[p.key] ? { error: prodErr[p.key].error } : {}) : null,
       ...devInfo[p.key] })),
     rooms: visible
   };
   cache.data = data; if (gen === cache.gen) cache._at = now;   // 계산 중에 바뀌었으면 다음 요청이 새로 계산
   return data;
+}
+
+// 백업 현황 — 화면 갱신(3초)을 막지 않게 저장해 둔 값을 바로 주고, 5분 지났으면 뒤에서 새로 잰다 (BACKUP_STRUCTURE.md 3절)
+const backupMem = {};
+function backupView(p) {
+  if (!backup.conf(p)) return null;
+  const m = backupMem[p.key];
+  if (!m || Date.now() - m.at > 5 * 60 * 1000 || m.fp !== backup.fingerprint(p) || (m.v && m.v.run && m.v.run.result === 'running')) backupRefresh(p);
+  const v = m ? m.v : { level: 'loading' };
+  return Object.assign({}, v, { approved: backup.isApproved(p) });
+}
+function backupRefresh(p, force) {
+  const m = backupMem[p.key] || (backupMem[p.key] = { at: 0, v: null });
+  if (m.busy) return m.busy;
+  m.busy = backup.status(p, force).then((v) => { m.v = v; m.at = Date.now(); m.fp = backup.fingerprint(p); cache.at = 0; }).catch(() => {}).finally(() => { m.busy = null; });
+  return m.busy;
+}
+/** 코드 사본 줄 — 주인 아닌 사람에게는 저장소·가지 이름을 뺀 상태만 */
+function gitForViewer(g) { return g ? Object.assign({}, g, { where: undefined, up: undefined, branch: undefined }) : g; }
+/** 주인 아닌 사람에게 — 승인 안 된(또는 승인 뒤 바뀐) 설정이면 경로·이름을 감춘다 (Fable ②) */
+function backupForViewer(b) {
+  if (!b || b.approved) return b && Object.assign({}, b, { log: undefined, command: undefined, git: gitForViewer(b.git), problems: (b.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')) });
+  return { level: 'unapproved', approved: false };
 }
 
 // 큰 글 묶음 번호 — 방마다·끝난 일 목록의 지문. 최근 묶음 몇 개를 기억해 화면이 가진 묶음과의 차이만 보낸다 (/api/board X-Board-Delta)
@@ -4445,6 +4470,82 @@ async function handleAction(req, res, url, who) {
     if (body.off === true) { cache.at = 0; return send(res, 200, { ok: true, message: K(proj.name + ' 운영 배포 연결을 끊었어요 — 배포 버튼은 «연결 안 됨» 으로 보여요(운영서버·스크립트는 그대로)', proj.name + ' disconnected — the Deploy button now shows «not connected»') }); }
     const a = runner.approve(next, by); cache.at = 0;   // 주인이 화면에서 명령을 보고 넣은 것 = 승인(같은 기록 줄 · 지문)
     return send(res, 200, { ok: true, message: K('연결했어요 — 상황판이 이 명령만 실행합니다: ', 'Connected — the board runs only this command: ') + a.command + (next.deploy.dryRun ? K(' · 먼저 «시험 배포» 로 확인해 보세요', ' · try «Dry run» first') : '') });
+  }
+  const mbk = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/backup-(setup|approve|run|restore)$/);
+  if (mbk) {
+    const all = loadProjects(), proj = all.find((p) => p.key === mbk[1]);
+    if (!proj) return send(res, 404, { ok: false, message: K('솔루션을 찾을 수 없습니다', 'Project not found') });
+    const by = who.name || who.user;
+    if (mbk[2] === 'setup') {
+      const clean = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, n || 300);
+      const rows = (v, k) => (Array.isArray(v) ? v : []).map((x) => ({ label: clean(x && x.label, 40), [k]: clean(x && x[k]) })).filter((x) => x[k]).slice(0, 8);
+      let next;
+      if (body.off === true) { next = Object.assign({}, proj); delete next.backup; }
+      else {
+        const b = { };
+        if (clean(body.command)) b.command = clean(body.command);
+        if (clean(body.log)) b.log = clean(body.log);
+        const ev = Number(body.every); if (ev && ev !== 24) b.every = Math.max(1, Math.min(744, Math.round(ev)));
+        b.local = rows(body.local, 'path');
+        const sent = (Array.isArray(body.sent) ? body.sent : []).map((x) => (x && clean(x.stamp) ? { label: clean(x.label, 40), stamp: clean(x.stamp) } : { label: clean(x && x.label, 40), ok: clean(x && x.ok, 80) })).filter((x) => x.ok || x.stamp).slice(0, 8);
+        if (sent.length) b.sent = sent;
+        const rec = rows(body.received, 'path'); if (rec.length) b.received = rec;
+        if (clean(body.restore)) b.restore = clean(body.restore);
+        if (body.git === false || (body.git === undefined && proj.backup && proj.backup.git === false)) b.git = false;   // 코드 사본(GitHub) 줄 끔
+        if (!b.local.length && !b.command) return send(res, 400, { ok: false, message: K('이 서버 사본 폴더나 지금 백업 명령 중 하나는 넣어 주세요', 'Enter at least a backup folder or a backup command') });
+        next = Object.assign({}, proj, { backup: b });
+        const pr = backup.problems(backup.conf(next));
+        if (pr.length) return send(res, 400, { ok: false, message: pr.join(' · ') });
+      }
+      try { fs.mkdirSync(LOG_DIR, { recursive: true }); fs.copyFileSync(PROJECTS_FILE, path.join(LOG_DIR, 'projects-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json')); } catch (_) {}
+      const out = all.map((p) => (p.key === proj.key ? next : p));
+      fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(out, null, 2) + '\n'); fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
+      writeLog({ action: 'backup-setup', project: proj.key, by, off: body.off === true || undefined, backup: next.backup || null });
+      delete backupMem[proj.key]; cache.at = 0;
+      if (body.off === true) { const s1 = loadState(); if (s1.backupApproved) delete s1.backupApproved[proj.key]; saveState(s1); return send(res, 200, { ok: true, message: K('백업 등록을 지웠어요(백업 스크립트·사본은 그대로)', 'Backup registration removed (scripts and copies untouched)') }); }
+      backup.approve(next, by); backupRefresh(next, true);
+      return send(res, 200, { ok: true, message: K('저장하고 승인했어요 — 현황을 다시 재는 중', 'Saved and approved — re-reading status') });
+    }
+    if (!backup.conf(proj)) return send(res, 400, { ok: false, message: K(proj.name + ' 은 백업이 등록되지 않았어요', proj.name + ' has no backup registered') });
+    if (mbk[2] === 'approve') {
+      const pr = backup.problems(backup.conf(proj));
+      if (pr.length) return send(res, 400, { ok: false, message: pr.join(' · ') });
+      backup.approve(proj, by); backupRefresh(proj, true); cache.at = 0;
+      return send(res, 200, { ok: true, message: K('이 백업 설정을 승인했어요', 'Backup settings approved') });
+    }
+    if (mbk[2] === 'run') { const r = backup.runNow(proj, by); delete backupMem[proj.key]; cache.at = 0; return send(res, r.ok ? 200 : (r.code || 400), r); }
+    // 복원 요청 — 사본은 서버가 등록 폴더 안에서 다시 찾는다(브라우저가 보낸 경로를 쓰지 않음 · Fable ⑦). 상황판은 덮어쓰지 않고 그 솔루션 대기열에만
+    const kind = body.kind === 'received' ? 'received' : body.kind === 'local' ? 'local' : null;
+    const what = String(body.what || '').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim().slice(0, 1500);
+    if (!kind) return send(res, 400, { ok: false, message: K('사본 종류가 이상해요', 'Bad copy kind') });
+    if (!what) return send(res, 400, { ok: false, message: K('무엇을 되살릴지·왜 를 적어 주세요', 'Write what to restore and why') });
+    { const pr = backup.problems(backup.conf(proj)); if (pr.length) return send(res, 400, { ok: false, message: pr.join(' · ') }); }
+    if (!backup.isApproved(proj)) return send(res, 409, { ok: false, message: K('백업 설정이 승인 뒤 바뀌었어요(또는 승인 전) — 창에서 «이 설정 승인» 먼저', 'Backup settings changed since approval (or never approved) — approve them first') });
+    const cp = await backup.pickCopy(proj, kind, body.i, body.name);
+    if (!cp) return send(res, 400, { ok: false, message: K('그 사본을 등록 폴더에서 찾지 못했어요 — 창을 다시 열어 고르세요', 'That copy is not in the registered folder — reopen and pick again') });
+    const c = backup.conf(proj), when = new Date(cp.t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+    const task = K('[상황판 — 복원 요청] ' + proj.name + ' 백업 사본에서 되살리기 — ' + OWNER + ' 가 상황판 «백업» 창에서 맡김\n' +
+      '- 사본: ' + cp.path + (cp.dir ? ' (폴더)' : '') + ' · ' + cp.label + ' · ' + when + (cp.size != null ? ' · ' + cp.size + ' bytes' : '') + '\n' +
+      (kind === 'received' ? '- ⚠ 이것은 «다른 서버(운영)가 보내 준 사본» 이다. 실고객 연락처·토큰이 들어 있을 수 있다 — 개발서버로 넣기 전에 이 서버의 메일·문자·푸시·결제 발송이 막혀 있는지 먼저 확인하고, 막혀 있지 않으면 덮지 않고 ⏸ 로 묻는다.\n' : '') +
+      '- 되살릴 것·까닭(' + OWNER + ' 말): ' + what + '\n' +
+      '- 절차: ' + (c.restore ? '이 솔루션 복원 문서 ' + c.restore + ' 를 따른다' : '이 솔루션의 복원 절차(문서가 없으면 백업 스크립트를 거꾸로 읽어)를 따른다') + ' · 먼저 지금 상태를 따로 백업해 둔다 · 사본은 옆 임시 폴더에 풀어 비교한다.\n' +
+      '- 덮어쓰기 직전에 ⏸ 로 무엇을(파일·표·줄 수) 어디에 덮는지 보여 주고 ' + OWNER + ' 확인을 받는다. 복원은 이 개발서버에만 — 운영서버에는 쓰지 않는다(운영 복원은 그 솔루션 배포 절차 · ' + OWNER + ' 의 따로 지시).\n' +
+      '- 끝나면 무엇이 돌아왔는지·처음 따로 둔 백업 위치를 보고한다.',
+      '[Board — restore request] Restore ' + proj.name + ' from a backup copy — requested by the owner from the board «Backup» box\n' +
+      '- Copy: ' + cp.path + (cp.dir ? ' (folder)' : '') + ' · ' + cp.label + ' · ' + when + (cp.size != null ? ' · ' + cp.size + ' bytes' : '') + '\n' +
+      (kind === 'received' ? '- ⚠ This copy was sent by another (production) server. It may hold real customer contacts and tokens — before loading it here, confirm this server cannot send mail/SMS/push/payments; if not blocked, do not overwrite and ask (⏸).\n' : '') +
+      '- What and why (owner): ' + what + '\n' +
+      '- Procedure: ' + (c.restore ? 'follow this project\'s restore document ' + c.restore : 'follow this project\'s restore procedure (if none, read the backup script in reverse)') + ' · first take a separate backup of the current state · unpack the copy into a temp folder and compare.\n' +
+      '- Right before overwriting, ask (⏸) showing what (files, tables, row counts) goes where and get the owner\'s OK. Restore on this dev server only — never write to the production server (production restore = the project\'s deploy procedure, on separate owner instruction).\n' +
+      '- When done, report what came back and where the pre-restore backup is.');
+    const st = loadState();
+    const rref = 'restore:' + proj.key + ':' + cp.name;
+    if (st.queue.some((q) => q.ref === rref)) return send(res, 409, { ok: false, message: K('같은 사본 복원 요청이 이미 대기열에 있어요 — 그 일에 말을 덧붙여 주세요', 'A restore request for this copy is already queued — add to that task instead') });
+    const qid = 'rst' + Date.now().toString(36);
+    st.queue.push({ qid, project: proj.key, task, title: K('복원 요청: ', 'Restore: ') + cp.name.slice(0, 30), ref: rref, createdAt: new Date().toISOString() });
+    saveState(st); cache.at = 0;
+    writeLog({ action: 'backup-restore-queued', project: proj.key, by, qid, copy: cp.path, kind });
+    return send(res, 200, { ok: true, qid, message: K(proj.name + ' 대기열에 «복원 요청» 을 넣었어요 — 그 방이 덮기 전에 확인을 물어요', 'Queued a «restore request» for ' + proj.name + ' — the session will ask before overwriting') });
   }
   const mrn = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/deploy-(approve|dry|ack|unhold|baseline|status)$/);
   if (mrn) {
@@ -5922,7 +6023,7 @@ async function handleAction(req, res, url, who) {
 
 const AUTH_ISSUER = 'Server Board';
 const setupPending = new Map();   // nonce → { id, secret, exp } — 인증 앱 등록 중(15분)
-const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup))$/, /^\/api\/deploy-check$/,
+const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup)|backup-(setup|approve|run|restore))$/, /^\/api\/deploy-check$/,
   /^\/api\/schedules/, /^\/api\/rooms\/[0-9a-f]{8}\/delete$/, /^\/api\/queue\/[0-9a-z]+\/delete$/, /^\/api\/asks\/[0-9a-z]+\/delete$/, /^\/api\/fable-wait\/fw[0-9a-z]+\/delete$/,
   /^\/api\/ai-login\//, /^\/api\/setup\/(start|reopen|done)$/, /^\/api\/update\/(apply|revert)$/, /^\/api\/auth\/(invite|kick|remove)$/, /^\/api\/inquiries\/auto$/];
 const needsFresh = (who, url) => who.role === 'owner' && who.via !== 'terminal' && SENSITIVE_POST.some((re) => re.test(url)) && !who.fresh;
@@ -6326,6 +6427,24 @@ async function serveReq(req, res, who) {
       const items = inqOpenItems(loadState(), key);
       return send(res, 200, { ok: true, project: key, items: items.map((x) => x.draft ? Object.assign({}, x, { draftId: inqReplyRef(x).split(':').pop() }) : x) });
     }
+    if (url === '/api/backup') {   // 백업 창 — 현황(새로 잼) · 주인이면 설정 원본·마지막 지금 백업 출력·승인 정보
+      const q = new URL(req.url, ORIGIN).searchParams, proj = loadProjects().find((p) => p.key === (q.get('p') || ''));
+      if (!proj || !canSee(who, proj.key)) return send(res, 404, { ok: false });
+      const own = isOwner(who), on = !!backup.conf(proj);
+      if (!own && !(on && backup.isApproved(proj))) return send(res, 200, { ok: true, key: proj.key, name: proj.name, on, level: on ? 'unapproved' : 'none' });
+      if (on) await backupRefresh(proj, q.get('fresh') === '1');
+      const v = on ? Object.assign({}, (backupMem[proj.key] || {}).v || {}, { approved: backup.isApproved(proj) }) : { level: 'none' };
+      if (!own) { delete v.log; delete v.command; v.git = gitForViewer(v.git); v.problems = (v.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')); return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, on }, v)); }
+      return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, dir: proj.dir, on, raw: proj.backup || null, approvedBy: backup.approvedOf(proj.key), tail: await backup.runTail(proj.key) }, v));
+    }
+    if (url === '/api/backup-copies') {   // 복원 요청 고르기 — 등록 폴더 맨 위 항목(이름·시각·크기) · 주인만
+      if (!isOwner(who)) return send(res, 403, { ok: false });
+      const q = new URL(req.url, ORIGIN).searchParams, proj = loadProjects().find((p) => p.key === (q.get('p') || ''));
+      if (!proj) return send(res, 404, { ok: false });
+      if (!backup.isApproved(proj)) return send(res, 200, { ok: true, label: '', items: [] });
+      const r = await backup.copies(proj, q.get('kind'), q.get('i'));
+      return r ? send(res, 200, Object.assign({ ok: true }, r)) : send(res, 404, { ok: false });
+    }
     if (url === '/api/deploy-setup') {   // 운영 배포 연결 창 — 지금 값 + 그 폴더에서 찾은 배포 스크립트 후보(git 에 있는 것) · 주인만
       if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있어요', 'Owner only') });
       const proj = loadProjects().find((p) => p.key === (new URL(req.url, ORIGIN).searchParams.get('p') || ''));
@@ -6344,7 +6463,7 @@ async function serveReq(req, res, who) {
     }   // 연결 확인만 (쓰는 중에도 끊김을 알리려고 · 아주 작게)
     if (url === '/api/board') {
       const data = await buildBoard();
-      const out = Object.assign({}, data, { update: isOwner(who) ? data.update : null, tsUrl: tsHost ? 'https://' + tsHost : null, loginKeep: { idleH: Math.round(auth.IDLE_MS / 3600e3), absD: Math.round(auth.ABS_MS / 86400e3) } });
+      const out = Object.assign({}, data, { update: isOwner(who) ? data.update : null, projects: isOwner(who) ? data.projects : (data.projects || []).map((p) => (p.backup ? Object.assign({}, p, { backup: backupForViewer(p.backup) }) : p)), tsUrl: tsHost ? 'https://' + tsHost : null, loginKeep: { idleH: Math.round(auth.IDLE_MS / 3600e3), absD: Math.round(auth.ABS_MS / 86400e3) } });
       if (req.headers['x-board-heavy'] !== undefined) {
         const hv = heavyOf(data);
         out.heavy = hv.key;
@@ -8676,6 +8795,8 @@ function tidyDeployFix() {
   }
   if (n) { saveState(st); writeLog({ action: 'deploy-fix-tidy', n }); }
 }
+backup.init({ home: HOME, loadState, peekState, saveState, writeLog, K, onChange: () => { cache.at = 0; } });
+try { backup.bootSweep(); } catch (_) {}
 runner.init({ home: HOME, loadState, saveState, writeLog, memAvailableMb, readProdMarker, K, onDone: runnerDone, approvedInLog, projOf: (k) => loadProjects().find((p) => p.key === k) });
 
 if (require.main === module) {
@@ -8736,4 +8857,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

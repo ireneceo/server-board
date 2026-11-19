@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.5]
+**Backups**
+- New «Backup» line on each project card: newest copy on this server, «sent to another server» (from this server's backup log) and copies received from another server — red when stale or missing, yellow when nothing is kept off this server. Works for a single server (leave sent/received empty) and for two servers that swap copies; the board never connects to the other server
+- «⚙ Paths» registers the folders, log and backup script per project (`projects.json` `backup` — SERVER-GUIDE §2); saving approves them, and any change to the settings or the script needs approval again before «Back up now» runs or members see it
+- The backup line also shows the code copy: whether the project's git is pushed to GitHub (or another remote) — pushed time, commits not pushed (red after the backup interval + 2h), or yellow «no code copy» when there is no remote or no commits. Read-only from this server (the remote is not queried); «Start dev done (includes push)» in the window. `"git": false` hides it
+- «Back up now» (owner) runs the registered script once without a shell, in a clean environment; «Request restore» queues a restore task for that project's session — the board itself overwrites nothing
+
 ## [0.6.4]
 **Updates**
 - The board version and «check for updates» moved from the bottom of 🌐 Language to a chip next to the server name in the title (v… ↻ — tap to check now; shows «check failed» when the repository cannot be reached)

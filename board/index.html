@@ -1711,6 +1711,186 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       bg.appendChild(m); document.body.appendChild(bg); fCmd.i.focus();
     }).catch(function () { toast(K('연결 설정을 못 읽었습니다', 'Could not load the connection settings')); });
   }
+  function bkSize(n) { if (n == null) return ''; var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + u[i]; }
+  var BK_WHY = { missing: K('폴더 없음', 'folder missing'), notdir: K('폴더가 아님', 'not a folder'), noread: K('읽을 수 없음', 'cannot read'), empty: K('비었음', 'empty'), stale: K('오래됨', 'stale'), nolog: K('기록 파일 없음', 'no log file'), nophrase: K('기록에 보낸 줄 없음', 'no «sent» line in the log'), notime: K('기록 줄에 시각이 없어 확인 못 함', 'log lines have no time — cannot tell'), nostamp: K('표시 파일 없음', 'no stamp file'), toomany: K('항목이 2000개 넘어 확인 못 함', 'over 2000 entries — cannot tell') };
+  function bkRowText(r) {
+    var t = r.newest ? r.newest.t : r.t;
+    return (r.state === 'ok' ? '✔ ' : r.state === 'unknown' ? '? ' : '✗ ') + r.label + (t ? ' ' + hm(t) : '') + (r.why ? ' (' + (BK_WHY[r.why] || r.why) + ')' : '');
+  }
+  // 코드 사본(GitHub 등 원격 저장소) — 이 서버가 마지막으로 올린 때와 안 올린 커밋
+  function bkHrs(t) { var h = Math.floor((Date.now() - t) / 3600e3); return h < 1 ? K('1시간 안', 'under 1h') : h < 48 ? h + K('시간', 'h') : Math.floor(h / 24) + K('일', 'd'); }
+  function gitText(g) {
+    var nm = g.where ? g.where.host : K('원격 저장소', 'Remote');
+    if (g.state === 'unknown') return K('? 코드 사본 확인 못 함(git 이 이 폴더를 못 읽음 — 폴더 주인이 다르면 safe.directory 설정)', '? Code copy unknown (git cannot read this folder — set safe.directory if the owner differs)');
+    if (g.state === 'none') return (g.why === 'nogit' ? K('✗ 코드 사본 없음(git 아님)', '✗ No code copy (not a git folder)') : g.why === 'nocommit' ? K('✗ 코드 사본 없음(커밋 0개)', '✗ No code copy (no commits)') : K('✗ 코드 원격 저장소 연결 안 됨', '✗ Code not connected to a remote'));
+    if (g.why === 'noupstream') return '✗ ' + nm + K(' 올릴 가지 지정 안 됨', ': no upstream branch set');
+    if (g.ahead) return (g.state === 'bad' ? '✗ ' : '◐ ') + nm + K(' 안 올린 커밋 ', ': ') + g.ahead + K('개', ' commits not pushed') + (g.oldest ? ' (' + bkHrs(g.oldest) + ')' : '');
+    return '✔ ' + nm + K(' 올림', ' pushed') + (g.synced ? ' ' + hm(g.synced) : '');
+  }
+  function backupLine(p) {
+    var b = p.backup, row = el('div', 'runner-row bk-row');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:4px;';
+    var txt;
+    if (!b) txt = K('백업 · 등록 안 됨', 'Backup · not registered');
+    else if (b.level === 'loading') txt = K('백업 · 재는 중…', 'Backup · checking…');
+    else if (b.level === 'unapproved') txt = K('백업 · 설정 바뀜 — 최종 컨펌자 확인 전', 'Backup · settings changed — awaiting the final approver');
+    else {
+      var parts = (b.rows || []).map(bkRowText);
+      txt = K('백업 ', 'Backup ') + (b.level === 'bad' ? '● ' : b.level === 'warn' ? '◐ ' : '● ') + parts.join(' · ');
+      if (!b.offsite) txt += K(' · 서버 밖 사본 없음', ' · no copy off this server');
+      if (b.git) txt += ' · ' + gitText(b.git);
+      if (b.run && b.run.result === 'running') txt += K(' · 지금 백업 중…', ' · backing up now…');
+      else if (b.run && b.run.result === 'fail') txt += K(' · 지금 백업 실패 ', ' · backup-now failed ') + hm(Date.parse(b.run.end));
+      if (OWN_NOW && b.approved === false) txt += K(' · 승인 필요', ' · needs approval');
+    }
+    var sp = el('span', null, txt);
+    if (b && (b.level === 'bad' || (b.run && b.run.result === 'fail'))) sp.style.color = 'var(--red, #c0392b)';
+    else if (b && b.level === 'warn') sp.style.color = 'var(--amber, #b7791f)';
+    else if (b && b.level === 'ok') sp.style.color = 'var(--green, #2f855a)';
+    row.appendChild(sp);
+    if (OWN_NOW || (b && b.level !== 'unapproved')) {
+      var o = el('button', 'svc-link', b ? K('열기', 'Open') : K('⚙ 등록', '⚙ Register')); o.type = 'button';
+      o.addEventListener('click', function () { openBackup(p); }); row.appendChild(o);
+    }
+    return row;
+  }
+  function openBackup(p, startEdit) {
+    fetch('/api/backup?fresh=1&p=' + encodeURIComponent(p.key), { cache: 'no-store' }).then(function (x) { return x.json(); }).then(function (j) {
+      if (!j.ok) { toast(j.message || K('백업 현황을 못 읽었습니다', 'Could not load backup status')); return; }
+      var bg = el('div', 'modal-bg'); var m = el('div', 'modal svc-modal dsu'); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+      var hd = el('div', 'svc-hd'); hd.appendChild(el('h3', null, p.name + K(' · 백업', ' · Backup')));
+      var x = el('button', 'svc-x', '×'); x.type = 'button'; x.setAttribute('aria-label', K('닫기', 'Close')); hd.appendChild(x); m.appendChild(hd);
+      function done() { document.removeEventListener('keydown', esc); bg.remove(); lastSig = ''; load(); }
+      function esc(ev) { if (ev.key === 'Escape') done(); }
+      x.addEventListener('click', done);
+      bg.addEventListener('click', function (ev) { if (ev.target === bg) done(); });
+      document.addEventListener('keydown', esc);
+      if (j.level === 'unapproved') m.appendChild(el('div', 'mmsg', K('백업 설정이 바뀌어 최종 컨펌자가 확인하기 전까지는 보이지 않아요.', 'The backup settings changed — hidden until the final approver confirms them.')));
+      else if (!j.on || startEdit) { if (OWN_NOW) setupForm(); }
+      else {
+        var lv = { ok: K('● 모두 새것', '● All fresh'), warn: K('◐ 이 서버 안 사본만 있음 — 서버 밖 사본 없음(디스크가 망가지면 같이 잃음)', '◐ Copies only on this server — nothing off-server (lost with the disk)'), bad: K('● 빠진 것 있음', '● Something is missing') };
+        m.appendChild(el('div', 'dsu-st ' + (j.level === 'bad' ? 'off' : 'on'), (lv[j.level] || j.level) + K(' · 기준: ', ' · rule: ') + j.every + K('시간 + 2시간 안에 새 사본', 'h + 2h for a new copy')));
+        (j.problems || []).forEach(function (t) { m.appendChild(el('div', 'svc-n warn', '⚠ ' + t)); });
+        if (OWN_NOW && !j.approved) {
+          var ap = el('div', 'dsu-act'); ap.appendChild(el('span', 'svc-w', K('이 설정은 아직 승인 전이거나 승인 뒤 바뀌었어요(스크립트 내용 포함) — 승인해야 «지금 백업» 이 되고 팀원에게 보여요.', 'Not approved yet, or changed since (incl. script content) — approve to enable «Back up now» and show it to members.')));
+          var apb = el('button', 'btn', K('이 설정 승인', 'Approve these settings')); apb.type = 'button';
+          apb.addEventListener('click', function () { if (window.confirm(K('이 백업 설정을 승인할까요?\n\n', 'Approve these backup settings?\n\n') + JSON.stringify(j.raw, null, 2))) act('/api/projects/' + p.key + '/backup-approve', {}, apb).then(function (r) { if (r && r.ok) { done(); openBackup(p); } }); });
+          ap.appendChild(apb); m.appendChild(ap);
+        }
+        var KIND = { local: K('이 서버 사본', 'On this server'), sent: K('다른 서버로 보냄(이 서버 기록 기준)', 'Sent to another server (per this server\'s log)'), received: K('다른 서버가 보내 준 사본', 'Received from another server') };
+        var last = '';
+        var idx = { local: 0, received: 0 };
+        (j.rows || []).forEach(function (r) {
+          if (r.kind !== last) { m.appendChild(el('div', 'svc-sec', KIND[r.kind] || r.kind)); last = r.kind; }
+          var it = el('div', 'svc-it'); var t = el('div', 'svc-t'); t.appendChild(el('b', null, bkRowText(r))); it.appendChild(t);
+          if (r.path) it.appendChild(el('div', 'svc-w', r.path));
+          if (r.newest) it.appendChild(el('div', 'svc-u', K('가장 새 사본: ', 'Newest: ') + r.newest.name + (r.newest.size != null ? ' · ' + bkSize(r.newest.size) : '') + ' · ' + ago(r.newest.t) + ' · ' + r.n + K('개', ' items') + (r.more ? '+' : '')));
+          if (OWN_NOW && (r.kind === 'local' || r.kind === 'received') && r.n) {
+            var i0 = idx[r.kind]; var rb = el('button', 'svc-link', K('여기서 복원 요청…', 'Request restore from here…')); rb.type = 'button';
+            rb.addEventListener('click', function () { restoreForm(r.kind, i0, r); }); it.appendChild(rb);
+          }
+          if (r.kind === 'local' || r.kind === 'received') idx[r.kind]++;
+          m.appendChild(it);
+        });
+        if (j.git) {
+          var g = j.git;
+          m.appendChild(el('div', 'svc-sec', K('코드 사본 (GitHub 등 원격 저장소)', 'Code copy (GitHub or another remote)')));
+          var gi = el('div', 'svc-it'); var gt = el('div', 'svc-t'); gt.appendChild(el('b', null, gitText(g))); gi.appendChild(gt);
+          if (g.where) gi.appendChild(el('div', 'svc-w', g.where.host + ' · ' + g.where.repo + (g.branch ? ' · ' + g.branch + (g.up ? ' → ' + g.up : '') : '')));
+          var gl = [];
+          if (g.synced) gl.push(K('이 서버가 마지막으로 올리거나 받은 때 ', 'Last pushed/fetched from this server ') + fmt(g.synced));
+          if (g.ahead) gl.push(K('안 올린 커밋 ', 'Commits not pushed: ') + g.ahead + K('개 — 가장 오래된 것 ', ' — oldest ') + (g.oldest ? fmt(g.oldest) : '?') + (g.state === 'bad' ? K(' (기준 ', ' (over the ') + j.every + K('+2시간 넘음)', '+2h rule)') : ''));
+          if (g.behind) gl.push(K('원격 쪽이 커밋 ', 'Remote is ') + g.behind + K('개 앞서 있음(다른 곳에서 올린 것)', ' commits ahead (pushed from elsewhere)'));
+          if (g.dirty) gl.push(K('커밋 안 한 파일 ', 'Uncommitted files: ') + g.dirty + K('개(일하는 중일 수 있음)', ' (may be work in progress)'));
+          if (g.lastCommit && g.state === 'none') gl.push(K('마지막 커밋 ', 'Last commit ') + fmt(g.lastCommit));
+          if (gl.length) gi.appendChild(el('div', 'svc-u', gl.join(' · ')));
+          if (g.state === 'none') gi.appendChild(el('div', 'svc-n warn', K('⚠ 이 코드는 원격 저장소에 없어요 — 사본은 이 서버 디스크와 백업 묶음뿐이에요(이력·되돌리기 없음).', '⚠ This code is not in any remote repository — the only copies are this server\'s disk and the backup archives (no history to roll back to).')));
+          else gi.appendChild(el('div', 'svc-w', K('올리기는 ' + p.name + ' «개발완료» 가 해요(기록·커밋·백업·올리기 — 그 솔루션 규칙대로). 숫자는 이 서버 기준이라 원격에 묻지 않아요.', 'Pushing is done by ' + p.name + '\'s «dev done» (log · commit · backup · push — by that project\'s rules). Counts are from this server; the remote is not queried.')));
+          if (OWN_NOW && g.state !== 'none' && (g.ahead || g.dirty)) {
+            var gb = el('button', 'btn', K('개발완료 시작(올리기 포함)', 'Start dev done (includes push)')); gb.type = 'button';
+            gb.addEventListener('click', function () { if (window.confirm(K(p.name + ' 의 개발완료를 실행할까요? 기록 정리·커밋·백업·GitHub 올리기를 하는 방이 새로 열립니다. 운영 배포는 하지 않습니다.', 'Run dev done for ' + p.name + '? A new session opens to tidy the log, commit, back up and push. It does not deploy to production.'))) gateAct('/api/projects/' + p.key + '/devdone', {}, gb).then(function () { done(); }); });
+            var gr0 = el('div', 'dsu-act'); gr0.appendChild(gb); gi.appendChild(gr0);
+          }
+          m.appendChild(gi);
+        }
+        if (!j.offsite) m.appendChild(el('div', 'svc-w', K('다른 서버와 사본을 주고받으면 «⚙ 경로 설정» 에서 «보냄»·«받은 사본» 칸을 채우세요 — 한 서버만 쓰면 비워 둬도 돼요(노란 표시만).', 'If copies go to/come from another server, fill «sent»/«received» in «⚙ Paths» — on a single server leave them empty (yellow note only).')));
+        if (OWN_NOW) {
+          m.appendChild(el('div', 'svc-sec', K('지금 백업', 'Back up now')));
+          if (j.command) {
+            m.appendChild(el('div', 'svc-w', K('실행: ', 'Runs: ') + j.command + K(' (' + p.name + ' 폴더에서 · 정기 백업과 같은 스크립트)', ' (in the ' + p.name + ' folder · same script as the nightly backup)')));
+            if (j.run) m.appendChild(el('div', 'svc-u', K('마지막: ', 'Last: ') + hm(Date.parse(j.run.at)) + ' · ' + (j.run.result === 'running' ? K('도는 중', 'running') : j.run.result === 'ok' ? K('✔ 끝남', '✔ done') : j.run.result === 'fail' ? K('✗ 실패(종료 코드 ', '✗ failed (exit ') + j.run.code + ')' : K('모름(상황판 재시작)', 'unknown (board restarted)')) + (j.run.ms ? ' · ' + Math.round(j.run.ms / 1000) + K('초', 's') : '')));
+            if (j.tail && j.tail.length) { var pre = el('pre', 'svc-w'); pre.style.cssText = 'max-height:160px;overflow:auto;white-space:pre-wrap;font-size:11px;'; pre.textContent = j.tail.join('\n'); m.appendChild(pre); }
+            var rn = el('button', 'btn', K('지금 백업', 'Back up now')); rn.type = 'button'; rn.disabled = !j.approved || (j.run && j.run.result === 'running');
+            rn.addEventListener('click', function () {
+              var warn = K('지금 백업할까요?\n\n실행: ' + j.command + '\n\n· 정기 백업과 같은 스크립트예요 — 오늘 날짜 사본을 덮어쓸 수 있어요(도중에 실패하면 오늘 사본이 깨질 수 있음).', 'Back up now?\n\nRuns: ' + j.command + '\n\n· Same script as the nightly backup — it may overwrite today\'s copy (a failure midway can break it).')
+                + (j.offsite && (j.rows || []).some(function (r) { return r.kind === 'sent'; }) ? K('\n· 이 스크립트는 다른 서버로 사본도 보내요.', '\n· This script also sends a copy to another server.') : '');
+              if (window.confirm(warn)) act('/api/projects/' + p.key + '/backup-run', {}, rn).then(function (r) { if (r && r.ok) done(); });
+            });
+            var rr = el('div', 'dsu-act'); rr.appendChild(rn); m.appendChild(rr);
+          } else m.appendChild(el('div', 'svc-w', K('지금 백업 명령이 등록되지 않았어요 — «⚙ 경로 설정» 에서 백업 스크립트를 넣으면 버튼이 생겨요.', 'No backup command — add the backup script in «⚙ Paths» to get the button.')));
+          if (j.restore) m.appendChild(el('div', 'svc-w', K('복원 문서: ', 'Restore document: ') + j.restore));
+          var eb = el('button', 'btn', K('⚙ 경로 설정', '⚙ Paths')); eb.type = 'button'; eb.addEventListener('click', function () { done(); openBackup(p, true); });
+          var er = el('div', 'dsu-act'); er.appendChild(eb); m.appendChild(er);
+        }
+      }
+      function restoreForm(kind, i, r) {
+        fetch('/api/backup-copies?p=' + encodeURIComponent(p.key) + '&kind=' + kind + '&i=' + i, { cache: 'no-store' }).then(function (x) { return x.json(); }).then(function (c) {
+          if (!c.ok) { toast(K('사본 목록을 못 읽었습니다', 'Could not list copies')); return; }
+          var b2 = el('div', 'modal-bg'); var f = el('div', 'modal svc-modal dsu');
+          var h2 = el('div', 'svc-hd'); h2.appendChild(el('h3', null, K('복원 요청 · ', 'Restore request · ') + c.label)); var x2 = el('button', 'svc-x', '×'); x2.type = 'button'; h2.appendChild(x2); f.appendChild(h2);
+          f.appendChild(el('div', 'mmsg', K('상황판은 덮어쓰지 않아요. ' + p.name + ' 대기열에 «복원 요청» 일을 넣고, 그 방이 지금 상태를 따로 백업한 뒤 덮기 직전에 확인을 물어요. 운영서버에는 쓰지 않아요.', 'The board overwrites nothing. It queues a «restore request» for ' + p.name + '; that session backs up the current state first and asks before overwriting. Production is never written.')));
+          if (kind === 'received') f.appendChild(el('div', 'svc-n warn', K('⚠ 다른 서버(운영)가 보내 준 사본 — 실고객 연락처·토큰이 들어 있을 수 있어요. 방이 이 서버의 메일·문자·알림 발송이 막혀 있는지 먼저 확인해요.', '⚠ A copy from another (production) server — may contain real customer contacts and tokens. The session first checks that this server cannot send mail/SMS/notifications.')));
+          var sel = document.createElement('select'); sel.style.cssText = 'width:100%;margin:6px 0;';
+          c.items.forEach(function (it) { var o = document.createElement('option'); o.value = it.name; o.textContent = it.name + (it.dir ? '/' : '') + ' · ' + hm(it.t) + (it.size != null ? ' · ' + bkSize(it.size) : ''); sel.appendChild(o); });
+          f.appendChild(sel);
+          var ta = document.createElement('textarea'); ta.className = 'dsu-note'; ta.rows = 3; ta.placeholder = K('무엇을 되살릴지·왜 — 예: 11/17 에 지운 주문 3건만 되살리기 / DB 전체를 11/16 상태로', 'What to restore and why — e.g. only the 3 orders deleted on 11/17 / whole DB back to 11/16'); f.appendChild(ta);
+          var go = el('button', 'btn', K('대기열에 복원 요청 넣기', 'Queue the restore request')); go.type = 'button';
+          go.addEventListener('click', function () {
+            if (!ta.value.trim()) { toast(K('무엇을 되살릴지 적어 주세요', 'Write what to restore')); ta.focus(); return; }
+            act('/api/projects/' + p.key + '/backup-restore', { kind: kind, i: i, name: sel.value, what: ta.value }, go).then(function (rr) { if (rr && rr.ok) { b2.remove(); done(); } });
+          });
+          var gr = el('div', 'dsu-act'); gr.appendChild(go); f.appendChild(gr);
+          x2.addEventListener('click', function () { b2.remove(); });
+          b2.addEventListener('click', function (ev) { if (ev.target === b2) b2.remove(); });
+          b2.appendChild(f); document.body.appendChild(b2); ta.focus();
+        });
+      }
+      function setupForm() {
+        var raw = j.raw || {};
+        m.appendChild(el('div', 'mmsg', K('경로만 등록해요. 상황판은 다른 서버에 접속하지 않고, 파일 이름·크기·시각만 봐요(내용은 안 읽음). 한 서버만 쓰면 «보냄»·«받은 사본» 은 비워 두세요.', 'Register paths only. The board never connects to other servers and reads only names, sizes and times. On a single server leave «sent» and «received» empty.')));
+        function field(label, hint, val, ph, area) {
+          var w = el('label', 'dsu-f'); w.appendChild(el('b', null, label)); if (hint) w.appendChild(el('span', null, hint));
+          var i = document.createElement(area ? 'textarea' : 'input'); if (!area) i.type = 'text'; else { i.rows = 2; i.className = 'dsu-note'; }
+          i.value = val || ''; if (ph) i.placeholder = ph; i.autocomplete = 'off'; i.spellcheck = false; w.appendChild(i); m.appendChild(w); return i;
+        }
+        var lines = function (a, k) { return (a || []).map(function (x) { return (x.label || '') + ' | ' + (x[k] || ''); }).join('\n'); };
+        var fCmd = field(K('지금 백업 명령 (선택)', 'Backup-now command (optional)'), K(p.name + ' 폴더 기준 스크립트 경로 하나 · 인자 없음', 'One script path relative to the ' + p.name + ' folder · no arguments'), raw.command, 'scripts/backup.sh');
+        var fLog = field(K('백업 기록 파일 (선택)', 'Backup log file (optional)'), K('스크립트가 쓰는 기록 · «보냄» 확인에 씀', 'The script\'s log · used to check «sent»'), raw.log, '/var/log/app-backup.log');
+        var fEv = field(K('몇 시간마다', 'Every (hours)'), K('이 시간 + 2시간 넘게 새 사본이 없으면 빨강', 'Red if no new copy within this + 2 hours'), String(raw.every || 24), '24');
+        var fLoc = field(K('이 서버 사본 폴더', 'Backup folders on this server'), K('한 줄에 «이름 | 경로»', 'One per line: «name | path»'), lines(raw.local, 'path'), '개발 DB | /var/backups/app/daily', true);
+        var fSent = field(K('다른 서버로 보냄 (선택)', 'Sent to another server (optional)'), K('한 줄에 «이름 | 기록에 남는 성공 글귀» — 그 줄 앞 시각을 봐요. 표시 파일이면 «이름 | stamp:/경로»', 'One per line: «name | success phrase in the log» — the time at the start of that line is used. Stamp file: «name | stamp:/path»'), (raw.sent || []).map(function (x) { return (x.label || '') + ' | ' + (x.stamp ? 'stamp:' + x.stamp : x.ok); }).join('\n'), '운영서버 | Cross-backup sent', true);
+        var fRec = field(K('다른 서버가 보내 준 사본 (선택)', 'Received from another server (optional)'), K('한 줄에 «이름 | 경로»', 'One per line: «name | path»'), lines(raw.received, 'path'), '운영 DB | ~/backups/cross-backup/prod', true);
+        var fRs = field(K('복원 문서 (선택)', 'Restore document (optional)'), K('복원 요청 때 그 방이 따를 문서(솔루션 폴더 기준)', 'Document the session follows on a restore request (relative to the project folder)'), raw.restore, 'docs/BACKUP_RESTORE.md');
+        var gw = el('label', 'dsu-f'); var gc = document.createElement('input'); gc.type = 'checkbox'; gc.checked = raw.git !== false; gw.appendChild(gc);
+        gw.appendChild(el('span', null, K(' 코드 사본(GitHub 등 원격 저장소)에 올라갔는지도 보기 — 원격을 일부러 안 쓰면 끄세요', ' Also show whether the code is pushed to a remote (GitHub etc.) — turn off if you deliberately use none'))); m.appendChild(gw);
+        var parse = function (t, k) { return t.split('\n').map(function (l) { var i = l.indexOf('|'); if (i < 0) return l.trim() ? { label: '', v: l.trim() } : null; return { label: l.slice(0, i).trim(), v: l.slice(i + 1).trim() }; }).filter(function (x) { return x && x.v; }).map(function (x) { var o = { label: x.label }; o[k] = x.v; return o; }); };
+        var sv = el('button', 'btn', K('저장하고 승인', 'Save and approve')); sv.type = 'button';
+        sv.addEventListener('click', function () {
+          var sent = parse(fSent.value, 'ok').map(function (x) { return /^stamp:/.test(x.ok) ? { label: x.label, stamp: x.ok.slice(6).trim() } : x; });
+          var body = { command: fCmd.value, log: fLog.value, every: Number(fEv.value) || 24, local: parse(fLoc.value, 'path'), sent: sent, received: parse(fRec.value, 'path'), restore: fRs.value, git: gc.checked };
+          if (window.confirm(K('이 백업 설정을 저장하고 승인할까요?\n(지금 실행하지 않아요 — «지금 백업» 을 누를 때만)\n\n', 'Save and approve these backup settings?\n(Nothing runs now — only when you press «Back up now»)\n\n') + JSON.stringify(body, null, 2)))
+            act('/api/projects/' + p.key + '/backup-setup', body, sv).then(function (r) { if (r && r.ok) { done(); setTimeout(function () { openBackup(p); }, 600); } });
+        });
+        var sr = el('div', 'dsu-act'); sr.appendChild(sv); m.appendChild(sr);
+        if (j.on) {
+          var off = el('button', 'btn', K('백업 등록 지우기', 'Remove backup registration')); off.type = 'button';
+          off.addEventListener('click', function () { if (window.confirm(K('백업 등록을 지울까요? (백업 스크립트·사본·정기 백업은 그대로)', 'Remove the registration? (scripts, copies and the nightly backup stay)'))) act('/api/projects/' + p.key + '/backup-setup', { off: true }, off).then(function (r) { if (r && r.ok) done(); }); });
+          var orow = el('div', 'dsu-act'); orow.appendChild(off); m.appendChild(orow);
+        }
+      }
+      bg.appendChild(m); document.body.appendChild(bg); x.focus();
+    }).catch(function () { toast(K('백업 현황을 못 읽었습니다', 'Could not load backup status')); });
+  }
   function runnerLine(p) {
     var R = p.runner, row = el('div', 'runner-row');
     row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:4px;';
@@ -5480,6 +5660,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         btnRow.appendChild(pz);
         dv.appendChild(btnRow);
         if (runnerAfter) dv.appendChild(runnerAfter);
+        if (p.backup || OWN_NOW) dv.appendChild(backupLine(p));
         card.appendChild(dv);
         // 정기 점검은 카드 머리 버튼 바로 아래, 그 아래 «새 일 시키기»
         if (p.schedSteps && p.schedSteps.length) card.appendChild(schedBox(p, (data.schedules || []).filter(function (s) { return s.project === p.key; })));

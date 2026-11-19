@@ -46,6 +46,25 @@ Required: `key` (lowercase, used in queue/questions) · `name` (display) · `dir
 
 **Deploy connection** (2026-11-17) — the box opened from the card's "Deploy · not connected" button, or "⚙ Connection" on a connected card's deploy line, writes four fields to projects.json: `prodLabel`, `deploy.command`, `deploy.dryRun`, `prodMarker` (owner only · saving = approving that command · the old file is kept as `board/log/projects-<time>.json` · cannot change while a deploy is preparing or running). The command must be an executable script inside the project folder and committed in git, plus allowed arguments only (`--auto` `--routine`, dry run `--dry-run`); no shell symbols. "Disconnect" clears the four fields (script and production untouched). **The board never takes or stores production server addresses, accounts or keys** — those live in the project's deploy script / server config. Sessions (AI) and members cannot use this box (403) — a session only writes the script and lists the "board connection values" in its report.
 
+**Backup** (2026-11-18) — a `backup` field per project, written by «⚙ Paths» in the box opened from the card's «Backup …» line (owner only · saving = approving · the old file is kept as `board/log/projects-<time>.json`). The server session may fill in first values, but **until the owner presses «Approve these settings»** members only see «settings changed» and «Back up now» is off (fingerprint = the whole field + the backup script's content — any change needs approval again).
+```json
+"backup": {
+  "command": "scripts/backup.sh",            // optional · «Back up now» — one executable inside the project folder · no arguments, shell symbols or symlinks
+  "log": "/var/log/app-backup.log",          // optional · that script's log — used for «sent»
+  "every": 24,                               // optional · hours between runs — red if no new copy within this + 2
+  "local":    [{ "label": "Dev DB", "path": "/var/backups/app/daily" }],
+  "sent":     [{ "label": "Sent to production", "ok": "Cross-backup sent" }],   // or { "label", "stamp": "/path" } (a file the script touches on success — recommended)
+  "received": [{ "label": "Production DB", "path": "~/backups/cross-backup/prod" }],
+  "restore": "docs/BACKUP_RESTORE.md",       // optional · document the session follows on a restore request
+  "git": false                               // optional · hide the code-copy (GitHub etc.) row — on by default
+}
+```
+- **Single server**: leave `sent` and `received` empty → yellow «no copy off this server» (not a fault). **Two servers swapping copies**: `sent` (the success line in this server's log — the `YYYY-MM-DD HH:MM:SS` at the start of the line; logs without times show grey «cannot tell») · `received` (the folder the other server sends to). The board never connects to the other server.
+- Folders are read at the top level only (no descent · `.part`/`.tmp`/hidden skipped · up to 2000 entries). If a name holds a date (`20261118`, `2026-11-18`) and the file time is older (rsync -a), the name date is used. Paths start with `/` or `~/`; no `..`.
+- «Back up now» is owner only · no shell, clean environment (no board secrets), `nice`/`ionice` · 60-minute limit · refused while the same script is running (including the nightly run) · output in `board/log/backup/`.
+- **Code-copy row** (on by default): whether the project folder's git is pushed to a remote (GitHub etc.) — ✔ pushed (when this server last pushed/fetched) · ◐ N commits not pushed · ✗ oldest unpushed commit older than `every`+2h (red) · ✗ no remote / no commits / not a git folder (yellow — the code lives only on this server and in backup archives) · ? git cannot read the folder (different owner: `git config --global --add safe.directory <folder>`). The remote is never queried (no network, no keys) · user names/tokens in the URL are dropped, only «owner/repo» is shown · members see the state only. Pushing is done by that project's «dev done» (the window's «Start dev done (includes push)»). If you deliberately use no remote, set `"git": false`.
+- «Restore request» overwrites nothing — it queues `[Board — restore request]` for that project (the copy path is re-resolved by the server inside the registered folder). The session backs up the current state first, asks (⏸) right before overwriting, never writes to production, and for a copy from production first checks that mail/SMS/notifications cannot go out.
+
 
 **After adding or changing values**: `bash ~/dev-server/kit/verify.sh` (target: 0 ✘). It also checks every enabled button has its command.
 

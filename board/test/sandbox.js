@@ -4,7 +4,7 @@ const os = require('os');
 const path = require('path');
 
 const SRC = path.join(__dirname, '..');
-const FILES = ['server.js', 'index.html', 'auth.js', 'auth-cli.js', 'gate.js', 'deploy-runner.js', 'key-window.js', 'updater.js', 'update-runner.js', 'config.example.json'];
+const FILES = ['server.js', 'index.html', 'auth.js', 'auth-cli.js', 'gate.js', 'deploy-runner.js', 'backup.js', 'key-window.js', 'updater.js', 'update-runner.js', 'config.example.json'];
 
 // 가짜 claude — 시험이 부르는 명령만 흉내 낸다
 const FAKE_CLAUDE = `#!/usr/bin/env node

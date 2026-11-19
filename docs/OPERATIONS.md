@@ -110,5 +110,13 @@ To change a board's port (on that server, owner):
 4. If used: `sudo tailscale serve --bg <new>` · dev-site gate: re-run `kit/board-gate-install.sh` (the nginx snippet carries the port)
 5. Sign in again on the new address (sign-in cookies are per port) · `bash ~/dev-server/kit/verify.sh`
 
+## 12. Backups · back up now · restore request (per project · final approver)
+1. Under each project card's buttons, one «Backup …» line — ✔/✗ for copies on this server, sent to another server, received from another server. Red = something missing (stale, folder gone); yellow = no copy off this server.
+2. First time: «⚙ Register» → fill the path boxes (one «name | path» per line) → «Save and approve». On a single server leave «sent» and «received» empty. Fields: SERVER-GUIDE section 2 «Backup».
+3. «Open» → «Back up now» runs the registered backup script once (same script as the nightly backup · may overwrite today's copy).
+4. «Request restore from here…» → pick a copy + what and why → it goes into that project's queue. The board overwrites nothing; the session backs up the current state first and asks right before overwriting.
+5. If the settings or the script content change, it shows «needs approval» — press «Approve these settings» in the box.
+6. «GitHub …» at the end of the same line = the code copy. «N commits not pushed» → the window's «Code copy» box → «Start dev done (includes push)»: that project's dev done logs, commits, backs up and pushes. «No code copy» means the code exists only on this server and in backup archives.
+
 ## To be added (next stages)
 Key and password rotation · incident response (block → stop → revoke/rotate → keep evidence → restore) · backup and restore (code rollback vs database restore, restore drills) · what changes after OS account separation
