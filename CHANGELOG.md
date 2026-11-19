@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.6.7]
+**Deploy**
+- Auto redeploy after a fixed failure (`deploy.autoRetry` + `deploy.gateFiles`, off by default): when a deploy you started fails a pre-deploy check, the fix session queued at the front ends ✅ and the board redeploys by itself after a 5-minute notice card (close it to stop). Temporary failures (rate limit, memory, connection) retry once 5 minutes later without a fix. Only within 6 h of your press, at most twice, and only if production is untouched, the deploy/check files did not change and no other session's work slipped in — otherwise the card says why and waits for your button
+- A deploy that finished while the board was restarting is no longer «result unknown»: the runner records the script's exit code next to the log and judges it the same way (exit code + production marker) when it comes back
+- The failure title no longer shows a «=====» divider line as the cause
+**Backup**
+- «needs approval» now says what and why: «backup settings not approved» (never approved — a session's «Confirm done» is not an approval) · «backup script changed — re-approve» (with when) · «backup paths changed — re-approve», and that scheduled backups keep running. An «Approve backup settings…» button sits right in the card's backup details. Deploy-side wording now reads «deploy command not approved» so the two approvals are not confused
+**Connection**
+- «Keep it open» suggestion on a Mac: the server now checks the tunnel itself — a shell-less tunnel (`ssh -N`, what the automatic tunnel uses) no longer gets the suggestion even when this browser lacks the «automatic tunnel» mark
+- «This device drops often (N× in 7 days)» no longer counts a Mac waking from sleep (or a paused tab) as a drop — only outages over 2 minutes while the page was awake, counted once when they recover
+
 ## [0.6.6]
 **Backups**
 - «Connect to GitHub…» for a project with no remote: the board creates a per-project deploy key, shows the steps, refuses public repositories, checks the connection with that key only (pinned GitHub host key), then queues the first commit and push for that project's session (secret filtering and a review before pushing; never force)

@@ -229,3 +229,19 @@ test('원격 연결 — 주소 거르기 · 열쇠(덮지 않음·600·.pub 만)
     const b = JSON.parse(fs.readFileSync(PJ, 'utf8')); b[0].dir = dir0; delete b[0].remote; fs.writeFileSync(PJ, JSON.stringify(b));
   }
 });
+
+test('승인 이유 — 한 번도 안 함 · 스크립트 내용만 바뀜 · 경로 바뀜 · 승인하면 빠짐 (2026-11-19 «승인했는데 왜 계속»)', () => {
+  const bk = board.backup;
+  setProj({ command: 'scripts/backup.sh', local: [{ label: 'DB', path: B }] });
+  const s0 = board.loadState(); if (s0.backupApproved) delete s0.backupApproved.demo; board.saveState(s0);
+  assert.equal(bk.approvalWhy(P()).why, 'never');
+  bk.approve(P(), 't');
+  assert.equal(bk.approvalWhy(P()), null, '승인하면 null');
+  const body = fs.readFileSync(SCRIPT, 'utf8');
+  fs.writeFileSync(SCRIPT, body + '# 고침\n');
+  const w = bk.approvalWhy(P()); assert.equal(w.why, 'script'); assert.ok(w.at && w.since);
+  fs.writeFileSync(SCRIPT, body);
+  assert.equal(bk.approvalWhy(P()), null, '되돌리면 다시 승인 상태');
+  setProj({ command: 'scripts/backup.sh', local: [{ label: 'DB2', path: B }] });
+  assert.equal(bk.approvalWhy(P()).why, 'settings');
+});

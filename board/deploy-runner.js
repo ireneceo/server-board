@@ -7,7 +7,9 @@
  *  - 명령 = projects.json «deploy.command» 그대로 + 주인이 화면에서 승인한 지문(state.deployApproved)과 같을 때만. 바뀌면 다시 승인 전엔 안 돈다.
  *  - 인자는 허용 목록만(--auto · --routine). --skip-* · --force · --no-* 같은 우회는 설정에 넣어도 거부.
  *  - 배포 스크립트가 마지막 성공 뒤 바뀌었으면 정기 점검은 돌리지 않는다(버튼으로만) · 첫 실행도 버튼으로만.
- *  - 자동 다시 시도 0. 실패·«모름» 뒤에는 주인이 확인할 때까지 정기 점검 배포도 선다.
+ *  - 자동 다시 시도는 server.js deployAutoTick 만 — 주인이 버튼을 누른 묶음 안(6시간 · 최대 2번)에서, 운영을 안 건드린 실패(배포 전 검사·일시적)를
+ *    고치는 방이 ✅ 로 고친 뒤에만. 이 실행기 자체는 다시 시도하지 않는다.
+ *    실패·«모름» 뒤에는 주인이 확인할 때까지 정기 점검 배포도 선다.
  *  - 검증·백업·원복은 솔루션 배포 스크립트 안 그대로 — 이 실행기는 누르고·지켜보고·기록할 뿐.
  */
 const fs = require('fs');
@@ -151,13 +153,15 @@ async function start(proj, opts) {
   env.TERM = 'dumb'; env.DEPLOY_BY = 'dev-board'; env.DEPLOY_VIA = opts.via;
   fs.writeSync(fd, `# dev-board deploy runner · ${new Date().toISOString()} · ${proj.key} · via=${opts.via} · by=${opts.by} · ${dry ? 'DRY-RUN · ' : ''}${c.script} ${args.join(' ')} · HEAD ${commit}\n`);
   let child;
-  try { child = spawn(c.script, args, { cwd: c.dir, env, detached: true, stdio: ['ignore', fd, fd] }); }
+  const exitFile = logFile.replace(/\.log$/, '') + '.exit';
+  //   sh 는 스크립트의 종료 코드를 그대로 돌려준다(exit $rc — 지켜보는 finish() 도 같은 값) · 파일 경로는 인자로(스크립트 환경에 안 샘) · tmp→mv 로 반쯤 쓴 파일 없음 (Fable 설계 판정 ①)
+  try { child = spawn('/bin/sh', ['-c', 'f=$1; shift; "$0" "$@"; rc=$?; echo "$rc" > "$f.tmp" && mv "$f.tmp" "$f"; exit $rc', c.script, exitFile].concat(args), { cwd: c.dir, env, detached: true, stdio: ['ignore', fd, fd] }); }
   catch (e) { fs.closeSync(fd); release(); return { ok: false, err: String(e.message || e) }; }
   if (!child.pid) { fs.closeSync(fd); release(); return { ok: false, err: D.K('배포 스크립트를 띄우지 못함', 'Could not start the deploy script') }; }
   fs.closeSync(fd);
   const run = { runId, key: proj.key, at: new Date().toISOString(), via: opts.via, by: opts.by, dry, command: c.script + ' ' + args.join(' '), commit, pid: child.pid,
-    markerBefore: before && before.at ? before.at : null, log: logFile, result: 'running' };
-  if (!dry) fs.writeFileSync(lockPath(), JSON.stringify({ key: proj.key, runId, pid: child.pid, procStart: procStart(child.pid), at: run.at, log: logFile }));
+    markerBefore: before && before.at ? before.at : null, log: logFile, exitFile, scriptsHash: scriptsHash(c), result: 'running' };
+  if (!dry) fs.writeFileSync(lockPath(), JSON.stringify({ key: proj.key, runId, pid: child.pid, procStart: procStart(child.pid), at: run.at, log: logFile, exitFile }));
   saveRun(proj.key, run);
   D.writeLog({ action: 'deploy-run-start', project: proj.key, runId, via: opts.via, by: opts.by, dry, pid: child.pid, commit: commit && commit.slice(0, 9) });
   let timedOut = false;
@@ -206,7 +210,7 @@ function failCause(text, opts) {
     hint: K('다른 무거운 일(빌드·시험)이 끝난 뒤 다시 누르면 돼요', 'Press again after other heavy work (builds, tests) finishes') };
   if (/ssh: connect|Connection (timed out|refused|reset)|Could not resolve|Permission denied \(publickey|운영서버 SSH.*(실패|FAIL)/i.test(t)) return { kind: 'network', retry: true, items: [], title: K('운영서버 접속 실패', 'Could not reach production'),
     hint: K('몇 분 뒤 다시 누르세요 — 계속되면 운영서버 상태를 봐야 해요', 'Press again in a few minutes — if it keeps failing, production needs a look') };
-  const last = errLine || (lines.filter((l) => l.trim()).slice(-1)[0] || '').trim().slice(0, 200);
+  const last = errLine || (lines.filter((l) => l.trim() && !/^[\s=*\-─━_#~.]+$/.test(l)).slice(-1)[0] || '').trim().slice(0, 200);   // «=====» 같은 장식줄은 원인이 아님
   return { kind: 'other', retry: false, items: [], title: last || K('원인 줄을 못 찾음', 'No error line found'), hint: K('고치는 방이 기록 전체를 읽고 원인을 찾아요', 'The fix session reads the whole log to find the cause') };
 }
 async function finish(proj, c, run, code, sig, timedOut) {
@@ -250,7 +254,8 @@ function saveRun(key, run) {
   st.deployRunLog = [{ key, runId: run.runId, at: run.at, end: run.end || null, via: run.via, dry: run.dry, result: run.result }].concat((st.deployRunLog || []).filter((x) => x.runId !== run.runId)).slice(0, 50);
   D.saveState(st);
 }
-/** 상황판 재시작 뒤 — 잠금이 남았는데 이 프로세스가 띄운 게 아니면: 살아 있으면 지켜보기만, 죽었으면 «모름» 으로 남김(다시 실행하지 않음) */
+/** 상황판 재시작 뒤 — 잠금이 남았는데 이 프로세스가 띄운 게 아니면: 살아 있으면 지켜보기만, 끝났으면 종료 코드 파일로 finish() 와 같은 판정(다시 실행하지 않음)
+ *  종료 코드 파일이 없으면(옛 실행·시간 넘김 kill) «모름» 그대로 */
 function recover() {
   const lk = readLock();
   if (!lk || running.has(lk.key)) return;
@@ -258,11 +263,22 @@ function recover() {
   if (r.runId === lk.runId && r.result !== 'running') return;
   if (lockAlive(lk)) return;   // 아직 돎 — 끝 코드를 못 받으니 끝나면 다음 틱에 아래로 (틱마다 부름 · Fable 완료 검증 ②)
   if (lk.starting && Date.now() - Date.parse(lk.at || 0) < 120000) return;   // 다른 프로세스가 막 자리 잡는 중
+  const proj = D.projOf ? D.projOf(lk.key) : null, c = proj ? conf(proj) : null;
+  let code = null;
+  try { const t = fs.readFileSync(lk.exitFile || r.exitFile || '', 'utf8').trim(); if (/^\d+$/.test(t)) code = Number(t); } catch (_) {}
+  if (code !== null && c && r.runId === lk.runId) {
+    const run = Object.assign({}, r, { log: r.log || lk.log, recovered: true });
+    running.set(lk.key, { runId: lk.runId, recovering: true });   // 표식 확인(최대 2분) 사이 다음 틱이 또 부르지 않게 — finish() 가 지움
+    D.writeLog({ action: 'deploy-run-recovered', project: lk.key, runId: lk.runId, code });
+    finish(proj, c, run, code, null, false).catch((e) => { running.delete(lk.key); D.writeLog({ action: 'deploy-run-finish-error', err: String(e.message || e) }); });
+    return;
+  }
   const run = Object.assign({}, r, { runId: lk.runId, key: lk.key, result: 'unknown', end: new Date().toISOString(), via: r.via || '?', command: r.command || '?', at: r.at || lk.at,
     why: D.K('상황판이 지켜보지 못한 사이 끝남(재시작 등) — 결과 모름', 'ended while the board was not watching (restart etc.) — result unknown'), tail: tailOf(lk.log, 25), log: lk.log });
+  run.cause = failCause(tailOf(lk.log, 80), {});
   saveRun(lk.key, run);
   D.writeLog({ action: 'deploy-run-recovered-unknown', project: lk.key, runId: lk.runId });
-  if (D.onDone && D.projOf) { const proj = D.projOf(lk.key); if (proj) D.onDone(proj, run); }
+  if (D.onDone && proj) D.onDone(proj, run);
 }
 /** 주인 확인 — 실패·모름을 봤다고 표시하고(정기 배포 다시 허용) 남은 잠금을 푼다 */
 function ack(key, by) {

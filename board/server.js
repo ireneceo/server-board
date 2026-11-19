@@ -2383,6 +2383,12 @@ function deployFixedBy(st, rooms, key, rr) {
   return r ? { room: r.id, at: r.lastReportAt } : null;
 }
 function deployFixState(st, rooms, key, rr) {
+  const out = deployFixState0(st, rooms, key, rr);
+  const da = (st.deployAuto || {})[key];
+  if (out && da && da.pending && da.pending.runId === rr.runId) { out.auto = { n: (da.n || 0) + 1, max: DEPLOY_AUTO.max, kind: da.pending.kind, noticeAt: da.pending.noticeAt || null }; if (da.pending.kind === 'retry' && out.state === 'none') out.state = 'retry'; }   // 자동 다시 배포가 맡음 (12절)
+  return out;
+}
+function deployFixState0(st, rooms, key, rr) {
   if (!rr || (rr.result !== 'fail' && rr.result !== 'unknown')) return null;
   const qid = rr.fixQid;
   if (!qid) return { state: 'none' };
@@ -2577,14 +2583,19 @@ async function gateUnpauseTick() {
       try {
         const gr = p.gateRoom ? board.rooms.find((x) => x.id === p.gateRoom) : null;
         const proj0 = projects.find((x) => x.key === key);
-        const via = p.gate === 'check' ? 'schedule' : 'button';
+        const via = p.gate === 'check' ? 'schedule' : p.runnerVia === 'auto' ? 'auto' : 'button';
         const prepOk = !p.gateRoom || (!!gr && reportOk(gr.lastReport));
         const started = proj0 ? await runnerGo(proj0, via, { prepOk, by: p.runnerBy || (via === 'schedule' ? 'schedule' : OWNER), fableOk: !!p.runnerFableOk, ack: !!p.runnerAck, room: gr, memWaitSince: p.memWaitSince }) : null;
         const s8 = loadState();
         if (s8.paused[key] && s8.paused[key].gateQid === p.gateQid) {
           if (started && started.ok) { s8.paused[key].gateRunner = started.runId; delete s8.paused[key].runnerPending; delete s8.paused[key].memWaitSince; saveState(s8); continue; }
           if (started && started.memWait) { if (!s8.paused[key].memWaitSince) s8.paused[key].memWaitSince = new Date().toISOString(); s8.paused[key].memNeed = started.need; s8.paused[key].memAvail = started.avail; saveState(s8); continue; }   // 메모리 기다림 — 일시정지를 쥔 채 다음 틱에 다시
-          delete s8.paused[key].runnerPending; delete s8.paused[key].memWaitSince; saveState(s8);
+          delete s8.paused[key].runnerPending; delete s8.paused[key].memWaitSince;
+          if (via === 'auto') {   // 자동 다시 배포가 못 뜸 — «다시 배포 중» 카드를 빼고(까닭 카드는 runnerGo 가 올림) 주인 버튼으로 (Fable 완료 검증 ③)
+            for (const k of Object.keys(s8.asks)) if (s8.asks[k].project === key && s8.asks[k].byDoctor && /자동으로 다시 배포 중|auto redeploy running/.test(s8.asks[k].title || '')) delete s8.asks[k];
+            writeLog({ action: 'deploy-auto-notstarted', project: key });
+          }
+          saveState(s8);
         }
       } finally { runnerStarting.delete(key); }
     }
@@ -3086,7 +3097,7 @@ function backupView(p) {
   const m = backupMem[p.key];
   if (!m || Date.now() - m.at > 5 * 60 * 1000 || m.fp !== backup.fingerprint(p) || (m.v && m.v.run && m.v.run.result === 'running')) backupRefresh(p);
   const v = m ? m.v : { level: 'loading' };
-  return Object.assign({}, v, { approved: backup.isApproved(p) });
+  return Object.assign({}, v, { approved: backup.isApproved(p), approvalWhy: backup.approvalWhy(p) || undefined });
 }
 function backupRefresh(p, force) {
   const m = backupMem[p.key] || (backupMem[p.key] = { at: 0, v: null });
@@ -3277,6 +3288,32 @@ function pidOfInode(inode) {
   }
   return { pid: null, sealedSsh };
 }
+/** SSH 통로가 «셸 창과 함께 연 것(ssh -L 서버 → 터미널 창)» 인지 «셸 없이 통로만(ssh -N — 맥 자동 통로)» 인지 — 'shell' | 'noshell' | ''(모름)
+ *  sshd 는 셸·명령을 열면 이름이 «sshd: 사용자@pts/N»·«@notty» 로 바뀌고, -N 은 «sshd: 사용자» 그대로 남는다(OpenSSH session_proctitle).
+ *  어느 sshd 인지는 소켓의 cgroup(로그인 세션 scope)으로 짝지음 — sshd 의 fd 는 같은 계정도 못 읽어서(dumpable 0).
+ *  화면이 «자동 통로 있음» 표시(브라우저 저장)만으로 판단해, 자동 통로를 깐 맥도 다른 브라우저·표시 지워짐이면 «터미널 창 통로» 로 잘못 봤다 */
+function tunnelShell(sk) {
+  if (sk._tunShell !== undefined) return sk._tunShell;
+  let r = '';
+  try {
+    const out = require('child_process').execFileSync('ss', ['-Htnpe', 'state', 'established', '( sport = :' + sk.remotePort + ' and dport = :' + sk.localPort + ' )'], { timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const m = /cgroup:(\S*\/session-\d+\.scope)/.exec(out);
+    if (m) {
+      for (const p of fs.readdirSync('/proc')) {
+        if (!/^\d+$/.test(p)) continue;
+        try {
+          if (fs.statSync('/proc/' + p).uid !== BOARD_UID) continue;
+          if (!fs.readFileSync('/proc/' + p + '/cgroup', 'utf8').trim().endsWith(m[1])) continue;
+          const cmd = fs.readFileSync('/proc/' + p + '/cmdline', 'utf8').replace(/\0+$/, '');
+          if (!/^sshd: /.test(cmd) || /\[(priv|net)\]/.test(cmd)) continue;
+          r = /@/.test(cmd) ? 'shell' : 'noshell'; break;
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  sk._tunShell = r;
+  return r;
+}
 /** 주인 계정 프로그램이 사람(SSH 터미널·통로)인지 작업방 AI(claude 아래)인지 — claude 를 먼저 본다(터미널에서 띄운 claude 도 AI) */
 function ownerKind(pid) {
   if (pid === process.pid) return 'system';
@@ -3404,7 +3441,7 @@ async function permit(who, url, body) {
     return no(K('배포·개발완료는 최종 컨펌자의 버튼으로만 시작합니다', 'Deploy and dev-done start only from the final approver\'s buttons'));
   const projOk = (key) => canSee(who, key);
   // 상황판이 만든 일처럼 보이는 글·답장 번호는 주인 버튼으로만 — 작업방이 «주인이 눌렀어요» 일을 흉내 내지 못하게 (Fable 완료 검증 ③)
-  if (url === '/api/rooms' && (/^\s*\[(상황판|Board)\s*[—-]/.test(String(body.task || '')) || /^\s*reply:/i.test(String(body.ref || ''))))
+  if (url === '/api/rooms' && (/^\s*\[(상황판|Board)\s*([—-]|배포 실행기|deploy runner)/i.test(String(body.task || '')) || /^(배포 실패 원인 고치기|Fix deploy failure)$/.test(String(body.title || body.name || '').trim()) || /^\s*reply:/i.test(String(body.ref || ''))))
     return no(K('상황판이 만드는 일(«[상황판 — …]»·답장 번호)은 작업방·팀원이 넣을 수 없습니다', 'Board-made tasks («[Board — …]», reply refs) cannot be queued by sessions or members'));
   if (who.role === 'agent') {
     if (!AGENT_POST.some((re) => re.test(url))) return no(K('작업방(AI)은 이 버튼을 쓸 수 없습니다 — 주인 화면에서만. 주인인데 이 말이 보이면 SSH 통로(ssh -L)나 Tailscale 주소로 열어 주세요(이 길로는 누구인지 못 가림)', 'AI sessions cannot use this — owner screen only. If you are the owner, open the board through an SSH tunnel (ssh -L) or the Tailscale address (this route cannot be identified)'));
@@ -4516,7 +4553,7 @@ async function handleAction(req, res, url, who) {
       const pr = backup.problems(backup.conf(proj));
       if (pr.length) return send(res, 400, { ok: false, message: pr.join(' · ') });
       backup.approve(proj, by); backupRefresh(proj, true); cache.at = 0;
-      return send(res, 200, { ok: true, message: K('이 백업 설정을 승인했어요', 'Backup settings approved') });
+      return send(res, 200, { ok: true, message: K(proj.name + ' 백업 설정을 승인했어요 — «승인 필요» 표시가 빠지고 «지금 백업»·복원 요청이 열려요', proj.name + ' backup settings approved — «Back up now» and restore requests are unlocked') });
     }
     if (mbk[2] === 'run') { const r = backup.runNow(proj, by); delete backupMem[proj.key]; cache.at = 0; return send(res, r.ok ? 200 : (r.code || 400), r); }
     // 복원 요청 — 사본은 서버가 등록 폴더 안에서 다시 찾는다(브라우저가 보낸 경로를 쓰지 않음 · Fable ⑦). 상황판은 덮어쓰지 않고 그 솔루션 대기열에만
@@ -5071,6 +5108,7 @@ async function handleAction(req, res, url, who) {
       if (bad.length) return send(res, 409, { ok: false, code: 'RUNNER_BLOCKED', checks: ck, fable: bad.some((x) => x.code === 'fable'), needAck: bad.some((x) => x.code === 'last-run' || x.code === 'lock-stale'), lastFail,
         message: K(proj.name + ' 배포를 시작하지 않았습니다 — ', proj.name + ' deploy not started — ') + bad.map((x) => x.text).join(' · ') });
       rItem = Object.assign(gateItem('deploy', proj.key, ''), { runner: true, runnerBy: who.name || who.user, fableOk: body.fableOk === true, ack: body.ack === true });
+      { const s0 = loadState(); s0.deployAuto = s0.deployAuto || {}; s0.deployAuto[proj.key] = { pressedAt: new Date().toISOString(), by: who.name || who.user, n: 0 }; saveState(s0); }   // 새 누름 = 새 자동 다시 배포 묶음 (12절)
       if (body.fableOk === true) writeLog({ action: 'deploy-fable-ok', project: proj.key, by: who.name || who.user });
     }
     const g = await pauseForGate(proj, rItem || gateItem('deploy', proj.key, typeof body.note === 'string' ? body.note.trim() : ''), K('배포', 'deploy'));
@@ -6505,7 +6543,7 @@ async function serveReq(req, res, who) {
       const own = isOwner(who), on = !!backup.conf(proj);
       if (!own && !(on && backup.isApproved(proj))) return send(res, 200, { ok: true, key: proj.key, name: proj.name, on, level: on ? 'unapproved' : 'none' });
       if (on) await backupRefresh(proj, q.get('fresh') === '1');
-      const v = on ? Object.assign({}, (backupMem[proj.key] || {}).v || {}, { approved: backup.isApproved(proj) }) : { level: 'none' };
+      const v = on ? Object.assign({}, (backupMem[proj.key] || {}).v || {}, { approved: backup.isApproved(proj), approvalWhy: backup.approvalWhy(proj) || undefined }) : { level: 'none' };
       if (!own) { delete v.log; delete v.command; v.git = gitForViewer(v.git); v.problems = (v.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')); return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, on }, v)); }
       return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, dir: proj.dir, on, raw: proj.backup || null, approvedBy: backup.approvedOf(proj.key), tail: await backup.runTail(proj.key) }, v));
     }
@@ -6560,6 +6598,7 @@ async function serveReq(req, res, who) {
         }
       }
       out.me = { role: who.role, user: who.user, name: who.name, projects: who.projects, via: who.via, viaName: VIA_NAMES[who.via] || who.via, fresh: !!who.fresh, totp: auth.hasTotp(who.user) };   // 화면이 역할에 맞게 버튼을 숨김
+      if (who.via === 'tunnel') out.me.tunShell = tunnelShell(req.socket);   // 통로 종류 — «늘 열어 두기» 권하기를 셸 창 통로에만
       { const ps = peekState(); out.proposals = Object.values(ps.proposals || {}); out.proposalDone = (ps.proposalDone || []).slice(-30); }
       if (TEAM.deployConfirm.length) { const ps2 = peekState(); out.projects = (out.projects || []).map((p) => TEAM.deployConfirm.includes(p.key) ? Object.assign({}, p, { unchecked: uncheckedWork(data, ps2, p.key) }) : p); }
       out.team = { members: TEAM.members.length, approval: TEAM.approval, smallDirect: TEAM.smallDirect, deployConfirm: TEAM.deployConfirm };
@@ -7546,7 +7585,7 @@ async function startQueuedNow(next, proj) {
     const c = runner.conf(proj);
     if (c && !c.prep) {
       const s9 = loadState(); s9.queue = s9.queue.filter((q) => q.qid !== next.qid);
-      if (s9.paused[proj.key] && s9.paused[proj.key].gateQid === next.qid) Object.assign(s9.paused[proj.key], { runnerPending: true, runnerBy: next.runnerBy, runnerFableOk: !!next.fableOk, runnerAck: !!next.ack, gateStartedAt: new Date().toISOString() });
+      if (s9.paused[proj.key] && s9.paused[proj.key].gateQid === next.qid) Object.assign(s9.paused[proj.key], { runnerPending: true, runnerBy: next.runnerBy, runnerVia: next.autoRetry ? 'auto' : undefined, runnerFableOk: !!next.fableOk, runnerAck: !!next.ack, gateStartedAt: new Date().toISOString() });
       saveState(s9); writeLog({ action: 'queue-auto-start', project: proj.key, name: next.title, qid: next.qid, gate: 'deploy', runner: true, ok: true });
       setTimeout(() => gateUnpauseTick().catch(() => {}), 200);
       return { ok: true, id: null, err: null };
@@ -7596,7 +7635,7 @@ async function startQueuedNow(next, proj) {
   }
   if (r.ok && m && next.gate) {   // 이 gate 가 건 일시정지 — 이 방이 끝나면 풀린다(gateUnpauseTick)
     const s5 = loadState(); const pz = s5.paused[proj.key];
-    if (pz && pz.gateQid === next.qid) { pz.gateRoom = m[1]; pz.gateStartedAt = new Date().toISOString(); if (next.runner) Object.assign(pz, { runnerPending: true, runnerBy: next.runnerBy, runnerFableOk: !!next.fableOk, runnerAck: !!next.ack }); else if (pz.runnerCheck) Object.assign(pz, { runnerPending: true, runnerBy: 'schedule' }); saveState(s5); }
+    if (pz && pz.gateQid === next.qid) { pz.gateRoom = m[1]; pz.gateStartedAt = new Date().toISOString(); if (next.runner) Object.assign(pz, { runnerPending: true, runnerBy: next.runnerBy, runnerVia: next.autoRetry ? 'auto' : undefined, runnerFableOk: !!next.fableOk, runnerAck: !!next.ack }); else if (pz.runnerCheck) Object.assign(pz, { runnerPending: true, runnerBy: 'schedule' }); saveState(s5); }
   }
   if (r.ok && m && next.setup) { const s6 = loadState(); s6.setup = s6.setup || {}; s6.setup.room = m[1]; delete s6.setup.sessionId; saveState(s6); }   // 처음 설정 방 번호
   if (next.gate === 'check' && !(r.ok && m)) {   // 실행기 정기 점검인데 방 번호를 못 잡음 — 조용히 빠지지 않게 맨 위에
@@ -8458,6 +8497,8 @@ async function doctorTick(force) {
       for (const proj of loadProjects()) {
         const rr = (st.deployRuns || {})[proj.key], df = (st.deployFix || {})[proj.key];
         if (!rr || rr.ackAt || !df || df.doneAt || rr.fixQid !== df.qid) continue;
+        const da = (st.deployAuto || {})[proj.key];
+        if (da && ((da.pending && da.pending.fixQid === df.qid) || da.gaveUpFor === df.qid)) continue;   // 자동 다시 배포가 맡음 / 이미 까닭 붙여 알림 (12절)
         const fs1 = deployFixState(st, board.rooms, proj.key, rr);
         if (!fs1 || fs1.state !== 'done') continue;
         df.doneAt = new Date(now).toISOString(); df.room = fs1.room;
@@ -8721,7 +8762,7 @@ async function runnerCtx(proj, via, extra) {
 /** 조건이 맞으면 누른다 — 안 맞으면 맨 위에 까닭(정기 점검) · 돌려주기 { ok, runId } */
 async function runnerGo(proj, via, o) {
   const ck = await runner.check(proj, await runnerCtx(proj, via, { prepOk: o.prepOk, ack: o.ack }));
-  const bad = ck.filter((x) => !x.ok && !(x.code === 'fable' && o.fableOk) && !(via === 'button' && x.code === 'unchecked'));
+  const bad = ck.filter((x) => !x.ok && !(x.code === 'fable' && o.fableOk) && !((via === 'button' || via === 'auto') && x.code === 'unchecked'));   // auto 는 deployAutoTick 이 «고친 방 말고 확인 안 된 일 없음» 을 먼저 봄
   if (bad.length) {
     const st = loadState();
     const nothing = bad.length === 1 && bad[0].code === 'new-commits';
@@ -8755,7 +8796,7 @@ function deployPrepText(proj) {
     '2. Read what would ship; if something must not ship now (half-done feature, risky DB change): POST /api/deploy-hold {"project":"' + proj.key + '","room":"<this session id>","reason":"…"} and make the first line ⏸.\n' +
     '3. When done, first line «✅ Deploy prep done» + one or two lines. Never bypass the deploy script\'s checks.');
 }
-const DEPLOY_BAD_ASK_RE = /배포 (안 함|시작 못 함|실패|결과 모름)|deploy (not run|did not start|failed|result unknown)/;
+const DEPLOY_BAD_ASK_RE = /배포 (안 함|시작 못 함|실패|결과 모름)|자동으로 다시 배포|deploy (not run|did not start|failed|result unknown)|auto[- ]redeploy/i;
 /** 실행이 끝나면 — 성공은 기록만 · 실패·모름은 맨 위에(되돌리는 길 1줄 · 실행은 안 함) */
 function runnerDone(proj, run) {
   cache.at = 0;
@@ -8767,6 +8808,7 @@ function runnerDone(proj, run) {
     const stale = st.queue.filter((q) => q.project === proj.key && q.deployFix);
     if (stale.length) { st.queue = st.queue.filter((q) => !stale.includes(q)); writeLog({ action: 'deploy-fix-dropped', project: proj.key, qids: stale.map((q) => q.qid), why: 'deploy-ok' }); }
     if (st.deployFix) delete st.deployFix[proj.key];
+    if (st.deployAuto && st.deployAuto[proj.key]) { if (run.via === 'auto') writeLog({ action: 'deploy-auto-ok', project: proj.key, runId: run.runId, n: st.deployAuto[proj.key].n }); delete st.deployAuto[proj.key]; }   // 나갔으면 묶음 끝
     saveState(st);
     queueReleaseCommit(proj, run);
     return;
@@ -8776,7 +8818,16 @@ function runnerDone(proj, run) {
   const back = proj.deploy && proj.deploy.rollback ? '\n' + K('되돌리는 명령(실행은 안 함 — 필요하면 서버 창에서): ', 'Rollback command (not run — use the server window if needed): ') + proj.deploy.rollback : '';
   const prevRun = (st.deployRunLog || []).find((x) => x.key === proj.key && x.runId !== run.runId && !x.dry);
   const sameAgain = prevRun && (prevRun.result === 'fail' || prevRun.result === 'unknown');
-  const needFix = !(cz.retry && !sameAgain);
+  // 자동 다시 배포(12절) — 대상이면 일시적 실패는 고칠 일 없이 잠깐 뒤 다시 · 배포 전 검사 실패는 고치는 방 ✅ 뒤 다시 (deployAutoTick 이 누름)
+  st.deployAuto = st.deployAuto || {};
+  const autoNo = deployAutoWhyNot(st, proj, run, cz);
+  const ch = st.deployAuto[proj.key];
+  if (ch) delete ch.pending;
+  const autoOn = !autoNo, autoN = ch ? (ch.n || 0) + 1 : 1;
+  const needFix = !(cz.retry && (autoOn || !sameAgain));
+  if (autoOn && !needFix) ch.pending = { kind: 'retry', runId: run.runId, startAt: new Date(Date.now() + DEPLOY_AUTO.retryWaitMs).toISOString() };
+  const autoTxt = autoOn ? K('\n\n[자동 다시 배포 — ' + autoN + '/' + DEPLOY_AUTO.max + '번째] 이 방이 ✅ 로 끝내면 상황판이 자동으로 다시 배포한다(__OWNER__ 지시 11-19). 그래서 ✅ 는 걸린 검사를 개발서버에서 다시 돌려 통과한 것을 확인했을 때만 쓴다. 검사·배포 스크립트(' + ((proj.deploy || {}).gateFiles || []).join(', ') + ')를 고치거나 약하게 바꾸면 자동 다시 배포는 서고 __OWNER__ 버튼으로 간다 — 검사를 느슨하게 하는 것은 고침이 아니다. __OWNER__ 결정이 필요하면 ⏸.',
+      '\n\n[Auto redeploy — ' + autoN + '/' + DEPLOY_AUTO.max + '] When this session ends with ✅ the board redeploys automatically. So write ✅ only after rerunning the failed check on dev and seeing it pass. Changing or loosening the check/deploy scripts stops the auto redeploy (it goes to the owner\'s button). If the owner must decide, ⏸.') : '';
   let fixQid = null, fixNote = '';
   if (needFix) {
     const openFix = st.queue.find((q) => q.project === proj.key && q.deployFix);
@@ -8785,7 +8836,7 @@ function runnerDone(proj, run) {
     const causeTxt = K('원인(기록에서 읽음): ', 'Cause (from the log): ') + cz.title + (cz.items.length ? '\n' + cz.items.map((x, i) => '  ' + (i + 1) + '. ' + x).join('\n') : '');
     if (openFix) {
       fixQid = openFix.qid;
-      openFix.task += '\n\n' + K('[같은 일 — ' + String(run.end || '').slice(11, 16) + ' UTC 다시 실패] 기록: ', '[Same task — failed again ' + String(run.end || '').slice(11, 16) + ' UTC] Log: ') + run.log + '\n' + causeTxt;
+      openFix.task += '\n\n' + K('[같은 일 — ' + String(run.end || '').slice(11, 16) + ' UTC 다시 실패] 기록: ', '[Same task — failed again ' + String(run.end || '').slice(11, 16) + ' UTC] Log: ') + run.log + '\n' + causeTxt + autoTxt;
       fixNote = K('고치는 일이 이미 대기열에 있어 이번 기록을 더했어요', 'A fix task was already queued — this log was added to it');
     } else if (workingQid) {
       fixQid = workingQid;
@@ -8795,27 +8846,164 @@ function runnerDone(proj, run) {
       const item = { qid: fixQid, project: proj.key, title: K('배포 실패 원인 고치기', 'Fix deploy failure'), createdAt: new Date().toISOString(), deployFix: true, front: true,
         task: K('[상황판 배포 실행기 — ' + bad + ']\n상황판이 `' + run.command + '` 을 실행했고 결과가 «' + run.result + '» 였다. 기록: ' + run.log + '\n' + causeTxt +
           '\n할 일: 기록을 읽고 원인을 개발서버에서 고쳐 커밋한다. 배포 전 검사(게이트)에 걸렸으면 같은 검사를 개발서버에서 다시 돌려 통과하는 것까지 확인한다(검사를 끄거나 건너뛰는 것은 고침이 아님). ' +
-          '고치는 데 __OWNER__ 결정이 필요하면(외부 주소 등록·데이터 판단 등) ⏸ 로 무엇을 골라야 하는지 묻는다. 배포 명령·운영 접속 명령은 실행하지 않는다 — 다시 배포는 __OWNER__ 가 배포 버튼으로 한다(고치면 상황판이 __OWNER__ 에게 알림). 운영이 반쯤 바뀌었을 가능성(«모름»)이면 읽기로만 상태를 확인해 보고에 적는다. 보고 첫 줄 규칙 그대로 · 보고에 «무엇 때문에 걸렸고 무엇을 고쳤는지» 한두 줄.',
+          '고치는 데 __OWNER__ 결정이 필요하면(외부 주소 등록·데이터 판단 등) ⏸ 로 무엇을 골라야 하는지 묻는다. 배포 명령·운영 접속 명령은 실행하지 않는다 — 다시 배포는 상황판이 한다(자동 다시 배포 대상이면 ✅ 뒤 저절로, 아니면 __OWNER__ 버튼). 운영이 반쯤 바뀌었을 가능성(«모름»)이면 읽기로만 상태를 확인해 보고에 적는다. 보고 첫 줄 규칙 그대로 · 보고에 «무엇 때문에 걸렸고 무엇을 고쳤는지» 한두 줄.' + autoTxt,
           '[Board deploy runner — ' + bad + ']\nThe board ran `' + run.command + '`, result «' + run.result + '». Log: ' + run.log + '\n' + causeTxt +
-          '\nTask: read the log, fix the cause on the dev server and commit. If a pre-deploy check failed, rerun that check on dev until it passes (turning the check off is not a fix). If the fix needs the owner\'s decision, ask with ⏸. Do not run the deploy command or production commands — redeploying is the owner\'s «Deploy» button (the board notifies the owner once fixed). If production may be half-changed («unknown»), check read-only and report.') };
+          '\nTask: read the log, fix the cause on the dev server and commit. If a pre-deploy check failed, rerun that check on dev until it passes (turning the check off is not a fix). If the fix needs the owner\'s decision, ask with ⏸. Do not run the deploy command or production commands — the board redeploys (automatically after ✅ if eligible, otherwise the owner\'s button). If production may be half-changed («unknown»), check read-only and report.' + autoTxt) };
       const gi = st.queue.findIndex((q) => !q.gate);
       st.queue.splice(gi < 0 ? st.queue.length : gi, 0, item);
     }
     if (st.deployRuns && st.deployRuns[proj.key] && st.deployRuns[proj.key].runId === run.runId) st.deployRuns[proj.key].fixQid = fixQid;   // 버튼이 «원인 고침» 을 알게
     st.deployFix = st.deployFix || {};
     if (!df || df.qid !== fixQid || df.doneAt) st.deployFix[proj.key] = { qid: fixQid, at: new Date().toISOString(), runId: run.runId, cause: cz.title };
+    if (autoOn && fixQid) ch.pending = { kind: 'fix', runId: run.runId, fixQid };
   }
+  if (autoNo && ch && (proj.deploy || {}).autoRetry === true) writeLog({ action: 'deploy-auto-skip', project: proj.key, runId: run.runId, why: autoNo });
   for (const k of Object.keys(st.asks)) if (st.asks[k].project === proj.key && st.asks[k].byDoctor && DEPLOY_BAD_ASK_RE.test(st.asks[k].title || '')) delete st.asks[k];   // 지난 실패 카드는 이번 것으로 바꿈
   doctorAsk(st, null, proj.key, proj.name + ' ' + bad + ' — ' + cz.title,
     K('원인: ', 'Cause: ') + cz.title + (cz.items.length > 1 ? '\n' + cz.items.map((x, i) => '  ' + (i + 1) + '. ' + x).join('\n') : cz.items.length ? '\n  ' + cz.items[0] : '') + '\n' + cz.hint +
     '\n\n' + K('운영: ', 'Production: ') + (run.result === 'fail' ? K('그대로이거나 스크립트가 원복함', 'unchanged or restored by the script') : K('반쯤 바뀌었을 수 있음', 'may be half-changed')) +
     '\n' + K('상황판이 ', 'The board ran ') + '`' + run.command + '` ' + K('을 실행했어요(', ' (') + run.via + ' · ' + String(run.at).slice(0, 16).replace('T', ' ') + ' UTC · ' + K('종료 ', 'exit ') + (run.code == null ? '?' : run.code) + ').' + (run.why ? '\n' + run.why : '') +
     '\n' + K('출력 마지막 줄:\n', 'Last lines:\n') + String(run.tail || '').slice(-1200) + '\n' + K('전체 기록: ', 'Full log: ') + run.log + back +
-    K('\n자동으로 다시 시도하지 않아요.', '\nNo automatic retry.'),
-    needFix ? (fixNote || K(proj.name + ' 대기열 맨 앞에 «배포 실패 원인 고치기» 를 넣었어요 — 고쳐지면 알려 드려요. 그 뒤 «배포» 를 다시 누르세요', '«Fix deploy failure» is at the front of the ' + proj.name + ' queue — you will be notified when fixed; then press «Deploy» again'))
+    (autoOn ? K('\n자동 다시 배포 ' + autoN + '/' + DEPLOY_AUTO.max + '번째 — ' + (needFix ? '고치는 방이 ✅ 로 끝나면' : Math.round(DEPLOY_AUTO.retryWaitMs / 60000) + '분 뒤') + ' 조건을 다시 보고 5분 예고 뒤 상황판이 다시 배포해요(운영 표식·검사 파일·다른 방 일이 그대로일 때만).', '\nAuto redeploy ' + autoN + '/' + DEPLOY_AUTO.max + ' — ' + (needFix ? 'once the fix session ends ✅' : 'in ' + Math.round(DEPLOY_AUTO.retryWaitMs / 60000) + ' min') + ', the board rechecks and redeploys after a 5-minute notice.')
+      : K('\n자동으로 다시 배포하지 않아요' + ((proj.deploy || {}).autoRetry === true && autoNo ? ' — ' + autoNo : '') + '.', '\nNo automatic redeploy' + ((proj.deploy || {}).autoRetry === true && autoNo ? ' — ' + autoNo : '') + '.')),
+    autoOn ? K(needFix ? '할 것 없음 — 고치는 방이 ✅ 면 상황판이 다시 배포해요. 고치는 방이 ⏸ 로 물으면 답해 주세요' : '할 것 없음 — 일시적 실패라 상황판이 잠깐 뒤 다시 배포해요', needFix ? 'Nothing to do — the board redeploys once the fix session ends ✅. Answer it if it asks ⏸' : 'Nothing to do — temporary failure, the board redeploys shortly')
+    : needFix ? (fixNote || K(proj.name + ' 대기열 맨 앞에 «배포 실패 원인 고치기» 를 넣었어요 — 고쳐지면 알려 드려요. 그 뒤 «배포» 를 다시 누르세요', '«Fix deploy failure» is at the front of the ' + proj.name + ' queue — you will be notified when fixed; then press «Deploy» again'))
       : K('고칠 것 없이 몇 분 뒤 «배포» 를 다시 누르면 돼요(일시적 실패)', 'Nothing to fix — press «Deploy» again in a few minutes (temporary failure)'));
   saveState(st);   // 휴대폰 알림은 맨 위 카드가 새로 생기면 notifyTick 이 보냄
-  writeLog({ action: 'deploy-runner-alert', project: proj.key, result: run.result, runId: run.runId, cause: cz.kind, fix: needFix ? fixQid : null });
+  writeLog({ action: 'deploy-runner-alert', project: proj.key, result: run.result, runId: run.runId, cause: cz.kind, fix: needFix ? fixQid : null, auto: autoOn ? autoN : null });
+  if (autoOn) setTimeout(() => deployAutoTick().catch(() => {}), 1000);
+}
+
+const DEPLOY_AUTO = { max: 2, windowMs: 6 * 3600 * 1000, retryWaitMs: 5 * 60 * 1000, settleMs: 3 * 60 * 1000, noticeMs: 5 * 60 * 1000, kinds: ['gate', 'flaky', 'memory', 'network'] };
+function deployAutoWhyNot(st, proj, run, cz) {
+  const d = proj.deploy || {};
+  if (d.autoRetry !== true) return K('이 솔루션은 자동 다시 배포를 안 켬', 'auto redeploy is off for this project');
+  if (!Array.isArray(d.gateFiles) || !d.gateFiles.length) return K('배포 전 검사 파일 목록(gateFiles)이 없음', 'no gateFiles list');
+  if (run.result !== 'fail') return K('결과 «모름» — 운영이 반쯤 바뀌었을 수 있어 직접 확인', 'result «unknown» — production may be half-changed');
+  if (run.recovered) return K('상황판이 끝까지 지켜보지 못한 실행', 'the board did not watch this run to the end');
+  if (run.via !== 'button' && run.via !== 'auto') return K('버튼으로 시작한 배포가 아님', 'not started from the button');
+  if (!DEPLOY_AUTO.kinds.includes(cz.kind)) return K('운영을 건드렸을 수 있는 실패(' + cz.kind + ')', 'a failure that may have touched production (' + cz.kind + ')');
+  const ch = (st.deployAuto || {})[proj.key];
+  if (!ch || !ch.pressedAt) return K('이번 «배포» 누름 기록이 없음', 'no record of the button press');
+  if (Date.now() - Date.parse(ch.pressedAt) > DEPLOY_AUTO.windowMs) return K('«배포» 누른 지 6시간 넘음', 'more than 6 h since «Deploy» was pressed');
+  if ((ch.n || 0) >= DEPLOY_AUTO.max) return K('자동 다시 배포 ' + DEPLOY_AUTO.max + '번을 다 씀', 'used all ' + DEPLOY_AUTO.max + ' auto redeploys');
+  if (!run.scriptsHash || !run.commit || !run.markerBefore) return K('실패한 실행의 지문·커밋·운영 표식 기록이 없음', 'the failed run has no script hash / commit / marker');
+  return null;
+}
+const gitP = (dir, args) => new Promise((res) => execFile('git', ['-C', dir].concat(args), { timeout: 15000 }, (e, o) => res(e ? null : String(o).trim())));
+/** 누르기 직전 다시 보는 것 — 막히면 까닭 한 줄 */
+async function deployAutoBlock(proj, rr, pd, fixRoom, board, st) {
+  const c = runner.conf(proj);
+  if (!c) return K('배포 명령 설정이 없어짐', 'deploy config is gone');
+  if (runner.scriptsHash(c) !== rr.scriptsHash) return K('배포 스크립트가 실패 뒤 바뀜', 'deploy scripts changed after the failure');
+  if (c.marker) { const m = await readProdMarker(c.marker); if (!m || !m.at || m.at !== rr.markerBefore) return K('운영 표식이 실패 전과 다름(또는 못 읽음) — 운영이 바뀌었을 수 있음', 'production marker differs from before the failure (or unreadable)'); }
+  const head = await gitP(proj.dir, ['rev-parse', 'HEAD']);
+  if (!head) return K('git 을 읽지 못함', 'could not read git');
+  // 검사 파일 — 실패 커밋과 «작업 폴더» 를 대조(커밋 안 한 변경도) + 새 파일(추적 안 됨). 배포 스크립트가 검사를 작업 폴더에서 그대로 돌리기 때문 (Fable 완료 검증 ①)
+  const watch = ['--'].concat(c.scripts.map((f) => path.relative(proj.dir, f))).concat(proj.deploy.gateFiles);
+  const gf = await gitP(proj.dir, ['diff', '--name-only', rr.commit].concat(watch));
+  const gu = await gitP(proj.dir, ['ls-files', '--others', '--exclude-standard'].concat(watch));
+  if (gf === null || gu === null) return K('바뀐 파일을 읽지 못함', 'could not diff');
+  if (gf || gu) return K('배포 스크립트·배포 전 검사 파일이 바뀜: ', 'deploy/check files changed: ') + (gf + '\n' + gu).split('\n').filter(Boolean).slice(0, 5).join(', ');
+  if (head !== rr.commit) {
+    if (pd.kind === 'retry') return K('일시적 실패 뒤 새 커밋이 생김', 'new commits after the temporary failure');
+    const since = Date.parse(rr.end);
+    const others = board.rooms.filter((r) => r.project === proj.key && (!fixRoom || r.id !== fixRoom.id) && (r.turnOpen || (r.lastActivity || 0) > since));
+    if (others.length) return K('실패 뒤 다른 방도 일함(무엇이 같이 나갈지 확인 필요): ', 'other sessions worked after the failure: ') + others.slice(0, 4).map((r) => '«' + r.name + '»').join(', ');
+  }
+  const unc = uncheckedWork(board, st, proj.key).filter((x) => !fixRoom || x.sid !== fixRoom.sessionId);
+  if (unc.length) return K('«확인 완료» 안 된 다른 끝난 일 ' + unc.length + '개', unc.length + ' other finished task(s) not «Checked»');
+  const ck = await runner.check(proj, await runnerCtx(proj, 'auto', { ack: true }));
+  const bad = ck.filter((x) => !x.ok && x.code !== 'unchecked' && x.code !== 'last-run');
+  if (bad.length) return bad.map((x) => x.text).join(' · ').slice(0, 300);
+  return null;
+}
+function deployAutoGiveUp(st, proj, rr, pd, why, fixRoom) {
+  const ch = st.deployAuto[proj.key];
+  delete ch.pending; if (pd.fixQid) ch.gaveUpFor = pd.fixQid;
+  for (const k of Object.keys(st.asks)) if (st.asks[k].project === proj.key && st.asks[k].byDoctor && DEPLOY_BAD_ASK_RE.test(st.asks[k].title || '')) delete st.asks[k];
+  doctorAsk(st, null, proj.key, K(proj.name + ' 자동 다시 배포 안 함 — ', proj.name + ' auto redeploy not done — ') + String(why).slice(0, 80),
+    K('까닭: ', 'Why: ') + why + '\n' + K('지난 실패: ', 'Last failure: ') + ((rr.cause && rr.cause.title) || '?') +
+    (fixRoom ? '\n' + K('고친 방 ', 'Fix session ') + fixRoom.id + ': ' + firstLine(fixRoom.lastReport).slice(0, 300) : '') +
+    '\n' + K('운영은 아직 그대로예요. 확인한 뒤 솔루션 카드 «배포» → «지난 배포 결과를 확인했어요 — 다시 배포».', 'Production is unchanged. After checking, project card «Deploy» → «I checked the last deploy — deploy again».'),
+    K('까닭을 보고 «배포» 를 다시 누르세요', 'Read the reason, then press «Deploy» again'));
+  writeLog({ action: 'deploy-auto-giveup', project: proj.key, runId: rr.runId, why: String(why).slice(0, 300) });
+}
+let deployAutoBusy = false;
+async function deployAutoTick() {
+  if (deployAutoBusy) return { busy: true };
+  deployAutoBusy = true;
+  const did = [];
+  try {
+    const st0 = peekState();
+    const keys = Object.keys(st0.deployAuto || {}).filter((k) => st0.deployAuto[k] && st0.deployAuto[k].pending);
+    if (!keys.length) return { did };
+    const board = await buildBoard();
+    for (const key of keys) {
+      const proj = loadProjects().find((p) => p.key === key);
+      let st = loadState();
+      const ch = (st.deployAuto || {})[key], pd = ch && ch.pending;
+      if (!pd) continue;
+      const rr = (st.deployRuns || {})[key];
+      if (!proj || !rr || rr.runId !== pd.runId || rr.result !== 'fail') { delete ch.pending; saveState(st); continue; }   // 그 사이 다른 실행이 있었음
+      if (rr.ackAt) { delete ch.pending; saveState(st); continue; }   // 주인이 직접 확인·다시 누름
+      if (Date.now() - Date.parse(ch.pressedAt) > DEPLOY_AUTO.windowMs) { deployAutoGiveUp(st, proj, rr, pd, K('«배포» 누른 지 6시간 넘음', 'more than 6 h since «Deploy» was pressed')); saveState(st); did.push(key + ':window'); continue; }
+      let fixRoom = null;
+      if (pd.kind === 'retry') { if (Date.now() < Date.parse(pd.startAt)) continue; }
+      else {
+        const qs = st.qStarted && st.qStarted[pd.fixQid];   // 그 실패의 고칠 일로 상황판이 연 방만 (Fable ⑨)
+        if (!qs) { if (!st.queue.some((q) => q.qid === pd.fixQid)) { deployAutoGiveUp(st, proj, rr, pd, K('고칠 일이 대기열에서 빠짐', 'the fix task left the queue')); saveState(st); did.push(key + ':gone'); } continue; }
+        const r = board.rooms.find((x) => x.id === qs.id);
+        if (!r || (r.alive && r.turnOpen) || (r.status && r.status.code === 'waiting')) continue;
+        if (!(r.lastReportAt > Date.parse(rr.end))) continue;
+        if (!firstLine(r.lastReport).startsWith('✅')) { deployAutoGiveUp(st, proj, rr, pd, K('고치는 방이 ✅ 아닌 보고로 끝남', 'the fix session did not end ✅'), r); saveState(st); did.push(key + ':notok'); continue; }
+        if (Date.now() - r.lastReportAt < DEPLOY_AUTO.settleMs) continue;   // 끝난 뒤 잠깐 그대로인지
+        fixRoom = r;
+      }
+      const why = await deployAutoBlock(proj, rr, pd, fixRoom, board, st);
+      st = loadState();
+      const ch2 = (st.deployAuto || {})[key], pd2 = ch2 && ch2.pending;
+      if (!pd2 || pd2.runId !== pd.runId) continue;
+      if (why) { deployAutoGiveUp(st, proj, rr, pd2, why, fixRoom); saveState(st); did.push(key + ':blocked'); continue; }
+      const n = (ch2.n || 0) + 1;
+      if (!pd2.noticeAt) {   // 5분 예고 — 카드를 닫으면(답하면) 하지 않음
+        for (const k of Object.keys(st.asks)) if (st.asks[k].project === key && st.asks[k].byDoctor && DEPLOY_BAD_ASK_RE.test(st.asks[k].title || '')) delete st.asks[k];
+        const title = K(proj.name + ' 5분 뒤 자동으로 다시 배포 (' + n + '/' + DEPLOY_AUTO.max + ')', proj.name + ' auto redeploy in 5 min (' + n + '/' + DEPLOY_AUTO.max + ')');
+        doctorAsk(st, null, key, title,
+          K('지난 실패: ', 'Last failure: ') + ((rr.cause && rr.cause.title) || '?') + '\n' + (fixRoom ? K('고친 방 ', 'Fixed by ') + fixRoom.id + ': ' + firstLine(fixRoom.lastReport).slice(0, 300) : K('일시적 실패 — 고칠 것 없이 다시', 'Temporary failure — retrying as is')) +
+          '\n' + K('다시 확인함: 운영 표식 실패 전 그대로 · 배포 스크립트·검사 파일 안 바뀜 · 다른 방 일 섞이지 않음 · 배포 조건 모두 통과.', 'Rechecked: production marker unchanged · deploy/check files unchanged · no other sessions\' work mixed in · all deploy conditions pass.') +
+          '\n' + K('**막으려면 이 카드를 닫아 주세요** — 닫으면 자동으로 다시 배포하지 않고 «배포» 버튼으로 넘겨요.', '**To stop it, close this card** — then it waits for the «Deploy» button.'),
+          K('그대로 두면 5분 뒤 상황판이 «' + (ch2.by || OWNER) + '» 님이 누른 배포를 이어서 다시 배포해요', 'Leave it and the board redeploys in 5 min, continuing the press by ' + (ch2.by || OWNER)));
+        const a = Object.values(st.asks).find((x) => x.project === key && x.title === title.slice(0, 120));
+        pd2.noticeAt = new Date().toISOString(); pd2.noticeAid = a ? a.aid : null;
+        saveState(st); did.push(key + ':notice');
+        writeLog({ action: 'deploy-auto-notice', project: key, runId: rr.runId, n, fixRoom: fixRoom ? fixRoom.id : null });
+        continue;
+      }
+      if (Date.now() - Date.parse(pd2.noticeAt) < DEPLOY_AUTO.noticeMs) continue;
+      if (!pd2.noticeAid || !st.asks[pd2.noticeAid]) { delete ch2.pending; if (pd2.fixQid) ch2.gaveUpFor = pd2.fixQid; saveState(st); writeLog({ action: 'deploy-auto-cancelled', project: key, runId: rr.runId, why: 'notice-closed' }); did.push(key + ':cancelled'); continue; }
+      if (st.paused.all || (st.paused[key] && st.paused[key].gate !== 'memhold')) continue;   // 전체 일시정지·다른 일시정지(배포·점검) — 풀리면 (Fable 완료 검증 ⑤)
+      if (st.queue.some((q) => q.project === key && q.gate)) continue;
+      // 시작 — 횟수는 누르기 전에 올려 저장(Fable ⑪) · 이 실행에만 확인 표시(runner.ack 은 다른 잠금까지 풀어 안 씀 · Fable ⑩)
+      ch2.n = n; ch2.lastAt = new Date().toISOString(); delete ch2.pending;
+      //   실패 기록에 ackAt 을 찍지 않는다 — 실행이 못 뜨면 주인 확인 없이 정기 배포 막음이 풀리게 됨. 확인은 이 실행 경로의 ack(runnerAck)로만 (Fable 완료 검증 ③)
+      st.deployRuns[key].autoStartedAt = ch2.lastAt;
+      if (st.deployFix && st.deployFix[key] && st.deployFix[key].qid === pd2.fixQid) Object.assign(st.deployFix[key], { doneAt: ch2.lastAt, room: fixRoom ? fixRoom.id : null });   // 다음 실패 때 이 방을 «아직 일하는 중» 으로 잡지 않게 (Fable 완료 검증 ②)
+      delete st.asks[pd2.noticeAid];
+      doctorAsk(st, null, key, K(proj.name + ' 자동으로 다시 배포 중 (' + n + '/' + DEPLOY_AUTO.max + ')', proj.name + ' auto redeploy running (' + n + '/' + DEPLOY_AUTO.max + ')'),
+        K('지난 실패: ', 'Last failure: ') + ((rr.cause && rr.cause.title) || '?') + '\n' + K('끝나면 결과를 알려 드려요 — 성공하면 이 카드는 저절로 빠져요.', 'You will be told the result — this card clears itself on success.'), K('할 것 없음', 'Nothing to do'));
+      saveState(st);
+      writeLog({ action: 'deploy-auto-start', project: key, failedRunId: rr.runId, n, kind: pd2.kind, fixRoom: fixRoom ? fixRoom.id : null, by: ch2.by });
+      const item = Object.assign(gateItem('deploy', key, ''), { runner: true, runnerBy: 'auto · ' + (ch2.by || OWNER), ack: true, autoRetry: true });
+      await pauseForGate(proj, item, K('자동 다시 배포', 'auto redeploy'));
+      did.push(key + ':start');
+    }
+    if (did.length) cache.at = 0;
+    return { did };
+  } catch (e) {
+    writeLog({ action: 'deploy-auto-error', err: String(e.message || e).slice(0, 300) });
+    return { did, err: String(e.message || e) };
+  } finally { deployAutoBusy = false; }
 }
 /**
  * */
@@ -8847,7 +9035,7 @@ function tidyDeployFix() {
   const st = loadState(); let n = 0;
   st.deployFix = st.deployFix || {};
   for (const key of new Set(st.queue.map((q) => q.project))) {
-    const fx = st.queue.filter((q) => q.project === key && (q.deployFix || (/^(배포 실패 원인 고치기|Fix deploy failure)$/.test(q.title || '') && /^\[(상황판 배포 실행기|Board deploy runner)/.test(q.task || ''))));
+    const fx = st.queue.filter((q) => q.project === key && q.deployFix);   // runnerDone 이 만든 것만 — 글 모양으로 입양하지 않음(방이 같은 제목·머리로 심을 수 있음 · Fable 완료 검증 ④)
     if (!fx.length) continue;
     const keep = fx[0];
     for (const o of fx.slice(1)) { keep.task += '\n\n' + K('[같은 일 — 다시 실패]\n', '[Same task — failed again]\n') + o.task; n++; }
@@ -8896,6 +9084,7 @@ if (require.main === module) {
   ensureDevLoginSecrets();
   setInterval(autoResumeTick, 60 * 1000);
   setInterval(doctorTick, DOCTOR_EVERY_MS);   // 작업방 자동 점검 — 5분마다
+  setInterval(() => deployAutoTick().catch(() => {}), 60 * 1000);   // 자동 다시 배포 — 1분마다(맡은 것이 있을 때만 일함)
   setInterval(doctorFastTick, DOCTOR_FAST_MS);   // 보고 끝낸 방이 폴더를 안 놓으면 1분 안에
   setTimeout(doctorTick, 60 * 1000);
   setInterval(limitTick, 60 * 1000);
@@ -8936,4 +9125,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

@@ -93,10 +93,21 @@ function fingerprint(proj) {
 }
 function approvedOf(key) { return ((D.peekState().backupApproved || {})[key]) || null; }
 function isApproved(proj) { const a = approvedOf(proj.key); const f = fingerprint(proj); return !!(a && f && a.hash === f); }
+const cfgSha = (proj) => sha(JSON.stringify([proj.dir, proj.backup]));
+/** 왜 승인이 필요한지 — null(승인됨) · { why:'never' } 한 번도 안 함 · { why:'script', at } 백업 스크립트 내용만 바뀜 · { why:'settings' } 경로·명령이 바뀜
+ * */
+function approvalWhy(proj) {
+  if (!conf(proj) || isApproved(proj)) return null;
+  const a = approvedOf(proj.key);
+  if (!a) return { why: 'never' };
+  const c = conf(proj);
+  if (a.cfg && a.cfg === cfgSha(proj) && c.script) { let at = null; try { at = fs.statSync(c.script).mtimeMs; } catch (_) {} return { why: 'script', at, since: a.at }; }
+  return { why: 'settings', since: a.at };
+}
 function approve(proj, by) {
   const st = D.loadState(); st.backupApproved = st.backupApproved || {};
   const hash = fingerprint(proj);
-  st.backupApproved[proj.key] = { hash, by, at: new Date().toISOString() };
+  st.backupApproved[proj.key] = { hash, cfg: cfgSha(proj), by, at: new Date().toISOString() };
   D.saveState(st); D.writeLog({ action: 'backup-approve', project: proj.key, by, hash });
   delete statusCache[proj.key];
   return hash;
@@ -413,4 +424,4 @@ async function copies(proj, kind, idx) {
   return { label: x.label, items: r.items.slice(0, 60).map((i) => ({ name: i.name, t: i.t, size: i.size, dir: i.dir })) };
 }
 
-module.exports = { init, conf, problems, fingerprint, isApproved, approve, approvedOf, status, runNow, runTail, bootSweep, pickCopy, copies, listTop, sentAt, nameDate, otherRunning, pathBad, gitStatus, repoName, repoClean, keyInfo, makeKey, sshCommand, isPublic, checkRemote, keyPath, GITHUB_HOSTKEY, running, _cache: statusCache };
+module.exports = { init, conf, problems, fingerprint, isApproved, approvalWhy, approve, approvedOf, status, runNow, runTail, bootSweep, pickCopy, copies, listTop, sentAt, nameDate, otherRunning, pathBad, gitStatus, repoName, repoClean, keyInfo, makeKey, sshCommand, isPublic, checkRemote, keyPath, GITHUB_HOSTKEY, running, _cache: statusCache };

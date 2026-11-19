@@ -1740,11 +1740,36 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   function runnerAttn(p) {
     var R = p.runner, out = [];
     if (!R) return out;
-    if (!R.approved) out.push(['w', R.approvedChanged ? K('명령 바뀜 — 다시 승인', 'command changed — re-approve') : K('명령 승인 전', 'command not approved')]);
+    if (!R.approved) out.push(['w', R.approvedChanged ? K('배포 명령 바뀜 — 다시 승인', 'deploy command changed — re-approve') : K('배포 명령 승인 전', 'deploy command not approved')]);
     var lr = R.last;
     if (lr && lr.end && (lr.result === 'fail' || lr.result === 'unknown') && !lr.ackAt) out.push(['b', K('✗ 지난 실행 ', '✗ last run ') + (lr.result === 'unknown' ? K('결과 모름 ', 'unknown ') : K('실패 ', 'failed ')) + fmt(Date.parse(lr.end))]);
     if (R.holds && R.holds.length) out.push(['w', K('막음 ', 'held ') + R.holds.length, R.holds.map(function (h) { return '«' + h.reason + '»'; }).join(' · ')]);
     return out;
+  }
+  function bkApprShort(b) {
+    var w = b.approvalWhy || {};
+    if (w.why === 'script') return K('백업 스크립트 바뀜 — 다시 승인', 'backup script changed — re-approve');
+    if (w.why === 'settings') return K('백업 경로 바뀜 — 다시 승인', 'backup paths changed — re-approve');
+    return K('백업 설정 승인 전', 'backup settings not approved');
+  }
+  function bkApprLong(b) {
+    var w = b.approvalWhy || {}, lock = K('정기 백업은 그대로 돌고, «지금 백업»·복원 요청만 잠겨 있어요', 'scheduled backups still run; only «Back up now» and restore requests are locked');
+    if (w.why === 'script') return K('솔루션 방이 백업 스크립트를 고쳤어요', 'a project session edited the backup script') + (w.at ? ' (' + fmt(new Date(w.at).toISOString()) + ')' : '') + K(' · 승인 ', ' · approved ') + (w.since ? fmt(w.since) : '') + ' · ' + lock;
+    if (w.why === 'settings') return K('승인 뒤 등록된 경로·명령이 바뀌었어요', 'registered paths or command changed after approval') + (w.since ? ' (' + K('승인 ', 'approved ') + fmt(w.since) + ')' : '') + ' · ' + lock;
+    return K('이 솔루션 백업 설정을 아직 한 번도 승인하지 않았어요(방의 «확인 완료» 는 승인이 아님) · ', 'never approved yet (a session «Confirm done» is not an approval) · ') + lock;
+  }
+  // 카드에서 바로 승인 — 설정 내용을 보여 주고 한 번 묻는다(인증 앱 재확인은 post 가 처리)
+  function approveBackup(p, btn) {
+    fetch('/api/backup?fresh=1&p=' + encodeURIComponent(p.key), { cache: 'no-store' }).then(function (x) { return x.json(); }).then(function (j) {
+      if (!j.ok) { toast(j.message || K('백업 설정을 못 읽었습니다', 'Could not load backup settings')); return; }
+      var r = j.raw || {}, ls = [];
+      (r.local || []).forEach(function (x) { ls.push(K('이 서버 사본: ', 'On this server: ') + (x.label ? x.label + ' — ' : '') + x.path); });
+      (r.sent || []).forEach(function (x) { ls.push(K('다른 서버로 보냄: ', 'Sent: ') + (x.label || '') + (x.stamp ? ' — ' + x.stamp : '')); });
+      (r.received || []).forEach(function (x) { ls.push(K('받은 사본: ', 'Received: ') + (x.label ? x.label + ' — ' : '') + x.path); });
+      if (r.command) ls.push(K('«지금 백업» 이 실행할 스크립트: ', '«Back up now» runs: ') + r.command);
+      if (!window.confirm(p.name + K(' 백업 설정을 승인할까요?\n\n', ' — approve these backup settings?\n\n') + bkApprShort(j) + '\n\n' + ls.join('\n'))) return;
+      act('/api/projects/' + p.key + '/backup-approve', {}, btn);
+    }).catch(function (e) { toast(K('보내지 못했습니다: ', 'Could not send: ') + e.message); });
   }
   function backupSum(p) {
     var b = p.backup;
@@ -1765,7 +1790,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     }
     if (b.run && b.run.result === 'running') out.push(K('지금 백업 중…', 'backing up now…'));
     else if (b.run && b.run.result === 'fail') out.push(['b', K('지금 백업 실패 ', 'backup-now failed ') + hm(Date.parse(b.run.end))]);
-    if (OWN_NOW && b.approved === false) out.push(['w', K('승인 필요', 'needs approval'), K('«열기» → «이 설정 승인»', '«Open» → «Approve these settings»')]);
+    if (OWN_NOW && b.approved === false) out.push(['w', bkApprShort(b), bkApprLong(b)]);
     return out;
   }
   // «자세히» 펼침 — 솔루션마다 이 브라우저에 기억(기본 접힘)
@@ -1784,7 +1809,12 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       if (b.git) line(gitText(b.git), b.git.state === 'bad' || b.git.state === 'none' || b.git.why === 'noupstream' ? 'cc-' + (b.git.state === 'bad' ? 'b' : 'w') : b.git.ahead ? 'cc-w' : b.git.state === 'unknown' ? 'cc-n' : null);
       if (b.run && b.run.result === 'running') line(K('지금 백업 중…', 'Backing up now…'));
       else if (b.run && b.run.result === 'fail') line(K('지금 백업 실패 ', 'Backup-now failed ') + hm(Date.parse(b.run.end)), 'cc-b');
-      if (OWN_NOW && b.approved === false) line(K('승인 필요 — «열기» 에서 «이 설정 승인»', 'Needs approval — «Open» → «Approve these settings»'), 'cc-w');
+      if (OWN_NOW && b.approved === false) {
+        line(bkApprShort(b) + ' — ' + bkApprLong(b), 'cc-w');
+        var qa = el('button', 'btn', K('백업 설정 승인…', 'Approve backup settings…')); qa.type = 'button';
+        qa.style.cssText = 'font-size:11px;padding:3px 8px;';
+        qa.addEventListener('click', function () { approveBackup(p, qa); }); btns.appendChild(qa);
+      }
     }
     if (OWN_NOW || (b && b.level !== 'unapproved')) {
       var o = el('button', 'btn', b ? K('열기 — 지금 백업·복원 요청·경로', 'Open — back up now · restore · paths') : K('⚙ 등록', '⚙ Register')); o.type = 'button';
@@ -1811,7 +1841,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         m.appendChild(el('div', 'dsu-st ' + (j.level === 'bad' ? 'off' : 'on'), (lv[j.level] || j.level) + K(' · 기준: ', ' · rule: ') + j.every + K('시간 + 2시간 안에 새 사본', 'h + 2h for a new copy')));
         (j.problems || []).forEach(function (t) { m.appendChild(el('div', 'svc-n warn', '⚠ ' + t)); });
         if (OWN_NOW && !j.approved) {
-          var ap = el('div', 'dsu-act'); ap.appendChild(el('span', 'svc-w', K('이 설정은 아직 승인 전이거나 승인 뒤 바뀌었어요(스크립트 내용 포함) — 승인해야 «지금 백업» 이 되고 팀원에게 보여요.', 'Not approved yet, or changed since (incl. script content) — approve to enable «Back up now» and show it to members.')));
+          var ap = el('div', 'dsu-act'); ap.appendChild(el('span', 'svc-w', bkApprShort(j) + ' — ' + bkApprLong(j) + K(' · 승인하면 팀원에게도 보여요.', ' · Approving also shows it to members.')));
           var apb = el('button', 'btn', K('이 설정 승인', 'Approve these settings')); apb.type = 'button';
           apb.addEventListener('click', function () { if (window.confirm(K('이 백업 설정을 승인할까요?\n\n', 'Approve these backup settings?\n\n') + JSON.stringify(j.raw, null, 2))) act('/api/projects/' + p.key + '/backup-approve', {}, apb).then(function (r) { if (r && r.ok) { done(); openBackup(p); } }); });
           ap.appendChild(apb); m.appendChild(ap);
@@ -1981,7 +2011,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   }
   function runnerLine(p) {
     var R = p.runner, row = el('div', 'runner-row cm-body'), btns = el('div', 'cm-btns');
-    var lr = R.last, txt = K('실행: 상황판', 'Run by: board') + (R.approved ? '' : R.approvedChanged ? K(' · 명령 바뀜 — 다시 승인 필요', ' · command changed — approve again') : K(' · 명령 승인 전(배포 버튼에서 승인)', ' · command not approved yet (approve via Deploy)'));
+    var lr = R.last, txt = K('실행: 상황판', 'Run by: board') + (R.approved ? '' : R.approvedChanged ? K(' · 배포 명령 바뀜 — 다시 승인 필요(배포 버튼에서)', ' · deploy command changed — approve again (via Deploy)') : K(' · 배포 명령 승인 전(배포 버튼에서 승인)', ' · deploy command not approved yet (approve via Deploy)'));
     if (lr && lr.end) txt += K(' · 마지막 ', ' · last ') + (lr.result === 'ok' ? '✓ ' : '✗ ' + (lr.result === 'unknown' ? K('모름 ', 'unknown ') : K('실패 ', 'failed '))) + fmt(Date.parse(lr.end)) + (lr.ackAt ? K('(확인함)', ' (seen)') : '');
     if (!R.scheduledReady && R.approved) txt += K(' · 정기 점검은 버튼으로 한 번 나간 뒤부터', ' · scheduled checks start after one button deploy');
     if (R.lastDry && R.lastDry.end) txt += K(' · 시험 ', ' · dry run ') + (R.lastDry.result === 'dry-ok' ? '✓ ' : '✗ ') + fmt(Date.parse(R.lastDry.end));
@@ -2029,18 +2059,20 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var lines2 = (j.checks || []).map(function (x) { return (x.ok ? '✓ ' : '✗ ') + x.text; }).join('\n');
         if (!only) { window.alert(j.message + '\n\n' + lines2); return { ok: false }; }
         var opts = [];
-        var lf = j.lastFail, fx = lf && lf.fix, fixing = !!(fx && /^(queued|working|ask)$/.test(fx.state)) && !(lf.cause && lf.cause.retry);
+        var lf = j.lastFail, fx = lf && lf.fix, auto = fx && fx.auto, fixing = !!(fx && /^(queued|working|ask)$/.test(fx.state)) && !(lf.cause && lf.cause.retry) || !!auto;
         var head = '';
         if (lf && lf.cause) {
           head = K('지난 배포가 실패한 까닭: ', 'Why the last deploy failed: ') + lf.cause.title + '\n' + (lf.cause.hint || '') + '\n' +
-            (!fx || fx.state === 'none' ? K('고칠 것 없음(일시적 실패)', 'Nothing to fix (temporary failure)')
+            (!fx || fx.state === 'none' || fx.state === 'retry' ? K('고칠 것 없음(일시적 실패)', 'Nothing to fix (temporary failure)')
               : fx.state === 'done' ? K('✓ 방 ' + fx.room + ' 가 원인을 고쳤어요', '✓ Session ' + fx.room + ' fixed the cause')
               : fx.state === 'working' ? K('… 방 ' + fx.room + ' 가 지금 고치는 중이에요', '… Session ' + fx.room + ' is fixing it now')
               : fx.state === 'ask' ? K('⏸ 고치는 방 ' + fx.room + ' 가 __OWNER__ 님 답을 기다려요', '⏸ Fix session ' + fx.room + ' is waiting for your answer')
               : fx.state === 'queued' ? K('… 고치는 일이 대기열 ' + fx.pos + '번째에서 기다려요', '… The fix is #' + fx.pos + ' in the queue')
-              : K('고치는 방 ' + fx.room + ' 가 끝났어요(✅ 아님): ', 'Fix session ' + fx.room + ' ended (not ✅): ') + (fx.report || '')) + '\n\n';
+              : K('고치는 방 ' + fx.room + ' 가 끝났어요(✅ 아님): ', 'Fix session ' + fx.room + ' ended (not ✅): ') + (fx.report || '')) +
+            (auto ? '\n' + K('↻ 자동 다시 배포 ' + auto.n + '/' + auto.max + '번째가 맡고 있어요 — ' + (auto.kind === 'retry' ? '잠깐 뒤' : '고치는 방이 ✅ 면') + ' 5분 예고 뒤 상황판이 다시 배포해요', '↻ Auto redeploy ' + auto.n + '/' + auto.max + ' is on it — the board redeploys after a 5-minute notice') : '') + '\n\n';
         }
-        if (fixing) opts.push({ v: 'wait', rec: true, label: K('고친 뒤에 다시 배포 (지금은 안 누름)', 'Deploy after the fix (not now)'), desc: K('고치는 방이 ✅ 로 끝나면 맨 위·휴대폰으로 «다시 배포» 를 알려 드려요', 'When the fix session ends ✅ you get a «deploy again» notice at the top and on your phone') });
+        if (fixing) opts.push({ v: 'wait', rec: true, label: auto ? K('기다리기 — 상황판이 자동으로 다시 배포', 'Wait — the board redeploys automatically') : K('고친 뒤에 다시 배포 (지금은 안 누름)', 'Deploy after the fix (not now)'),
+          desc: auto ? K('할 것 없어요. 예고 카드가 뜨고 5분 뒤 나가요 — 막으려면 그 카드를 닫으세요', 'Nothing to do. A notice card appears and it ships 5 minutes later — close that card to stop it') : K('고치는 방이 ✅ 로 끝나면 맨 위·휴대폰으로 «다시 배포» 를 알려 드려요', 'When the fix session ends ✅ you get a «deploy again» notice at the top and on your phone') });
         if (j.fable) opts.push({ v: 'fable', rec: !j.needAck, label: K('자체 검증만으로 배포 (Fable 미검증)', 'Deploy with self-verification only (no Fable review)'), desc: K('Fable 대기는 지우지 않고 한도가 풀리면 사후 검증해요. 누가·언제 눌렀는지 기록돼요', 'Fable waits stay and are reviewed later. Who and when is recorded') });
         if (j.needAck) opts.push(fixing
           ? { v: 'ack', warn: true, label: K('그래도 지금 다시 배포', 'Deploy again anyway'), desc: K('아직 안 고쳤으면 같은 검사에 또 걸려 실패해요(운영은 그대로). 고친 것을 알고 있을 때만', 'If not fixed yet it fails the same check again (production unchanged). Only if you know it is fixed') }
@@ -3857,7 +3889,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   var aiLoginMsg = '', aiOkAt = 0;   // 마지막 «연결» 결과 — 칸 안에 그대로 남긴다(알림창은 곧 사라짐) · 연결된 뒤 1분은 초록 «연결됨» 칸
   // ── SSH 통로 안내 — 터미널 창(ssh -L)으로 연 통로는 창을 닫으면 끝. 자동 통로가 깔린 맥인지는 서버가 모름 →
   //   자동 통로 스크립트가 끝에 이 맥 브라우저로 «#autotunnel=<별명>» 을 열어 이 기기에 표시를 남긴다 · 표시 없는 통로 기기에만 권함
-  //   «그만 보기» 뒤에도 이 기기에서 1분 넘는 끊김이 7일에 2번 이상이면 다시 권함
+  //   «그만 보기» 뒤에도 이 기기에서 깨어 있는 동안 2분 넘는 끊김이 7일에 2번 이상이면 다시 권함
+  //   맥에서 셸 없는 통로(ssh -N = 자동 통로)는 서버가 알려 줌(me.tunShell) — 표시가 없어도 권하지 않음
   var IS_MAC = /Mac/.test(navigator.platform || '') && !(navigator.maxTouchPoints > 1);
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
   function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (_) {} }
@@ -3886,13 +3919,16 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   function tunHintBox(me) {
     if (!me || me.via !== 'tunnel' || !/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return null;
     if (lsGet('board.autoTunnel')) return null;
+    // 서버가 본 통로 종류 — 맥에서 셸 없이 통로만 연 것(ssh -N)은 자동 통로(맥을 켜면·깨면 저절로 다시 붙음) → 권하지 않음
+    if (IS_MAC && me.tunShell === 'noshell') return null;
     var js = Number(lsGet('board.justSetup') || 0), big = js && Date.now() - js < 86400000;
     var off = Number(lsGet('board.tunHintOff') || 0), drops = recentDrops(off);
     if (!big && off && drops < 2) return null;
     var box = el('div', 'todo tunhint'); box.style.cssText = 'margin:10px 0 0;padding:10px 12px;border-radius:8px;';
     box.big = !!big;
     var msg = big ? K('처음 설정 끝 — 지금은 이 SSH 통로(터미널 창)가 열려 있는 동안만 상황판이 보여요. 창을 닫으면 안 열려요.', 'First setup done — right now the board shows only while this SSH tunnel (terminal window) stays open. Close it and the board won\'t open.')
-      : off ? K('이 기기에서 연결이 자주 끊겨요(7일 ' + drops + '번) — 터미널 창으로 연 통로라 창이 닫히거나 맥이 잠들면 끊겨요.', 'This device drops often (' + drops + '× in 7 days) — a tunnel opened in a terminal window ends when the window closes or the Mac sleeps.')
+      : off ? (IS_MAC ? K('이 기기에서 연결이 자주 끊겨요(7일 ' + drops + '번) — 터미널 창으로 연 통로라 창을 닫으면 끊기고 저절로 다시 붙지 않아요.', 'This device drops often (' + drops + '× in 7 days) — a tunnel opened in a terminal window ends when the window closes and does not come back by itself.')
+        : K('이 기기에서 연결이 자주 끊겨요(7일 ' + drops + '번) — 통로 앱(Termius 등)이 닫히거나 화면이 꺼지면 끊겨요.', 'This device drops often (' + drops + '× in 7 days) — the tunnel app (Termius etc.) stops when it closes or the screen turns off.'))
       : K('이 기기는 SSH 통로(터미널 창)가 열려 있는 동안만 상황판이 보여요.', 'This device shows the board only while the SSH tunnel (terminal window) stays open.');
     var t = el('div', 'th-t'); t.appendChild(el(big ? 'b' : 'span', null, msg)); box.appendChild(t);
     var b1;
@@ -5678,7 +5714,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             : ds.pending && ds.mem ? K('운영 배포 · 메모리 기다림 · ' + dsMin + '분째 (' + (ds.mem.avail / 1024).toFixed(1) + '/' + (ds.mem.need / 1024).toFixed(1) + 'GB)', 'Deploy · waiting for memory · ' + dsMin + ' min (' + (ds.mem.avail / 1024).toFixed(1) + '/' + (ds.mem.need / 1024).toFixed(1) + 'GB)')
             : ds.pending ? K('운영 배포 · 시작 직전 · ' + dsMin + '분째', 'Deploy · about to start · ' + dsMin + ' min')
             : ds.runner && ds.phase === 'run' ? K('배포 중(상황판 실행) · ' + dsMin + '분째', 'Deploying (board) · ' + dsMin + ' min')
-            : ds.runner && ds.phase === 'fail' ? K('운영 배포 · ✗ ', 'Deploy to production · ✗ ') + (ds.result === 'unknown' ? K('결과 모름 ', 'unknown ') : K('실패 ', 'failed ')) + hm(ds.at) + (ds.fixed ? K(' → 원인 고침 · 다시 배포', ' → cause fixed · deploy again') : ds.fix && ds.fix.state === 'working' ? K(' → 고치는 중', ' → fixing') : ds.fix && ds.fix.state === 'queued' ? K(' → 고치기 대기', ' → fix queued') : ds.fix && ds.fix.state === 'ask' ? K(' → 고치는 방 답 기다림', ' → fix waits for you') : '')
+            : ds.runner && ds.phase === 'fail' ? K('운영 배포 · ✗ ', 'Deploy to production · ✗ ') + (ds.result === 'unknown' ? K('결과 모름 ', 'unknown ') : K('실패 ', 'failed ')) + hm(ds.at) + (ds.fix && ds.fix.auto ? (ds.fix.auto.noticeAt ? K(' → 5분 예고 · 자동 다시 배포', ' → auto redeploy in 5 min') : ds.fix.auto.kind === 'retry' ? K(' → 잠깐 뒤 자동 다시 배포', ' → auto redeploy shortly') : ds.fix.state === 'working' ? K(' → 고치는 중 · 고치면 자동 다시 배포', ' → fixing · then auto redeploy') : K(' → 고치면 자동 다시 배포', ' → auto redeploy after the fix')) + ' ' + ds.fix.auto.n + '/' + ds.fix.auto.max
+              : ds.fixed ? K(' → 원인 고침 · 다시 배포', ' → cause fixed · deploy again') : ds.fix && ds.fix.state === 'working' ? K(' → 고치는 중', ' → fixing') : ds.fix && ds.fix.state === 'queued' ? K(' → 고치기 대기', ' → fix queued') : ds.fix && ds.fix.state === 'ask' ? K(' → 고치는 방 답 기다림', ' → fix waits for you') : '')
             : dsB ? '✗ ' + dsWhat + K(' 못 시작 — ', ' not started — ') + (BLOCK_WORD[dsB.why] || dsB.why) + K(' · ' + dsMin + '분째', ' · ' + dsMin + ' min')
             : ds.phase === 'skip' ? K('운영 배포 · ✗ 정기 점검 건너뜀 ', 'Deploy to production · ✗ check skipped ') + hm(ds.at) + ' (' + (BLOCK_WORD[ds.why] || ds.why) + ')'
             : ds.phase === 'prep' ? dsWhat + K(' 준비 중 · ' + dsMin + '분째', ' preparing · ' + dsMin + ' min')
@@ -5691,7 +5728,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
               : K('배포 준비가 끝나 상황판이 배포 명령을 누르는 중', 'Prep is done — the board is starting the deploy command'))
             : ds.runner ? (ds.phase === 'run' ? K('상황판이 배포 스크립트를 실행하는 중 — 끝나면 운영 표식을 확인하고 일시정지를 풀어요', 'The board is running the deploy script — then it checks the production marker and lifts the pause')
               : ds.phase === 'fail' && ds.fixed ? K('방 ' + ds.fixed.room + ' 가 ' + hm(ds.fixed.at) + ' 에 원인을 고쳤어요(✅ — 그 방 보고에 무엇을 고쳤는지). 운영은 그대로예요 · 누르면 «확인하고 다시 배포»', 'Session ' + ds.fixed.room + ' fixed the cause at ' + hm(ds.fixed.at) + ' (✅ — see its report). Production is unchanged · press to «confirm and deploy again»')
-              : ds.phase === 'fail' ? (ds.cause ? K('까닭: ', 'Why: ') + ds.cause.title + ' — ' + ds.cause.hint + '\n' : '') + K('맨 위 카드에 마지막 출력·기록 파일이 있어요. ', 'The top card has the last output and log. ') + (ds.fix && ds.fix.state === 'none' ? K('고칠 것 없음 — 몇 분 뒤 다시 누르세요', 'Nothing to fix — press again in a few minutes') : K('원인 고치기는 그 솔루션 대기열 앞에 넣었어요 — 고치면 알려 드려요', 'The fix is at the front of the project queue — you get a notice when fixed'))
+              : ds.phase === 'fail' ? (ds.cause ? K('까닭: ', 'Why: ') + ds.cause.title + ' — ' + ds.cause.hint + '\n' : '') + K('맨 위 카드에 마지막 출력·기록 파일이 있어요. ', 'The top card has the last output and log. ') + (ds.fix && ds.fix.auto ? K('상황판이 자동으로 다시 배포해요(' + ds.fix.auto.n + '/' + ds.fix.auto.max + '번째) — ' + (ds.fix.auto.kind === 'retry' ? '일시적 실패라 잠깐 뒤' : '고치는 방이 ✅ 로 끝나면') + ' 5분 예고 카드 뒤에 나가요. 막으려면 그 카드를 닫으세요', 'The board redeploys automatically (' + ds.fix.auto.n + '/' + ds.fix.auto.max + ') after a 5-minute notice card — close that card to stop it') : ds.fix && ds.fix.state === 'none' ? K('고칠 것 없음 — 몇 분 뒤 다시 누르세요', 'Nothing to fix — press again in a few minutes') : K('원인 고치기는 그 솔루션 대기열 앞에 넣었어요 — 고치면 알려 드려요', 'The fix is at the front of the project queue — you get a notice when fixed'))
               : K('상황판이 배포했어요', 'The board deployed') + (ds.mins ? K(' (' + ds.mins + '분 걸림)', ' (took ' + ds.mins + ' min)') : '') + K(' · 다시 누르면 새 배포', ' · click to deploy again')) : dsB ? (BLOCK_DO[dsB.why] || '') + dsSkip
             : ds.phase === 'skip' ? K((ds.title || '정기 점검') + ' 을 그날 안에 시작 못 해 건너뛰었어요(' + (BLOCK_WORD[ds.why] || ds.why) + '). 다음 정기 점검 때 다시 해요 · 지금 하려면 다시 누르면 배포', (ds.title || 'Scheduled check') + ' could not start that day and was skipped (' + (BLOCK_WORD[ds.why] || ds.why) + '). It runs at the next scheduled check · click to deploy now')
             : ds.phase === 'prep' && !ds.check ? K('일하던 방을 바로 멈추고 «/배포» 방을 여는 중', 'Stopping working sessions now and opening the «/deploy» session')
@@ -5965,15 +6002,23 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       })
       .catch(function (e) { if (loading) end(); connFail(e); });
   }
+  var tickAt = Date.now(), wakeAt = 0, downSince = 0;
+  function noteTick() { var n = Date.now(); if (n - tickAt > 20000) { wakeAt = n; if (downSince) downSince = n; } tickAt = n; }
   function connOk() {
+    noteTick();
+    if (fails && downSince && Date.now() - downSince >= 120000 && !/\.ts\.net$/.test(location.hostname)) noteDrop();
+    downSince = 0;
     fails = 0; lastOkAt = Date.now();
     var c = document.getElementById('connerr'); if (c) c.remove();
     flushOutbox();
   }
   function connFail(e) {
-    if (++fails < 4 && Date.now() - lastOkAt < 30000) return;   // 10초(한 번 기다림이 길면 30초) 넘게 안 될 때만 알린다 — 그 사이엔 보던 화면 그대로
+    noteTick();
+    var base = Math.max(lastOkAt, wakeAt);
+    if (!downSince) downSince = Date.now();
+    if (++fails < 4 && Date.now() - base < 30000) return;   // 10초(한 번 기다림이 길면 30초) 넘게 안 될 때만 알린다 — 그 사이엔 보던 화면 그대로
     var errBox = document.getElementById('err');
-    var downS = Math.round((Date.now() - lastOkAt) / 1000);
+    var downS = Math.round((Date.now() - base) / 1000);
     if (downS < 60) {
       errBox.textContent = '';
       errBox.appendChild(el('div', 'err', K('상황판 다시 켜는 중… 저절로 다시 연결합니다(' + downS + '초째) — 새로 고침은 안 눌러도 돼요. 작업방은 계속 일하고 있고, 지금 보내는 일은 이 기기에 담아 두었다가 연결되면 보냅니다.', 'The board is restarting… reconnecting by itself (' + downS + 's) — no need to refresh. Sessions keep working, and tasks you send now are kept on this device and sent once connected.'))).id = 'connerr';
@@ -5982,7 +6027,6 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var viaTs = /\.ts\.net$/.test(location.hostname);
     var cur = document.getElementById('connerr');
     if (cur && cur.dataset.long) return;   // 이미 띄운 긴 안내는 그대로(3초마다 다시 그리면 복사·선택이 끊김)
-    if (!viaTs) noteDrop();
     errBox.textContent = '';
     var d = el('div', 'err', K('1분 넘게 연결되지 않아요. ', 'Not connected for over a minute. ') + (viaTs ? K('상황판 서버에 연결하지 못했습니다(' + e.message + '). 이 기기의 Tailscale 앱이 켜져 있는지 확인해 주세요. 작업방은 계속 일하고 있습니다. 지금 보내는 일은 이 기기에 담아 두었다가 연결되면 보냅니다.', 'Could not reach the board server (' + e.message + '). Check that the Tailscale app is on on this device. Sessions keep working on the server. Tasks you send now are kept on this device and sent when the connection is back.') : EN ? 'Could not reach the board server (' + e.message + '). Check whether your SSH connection (tunnel) dropped — on a phone, open Termius and turn the tunnel back on. Sessions keep working on the server. Tasks you send now are kept on this device and sent when the connection is back.' : '상황판 서버에 연결하지 못했습니다(' + e.message + '). 서버 접속(SSH 통로)이 끊겼는지 확인해 주세요 — 휴대폰은 Termius 를 열어 통로를 다시 켜면 됩니다. 작업방은 계속 일하고 있습니다. 지금 보내는 일은 이 기기에 담아 두었다가 연결되면 보냅니다.'));
     // 맥 — 끊긴 뒤에는 안내 칸을 찾아 열 여유가 없다: 이 화면에 바로 «맥 터미널에 이 한 줄» 진단 + 자동 통로 한 줄
@@ -6857,8 +6901,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   }
   function liveOff() { if (live) { live.close(); live = null; } }
   liveOn();
-  setInterval(function () { if (!document.hidden) load(true); }, 3000);
+  setInterval(function () { noteTick(); if (!document.hidden) load(true); }, 3000);
   document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { wakeAt = Date.now(); if (downSince) downSince = wakeAt; }
     if (pendVer) { reloadKeep(); return; }   // 안 보는 사이(떠날 때·돌아올 때) 새 화면으로
     if (!document.hidden) { liveOn(); load(); } else liveOff();
   });
