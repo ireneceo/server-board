@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.6.9]
+**Packaging**
+- `board/downloads/` (file snapshots handed over by sessions) and `board/fbtriage/` are now in `.gitignore`, so a «dev done» / quick-save commit on the install folder never picks them up.
+
+**📥 Downloads from sessions**
+- A session can now hand you a file it made (spreadsheet, PDF, image, zip…): it calls `POST /api/files` and a «📥 name · size» download button appears on its card and in the done list. Snapshot copy, project folder / session folder only, secrets and DB dumps refused, owner only by default (`filesTeam: true` adds that project's people), «✕ Withdraw», always downloaded (never opened in the browser), kept `filesKeepDays` (default 14) days.
+
+**Deploy**
+- The deploy-prep session now runs the project's pre-deploy data checks first (checks that read the dev database / dev server, if the project's deploy procedure lists them). A failure caused by test/demo data is fixed on the dev database before the deploy starts; code or real-data problems hold the deploy. Checks are never turned off or skipped.
+
 ## [0.6.8]
 **Dev done**
 - Pressing «Dev done» while another session in that project is working queued it silently — the card kept showing «N unpushed commits» and nothing else, so it looked like dev done had failed. The card now shows «dev done queued — starts when «session» finishes» (or «dev done running · N min») next to the dev line, the button reads «Dev done queued», the backup line says «→ dev done pushes», and the backup window explains that «Back up now» makes file/DB copies only and never pushes to GitHub

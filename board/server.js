@@ -908,6 +908,91 @@ function consultContent(text, list) {
   return blocks;
 }
 
+const FILE_DIR = path.join(__dirname, 'downloads');
+const FILE_BYTES = 200 * 1024 * 1024, FILE_TOTAL = 2 * 1024 * 1024 * 1024, FILE_PER_ROOM = 20;
+const FILE_SECRET = /(^|\/)\.env|(^|\/)\.ssh(\/|$)|(^|\/)\.git(\/|$)|id_(rsa|ed25519|ecdsa|dsa)|\.(pem|key|p12|pfx|jks|keystore|kdbx)$|credential|secret|\.netrc$|\.pgpass$|\.npmrc$|\.htpasswd$|wp-config\.php$|\/\.claude\/[^/]*\.json$|\/\.claude\.json$|board\/(config|state)\.json$|\/\.claude\/(settings[^/]*|\.credentials[^/]*)$|board\/(log|downloads|secrets|fbtriage)\/|board\/state\.json|(^|\/)\.aws(\/|$)|serviceaccount[^/]*\.json$|\.(sql|dump|sqlite3?|db)(\.gz|\.zip)?$/i;
+function filesKeepMs() { return Math.max(1, Math.min(90, Number(CONFIG.filesKeepDays) || 14)) * 864e5; }
+function fileUnder(real, root) { try { const r = fs.realpathSync(root); return real === r || real.startsWith(r + path.sep); } catch (_) { return false; } }
+/** 방이 내줄 파일 하나 → 사본·기록. 돌려줌 { file } 또는 { err:[코드, 까닭] } */
+function fileOffer(body, proj, roomId, roomName) {
+  const bad = (c, m) => ({ err: [c, m] });
+  const src = String(body.path || '').trim();
+  if (!src || !path.isAbsolute(src)) return bad(400, K('path 에 내줄 파일의 전체 경로(/ 로 시작)를 넣어 주세요', 'Put the full path (starting with /) of the file in "path"'));
+  let real; try { real = fs.realpathSync(src); } catch (_) { return bad(404, K('파일이 없습니다: ', 'No such file: ') + src); }
+  let s; try { s = fs.statSync(real); } catch (_) { return bad(404, K('파일을 읽지 못했습니다', 'Cannot read the file')); }
+  if (s.isDirectory()) return bad(400, K('폴더는 못 내줍니다 — zip 으로 묶어서 그 파일을 내주세요', 'Folders cannot be offered — zip it and offer the zip'));
+  if (!s.isFile()) return bad(400, K('보통 파일만 내줄 수 있습니다', 'Only regular files'));
+  const jobDir = path.join(HOME, '.claude', 'jobs', roomId);
+  if (!(fileUnder(real, proj.dir) || fileUnder(real, jobDir))) return bad(403, K('이 방 솔루션 폴더(' + proj.dir + ')나 이 방 작업 폴더($CLAUDE_JOB_DIR) 안의 파일만 내줄 수 있습니다 — 거기로 복사한 뒤 다시', 'Only files inside this session\'s project folder (' + proj.dir + ') or its job folder ($CLAUDE_JOB_DIR) — copy it there first'));
+  if (FILE_SECRET.test(real) || FILE_SECRET.test(src)) return bad(403, K('비밀 파일(키·비밀번호·.env·설정 등)은 내주지 않습니다', 'Secret files (keys, passwords, .env, settings) are never offered'));
+  if (!s.size) return bad(400, K('빈 파일입니다', 'Empty file'));
+  if (s.size > FILE_BYTES) return bad(413, K('파일이 너무 큽니다(' + attKb(s.size) + ' — ' + attKb(FILE_BYTES) + ' 이하). 나눠서 zip 으로', 'File too large (' + attKb(s.size) + ' — max ' + attKb(FILE_BYTES) + '). Split it'));
+  const st = loadState(); st.files = st.files || {};
+  const mine = Object.values(st.files).filter((f) => f.room === roomId);
+  if (mine.length >= FILE_PER_ROOM) return bad(429, K('한 방에서 ' + FILE_PER_ROOM + '개까지 — 여러 파일은 zip 하나로 묶어 주세요', 'At most ' + FILE_PER_ROOM + ' per session — zip several files into one'));
+  const total = Object.values(st.files).reduce((n, f) => n + (f.size || 0), 0);
+  if (total + s.size > FILE_TOTAL) return bad(507, K('내려받기 칸이 가득 찼습니다(' + attKb(FILE_TOTAL) + ') — 오래된 것이 지워지면 다시', 'The downloads area is full (' + attKb(FILE_TOTAL) + ') — try again after old ones expire'));
+  const name = attSafeName(body.name || path.basename(real));
+  const id = 'f' + Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
+  const dst = path.join(FILE_DIR, id + '-' + name);
+  let size;
+  try { fs.mkdirSync(FILE_DIR, { recursive: true, mode: 0o750 }); fs.copyFileSync(real, dst); fs.chmodSync(dst, 0o640); size = fs.statSync(dst).size; }
+  catch (e) { try { fs.unlinkSync(dst); } catch (_) {} return bad(500, K('사본을 만들지 못했습니다: ', 'Could not copy: ') + (e.code || e.message)); }
+  if (!size || size > FILE_BYTES || total + size > FILE_TOTAL) { try { fs.unlinkSync(dst); } catch (_) {} return bad(413, K('복사하는 사이 파일 크기가 바뀌었습니다(' + attKb(size || 0) + ') — 다 만든 뒤 다시', 'The file changed size while copying (' + attKb(size || 0) + ') — offer it once it is finished')); }
+  const f = { id, room: roomId, roomName: roomName || null, project: proj.key, name, size, note: String(body.note || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200), src: real, at: new Date().toISOString() };
+  st.files[id] = Object.assign({ file: dst }, f);
+  saveState(st);
+  writeLog({ action: 'file-offer', id, room: roomId, project: proj.key, name, size, src: real });
+  return { file: f };
+}
+/** 거두기 — 주인 또는 그 방 자신(room 이 맞을 때) */
+function fileDrop(id, who, room) {
+  const st = loadState(); const f = (st.files || {})[id];
+  if (!f) return { err: [404, K('그 파일이 없습니다', 'No such file')] };
+  if (!isOwner(who) && !(who.role === 'agent' && room && room === f.room)) return { err: [403, K('주인이나 그 파일을 내준 방만 거둘 수 있습니다', 'Only the owner or the session that offered it')] };
+  try { fs.unlinkSync(f.file); } catch (_) {}
+  delete st.files[id]; saveState(st);
+  writeLog({ action: 'file-drop', id, project: f.project, name: f.name, by: actorOf(who) || who.role });
+  return { ok: true, name: f.name };
+}
+/** 화면에 보낼 목록(경로 빼고) — 방 번호별 */
+function filesByRoom() {
+  const out = {};
+  for (const f of Object.values(peekState().files || {})) {
+    (out[f.room] = out[f.room] || []).push({ id: f.id, name: f.name, size: f.size, note: f.note || '', at: f.at, until: new Date(Date.parse(f.at) + filesKeepMs()).toISOString() });
+  }
+  for (const k of Object.keys(out)) out[k].sort((a, b) => a.at.localeCompare(b.at));
+  return out;
+}
+function filesSweep() {
+  const st = loadState(); const map = st.files || {}; const now = Date.now(), keep = filesKeepMs();
+  let gone = 0;
+  for (const [id, f] of Object.entries(map)) {
+    if (now - Date.parse(f.at) > keep || !fs.existsSync(f.file)) { try { fs.unlinkSync(f.file); } catch (_) {} delete map[id]; gone++; }
+  }
+  // 기록에 없는 사본(상태 파일을 되돌렸을 때 등)도 정리
+  try { const known = new Set(Object.values(map).map((f) => path.basename(f.file))); for (const n of fs.readdirSync(FILE_DIR)) if (!known.has(n)) { try { if (now - fs.statSync(path.join(FILE_DIR, n)).mtimeMs > 3600e3) { fs.unlinkSync(path.join(FILE_DIR, n)); gone++; } } catch (_) {} } } catch (_) {}
+  if (gone) { st.files = map; saveState(st); writeLog({ action: 'file-sweep', removed: gone }); }
+  return gone;
+}
+setTimeout(() => { try { filesSweep(); } catch (_) {} }, 90e3).unref();
+setInterval(() => { try { filesSweep(); } catch (_) {} }, 3600e3).unref();
+/** GET /api/files/<번호> — 늘 내려받기로(브라우저가 상황판 주소에서 열어 실행하지 않게) */
+function fileServe(req, res, who, id) {
+  const f = (peekState().files || {})[id];
+  let size = 0; try { size = f ? fs.statSync(f.file).size : 0; } catch (_) { size = 0; }
+  if (!f || !size) return send(res, 404, { ok: false, message: K('파일이 없습니다(기간이 지나 지워졌을 수 있어요 — 그 방에 다시 내 달라고 하세요)', 'File not found (it may have expired — ask the session to offer it again)') });
+  if (who.role === 'agent' || !(isOwner(who) || (CONFIG.filesTeam === true && canSee(who, f.project)))) return send(res, 403, { ok: false, message: K('이 파일을 받을 수 없는 계정입니다', 'This account cannot download this file') });
+  const ascii = f.name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  res.writeHead(200, {
+    'Content-Type': 'application/octet-stream', 'Content-Length': size,
+    'Content-Disposition': 'attachment; filename="' + ascii + '"; filename*=UTF-8\'\'' + encodeURIComponent(f.name),
+    'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; sandbox"
+  });
+  writeLog({ action: 'file-download', id, project: f.project, name: f.name, by: actorOf(who) || who.role, via: who.via });
+  fs.createReadStream(f.file).on('error', () => { try { res.destroy(); } catch (_) {} }).pipe(res);
+}
+
 const CONSULT_MAX = 2, CONSULT_IDLE_MS = Number(process.env.CONSULT_IDLE_MS) || 20 * 60e3, CONSULT_MEM_MB = 1200, CONSULT_TEXT_MAX = 8000, CONSULT_KEEP = 300;
 const CONSULT_SETTINGS = JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Read|Grep|Glob', hooks: [{ type: 'command', command: path.join(__dirname, 'consult-guard.sh') }] }] } });   // 비밀 파일 막기 훅 — 상황판 폴더 기준(공개판도 같게)
 const consults = new Map();   // cid → { cid, project, name, dir, proc, sessionId, startedAt, lastAt, busy, events, partial, clients, err, closed }
@@ -2899,6 +2984,7 @@ async function buildBoard0(gen) {
   const agents = await sharedAgents();
   const now = Date.now();
   const lifted = peekState().limitLifted || null;
+  const fbr0 = filesByRoom();
   const rooms = agents.list.filter((a) => a && (a.id || a.sessionId) && !consultSids.has(a.sessionId) && !consultPids.has(a.pid)).map((a) => {   // id·sessionId 둘 다 없는 줄은 다룰 수 없어 건너뜀   // 💬 상의 창은 방이 아님
     const proj = projectOf(projects, a.cwd);
     const tr0 = readTranscript(transcriptPath(a.cwd, a.sessionId));
@@ -2925,6 +3011,7 @@ async function buildBoard0(gen) {
       lastReport: tr.readable ? (tr.lastReport || '') : null,
       attach: a.id ? `claude attach ${a.id}` : null,
       links: tr.readable ? extractLinks(tr.lastReport, proj) : [],
+      files: (a.id && fbr0[a.id]) || [],   // 📥 이 방이 내준 파일
       alive: !!a.pid,
       pid: a.pid || null,                   // 작업방 자동 점검이 그 방이 뒤에 남긴 명령을 가려낼 때 (CLAUDE_PID)
       // 차례 진행 중 — 일하는 중이거나, 일하던 차례 한가운데서 질문·허락을 기다림(답하면 곧바로 이어서 고친다)
@@ -3023,7 +3110,8 @@ async function buildBoard0(gen) {
     if (!r.alive || (r.idle && (r.status.code === 'waiting' || r.status.code === 'blocked' || r.status.code === 'later' || r.status.limit))) r.status = { code: 'off', label: turnKind === 'limit' ? K('한도 풀림 · 이어서 할 차례 대기', 'Limit lifted · waiting to continue') : turnKind === 'next' ? (pq.fableFid ? K('⏭ 다음 차례 — Fable 판정 다시 받기', '⏭ Next — get the Fable verdict again') : K('⏭ 다음 차례 — 멈춘 곳부터 이어서', '⏭ Next — continue where it stopped')) : K('답 받음 · 순서 대기', 'Answered · in queue'), hint: pq.priority && !pq.note ? K('⚡ 우선 진행 — 다른 방을 기다리지 않고 곧 바로 이어서 함', '⚡ Run first — continues right away without waiting') : holder ? '«' + holder + K('» 끝나면 이어서 함', '» finishes first, then this continues') : (isPaused(st, r.project) && !pq.gate ? K('일시정지 중 — «▶ 작업 다시 시작» 하면 이어서 함', 'Paused — continues after «▶ Restart work»') : K('곧 이어서 함', 'Continues shortly')) };
   }
   const visible = rooms.filter((r) => !(r.sessionId && st.completed[r.sessionId]) || r.pendingReply);
-  const completed = Object.values(st.completed).sort((a, b) => (b.confirmedAt || '').localeCompare(a.confirmedAt || ''));
+  const fbr = filesByRoom();
+  const completed = Object.values(st.completed).sort((a, b) => (b.confirmedAt || '').localeCompare(a.confirmedAt || '')).map((c) => c.id && fbr[c.id] ? Object.assign({}, c, { files: fbr[c.id] }) : c);
   const devInfo = {};
   for (const p of projects) {
     // git 기록(터미널·방·버튼 어디서 했든)과 상황판 버튼 기록 중 더 최근 것
@@ -3433,7 +3521,7 @@ const isOwner = (who) => !!who && (who.role === 'owner' || who.role === 'system'
 /** 기록에 남길 짧은 이름 */
 const actorOf = (who) => who ? (who.role === 'owner' || who.role === 'system' || who.role === 'agent' ? who.role + (who.role === 'owner' ? ':' + who.user : '') : who.role + ':' + who.user) : undefined;
 
-const AGENT_POST = [/^\/api\/asks$/, /^\/api\/todos$/, /^\/api\/todos\/(drop|checked)$/, /^\/api\/fable-wait$/, /^\/api\/inquiry-refs$/, /^\/api\/inquiries$/, /^\/api\/deploy-hold$/, /^\/api\/rooms$/, /^\/api\/submit-trace$/, /^\/api\/schedules$/];
+const AGENT_POST = [/^\/api\/asks$/, /^\/api\/todos$/, /^\/api\/todos\/(drop|checked)$/, /^\/api\/fable-wait$/, /^\/api\/inquiry-refs$/, /^\/api\/inquiries$/, /^\/api\/deploy-hold$/, /^\/api\/rooms$/, /^\/api\/submit-trace$/, /^\/api\/schedules$/, /^\/api\/files(\/f[0-9a-z]{8,24}\/drop)?$/];
 /** 팀원이 이 방에 답해도 되나 — 설정 «팀원이 답하는 방» */
 function memberMayAnswer(who, roomId, projKey) {
   if (!canSee(who, projKey) || !isWorker(who)) return false;
@@ -3739,6 +3827,10 @@ function inqReplyTask(proj, x, opt) {
 }
 /** 팀원·보기 전용에게 보낼 상황판 자료 — 맡은 솔루션 것만 */
 function scopeBoard(out, who) {
+  if (!isOwner(who) && CONFIG.filesTeam !== true) {   // 📥 방이 내준 파일 단추는 주인 화면에만(기본) — 설정 filesTeam
+    const nf = (x) => x && x.files ? Object.assign({}, x, { files: [] }) : x;
+    out = Object.assign({}, out, { rooms: (out.rooms || []).map(nf) }, Array.isArray(out.completed) ? { completed: out.completed.map(nf) } : {});
+  }
   if (who.projects.includes('*')) return out;
   const ok = (x) => x && canSee(who, x.project);
   const o = Object.assign({}, out);
@@ -3761,6 +3853,7 @@ const TASK_HEADER = T((EN ? [
   '- A ✅ Done report includes a «Where to check» section: full dev-site links (e.g. ' + CONFIG.linkExample + ') with one line each on what to check on that screen. The board turns the links into buttons. If the screen needs a specific role, end the line with [as=<role key> <scope>=<id>] (e.g. [as=owner ws=6] — role keys are in the project CLAUDE.md) and do not delete the test data that line shows (name it with [check]; it is cleaned up after 7 days).',
   '- When starting: check git status and this project\'s session log (.claude/session-state.md) first (never overwrite uncommitted changes from other sessions or tools).',
   '- If you need __OWNER__\'s answer (⏸), before reporting post the question to the top of the board (a link to this session is attached): curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF then on the next line {"room":"<last folder name of $CLAUDE_JOB_DIR = this session id>","title":"one-line title","question":"what must be decided · options · result of each","recommend":"your recommendation"} then EOF on the line after. It disappears automatically when __OWNER__ replies in this session. If __OWNER__ has to run a command in the terminal, also add "terminal":["! the command to paste, exactly"] (the board shows «Do it in the terminal» steps with a copy button). A command that asks for a password (sudo, or an installer piped to sh like curl … | sh) cannot run inside the session with «!» — write it without «!» ("terminal":["sudo …"]) and the board tells __OWNER__ to paste it at the server command line instead. The posted question and your last report must give the same command and the same place to run it. A «!» command runs only in this session\'s input opened in a terminal (claude attach <this session id>) — the board\'s «Reply» box only delivers text, so never tell __OWNER__ to paste it there or into «Open session»; in the report name the place as «<project> «<this session name>» session (id <id>) — open it in the terminal with claude attach <id> and paste into its input», and put the command on its own line.',
+  '- If you made a file __OWNER__ should take away (spreadsheet, PDF, image, zip…), offer it on the board: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' -d \'{"room":"<this session id>","path":"<full path of the file>","note":"one-line description"}\' http://127.0.0.1:8800/api/files — a «📥» download button appears on this session\'s card (files inside this project folder or $CLAUDE_JOB_DIR only · zip folders · never secrets). Add to the report: «📥 Download: <file name> — this session\'s card on the board».',
   '- If the task in progress needs an action only __OWNER__ can do, split it two ways. ① A quick action inside our server or service — pasted into a terminal/server window («!», sudo or other password commands, production access), a setting in our own app\'s admin screen, or a one-line value this session is waiting for → do NOT split it off into a separate to-do card — guide it here and finish here: first do everything not blocked by it, then post it to the top of the board as an action in this session: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF then on the next line {"room":"<this session id>","act":true,"title":"one line of what __OWNER__ must do («do X»)","question":"why only __OWNER__ can do it + the bold question «**… then reply «done»?**»","steps":["step 1 exactly as __OWNER__ does it (screen/menu/value)","step 2"],"links":["https://… screen to open"],"terminal":["! command to paste"]} then EOF. The report is ⏸ with the same steps and the bold question. The board shows a «👉 To do» card with «✓ Done» that replies to THIS session; when __OWNER__ replies «done» (or the output of a «!» command arrives here), first check read-only that it took effect, then finish the task in the same conversation (if not, say what is missing in a new ⏸). Do not write «press Done» in the steps. ② Work done neither in our service nor on our server — __OWNER__ sets time aside for it in an external service\'s screens (Google, Meta, app stores, payment, issuing a key/account), or follow-up apart from this task (later date / after another card — "after":"YYYY-MM-DD" / "waitFor":"<tid>") → an «owner to-do» card (/api/todos): finish this task up to that point, add "apart":"one line why it is separate" and a «then» (check and finish after «done» — readable without this conversation); the board refuses room cards without it. Report ✅ with «Owner to-do: <title> — posted to the board». Moving an action question you already posted to a card removes that question. When unsure: inside our server/service → ①, any other screen → ②. Do not post checks/tests («see whether it works», on a real device) as actions — __OWNER__ looks at «Where to check» on the finished task. Keep it short: at most 4 steps, 120 characters per step — only screen, button and value.',
   '- When done (✅): if a lot has piled up since the last «/dev-done» commit — 10+ uncommitted files or the last /dev-done commit is older than 24 hours — and `~/dev-server/kit/bin/ai-key-wait 2>/dev/null; claude agents --json` shows no other «busy» session in the same project folder, run this project\'s /dev-done procedure (log · commit · backup) and mention it in the report. Never deploy to production.',
   '',
@@ -3777,6 +3870,7 @@ const TASK_HEADER = T((EN ? [
   '- ✅ 완료 보고에는 «확인할 곳» 절을 넣는다: 개발서버 전체 주소 링크(예: https://dev.example.com/admin/orders)와 그 화면에서 무엇을 확인할지 한 줄씩. 상황판이 링크를 버튼으로 보여 준다. 특정 역할로 봐야 하는 화면이면 줄 끝에 [as=<역할키> <범위>=<번호>] (예: [as=owner ws=6] — 역할키는 그 솔루션 CLAUDE.md) 를 붙이고, 그 줄이 보여 주는 시험 데이터는 지우지 않는다(이름에 [확인용] · 7일 뒤 정리).',
   '- 시작할 때: git status 와 이 솔루션 작업기록(.claude/session-state.md)을 먼저 확인한다(다른 방·도구의 미커밋 변경 덮어쓰기 금지).',
   '- __OWNER__ 답이 필요하면(⏸) 보고 전에 상황판 맨 위에 질문을 올린다(이 방 링크가 붙는다): curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF 다음 줄에 {"room":"<$CLAUDE_JOB_DIR 의 마지막 폴더 이름 = 이 방 번호>","title":"한 줄 제목","question":"무엇을 정해야 하는지·선택지·각 결과","recommend":"권고"} 그다음 줄에 EOF. __OWNER__ 가 이 방에 답하면 저절로 빠진다. __OWNER__ 가 터미널에서 명령을 실행해야 하는 일이면 "terminal":["! 붙여 넣을 명령 그대로"] 도 넣는다(상황판이 «터미널에서 하기» 순서와 복사 버튼으로 보여 준다). 비밀번호를 묻는 명령(sudo · curl … | sh 같은 설치 줄)은 방 안 «!» 로는 실행되지 않으니 «!» 없이 "terminal":["sudo …"] 로 넣는다(상황판이 «서버 창에서 하기» 로 안내). 올린 질문과 마지막 보고는 같은 명령·같은 실행 장소로 쓴다. «!» 명령은 터미널에서 연 이 방 입력칸(claude attach <이 방 번호>)에서만 실행된다 — 상황판 «답하기»·«방 열기» 칸은 글만 전달하니 거기 붙이라고 쓰지 않는다. 보고에는 붙일 곳을 «<솔루션> «<이 방 이름>» 작업방(방 번호 <번호>) — 터미널에서 claude attach <번호> 로 열어 입력칸에» 로 쓰고 명령은 따로 한 줄에.',
+  '- __OWNER__ 가 받아 가야 할 파일(엑셀·PDF·사진·zip 등)을 만들었으면 상황판에 내준다: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' -d \'{"room":"<이 방 번호>","path":"<파일 전체 경로>","note":"한 줄 설명"}\' http://127.0.0.1:8800/api/files — 이 방 카드에 «📥» 내려받기 단추가 생긴다(이 솔루션 폴더·$CLAUDE_JOB_DIR 안 파일만 · 폴더는 zip 으로 · 비밀 파일 안 됨). 보고에 «📥 내려받기: <파일 이름> — 상황판 이 방 카드» 한 줄.',
   '- 진행 중인 이 일에 __OWNER__ 만 할 수 있는 행동이 필요하면 둘로 가른다. ① 우리 서버·우리 서비스 안에서 바로 하는 짧은 행동 — 터미널·서버 창에 붙여 넣는 명령(«!»·sudo 같은 비밀번호 명령·운영 접속)·우리 솔루션 관리자 화면 설정·이 방이 기다리는 값 한 줄 답하기 → 따로 «직접 할 일» 카드로 빼지 않는다 — 이 방에서 안내하고 이 방에서 마무리한다: 그 행동에 막히지 않는 일을 먼저 끝까지 하고, 상황판 맨 위에 이 방 행동 질문으로 올린다: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' --data-binary @- http://127.0.0.1:8800/api/asks <<EOF 다음 줄에 {"room":"<이 방 번호>","act":true,"title":"__OWNER__ 가 할 행동 한 줄(«…하기»)","question":"왜 __OWNER__ 만 할 수 있는지 + 굵은 질문 «**…하고 «했어요» 라고 답해 주실래요?**»","steps":["그대로 따라 할 1단계(화면·메뉴·넣을 값)","2단계"],"links":["https://… 열 화면"],"terminal":["! 붙여 넣을 명령"]} 그다음 줄에 EOF. 보고는 ⏸ — 같은 순서와 굵은 질문. 상황판이 «👉 할 일» 카드와 «✓ 했어요» 버튼(이 방 같은 대화로 감)을 보여 준다. __OWNER__ 가 답으로 «했어요»(또는 «!» 명령 결과)를 보내면 먼저 실제로 됐는지 읽기로 확인하고 같은 대화에서 이어서 끝까지 한다(안 됐으면 빠진 것을 새 ⏸ 로). steps 에 «했어요 누르기» 를 쓰지 않는다. ② 우리 서비스(솔루션 화면)도 우리 서버(터미널)도 아닌 곳에서 하는 일 — 외부 서비스 화면(Google·Meta·앱 스토어·결제·계정/키 발급 등)에서 __OWNER__ 가 시간을 따로 내서 하는 일 — 또는 이 방 일과 따로 노는 뒷일(나중 날짜·다른 카드 뒤 — "after":"YYYY-MM-DD"·"waitFor":"<tid>") → «직접 할 일» 카드(/api/todos): 그 앞까지 이 방 일을 끝내고 "apart":"왜 따로인지 한 줄" 과 then(«했어요» 뒤 확인·마무리 — 이 대화 없이도 이어갈 수 있게)을 넣는다(없으면 상황판이 방 카드를 받지 않는다). 보고 ✅ 에 «__OWNER__ 할 일: <제목> — 상황판에 올림». 이미 이 방 행동 질문으로 올린 같은 일을 카드로 옮기면 상황판이 그 질문을 뺀다. 헷갈리면: 우리 서버·우리 서비스 안에서 하는 일이면 ①, 그 밖의 화면에서 하는 일이면 ②. 확인·테스트(«…되는지 보기»·실기기로 보기)는 행동으로 올리지 않는다 — __OWNER__ 는 끝난 일의 «확인할 곳» 을 본다. 짧게 — steps 4줄·한 줄 120자 이하, 화면·버튼·넣을 값만.',
   '- 끝났을 때(✅): 마지막 «/개발완료» 커밋 이후 쌓인 일이 크면 — 미커밋 파일 10개 이상 또는 마지막 /개발완료 커밋이 24시간 넘음 — 그리고 `~/dev-server/kit/bin/ai-key-wait 2>/dev/null; claude agents --json` 에 같은 솔루션 폴더의 다른 «busy» 방이 없으면, 이 솔루션의 /개발완료 절차(기록·커밋·백업)를 이어서 실행하고 보고에 적는다. 운영 배포는 하지 않는다.',
   '',
@@ -3800,6 +3894,7 @@ function taskHeader() {
     '- Follow the shared rules in ~/.claude/CLAUDE.md («When to stop» · «Reports») as written: work alone in the background to the end · questions collected into one bold «?» sentence via /api/asks · actions only __OWNER__ can do for the task in progress are guided in this session (⏸ · /api/asks act:true) — /api/todos only for separate follow-up · no production deploy, production DB writes or external sends without __OWNER__ · do not ask about deploying · first line ✅/⏸/❌/🕓 · ✅ includes «Where to check».',
     AI_LANG ? '- Write every report, question and reply to __OWNER__ in ' + AI_LANG + '. Keep the status emoji at the very start of the first line (✅ ⏸ ❌ 🕓) and keep the session-log section headings exactly as they are — the board reads them.' : null,
     '- When starting: check git status and this project\'s session log (.claude/session-state.md) first (never overwrite uncommitted changes from other sessions or tools).',
+    '- If you made a file __OWNER__ should take away (spreadsheet, PDF, image, zip…), offer it on the board: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' -d \'{"room":"<this session id>","path":"<full path of the file>","note":"one-line description"}\' http://127.0.0.1:8800/api/files — a «📥» download button appears on this session\'s card (files inside this project folder or $CLAUDE_JOB_DIR only · zip folders · never secrets). Add to the report: «📥 Download: <file name> — this session\'s card on the board».',
     '- When done (✅): if a lot has piled up since the last «/dev-done» commit — 10+ uncommitted files or the last /dev-done commit is older than 24 hours — and `~/dev-server/kit/bin/ai-key-wait 2>/dev/null; claude agents --json` shows no other «busy» session in the same project folder, run this project\'s /dev-done procedure (log · commit · backup) and mention it in the report. Never deploy to production.',
     '', '[Task]', ''
   ] : [
@@ -3807,6 +3902,7 @@ function taskHeader() {
     '- 공용 규칙 ~/.claude/CLAUDE.md(«멈춰야 할 때»·«보고») 를 그대로 따른다 — 백그라운드에서 혼자 끝까지 · 질문은 굵은 «?» 문장 하나로 모아 /api/asks · 진행 중 일에 필요한 __OWNER__ 행동은 이 방에서 안내(⏸ · /api/asks act:true) — /api/todos 는 따로 노는 뒷일만 · 운영 배포·운영 DB 쓰기·외부 발송은 __OWNER__ 지시 없이 안 함 · 배포는 묻지 않음 · 보고 첫 줄 ✅/⏸/❌/🕓 · ✅ 에는 «확인할 곳».',
     AI_LANG ? '- __OWNER__ 에게 하는 보고·질문·답은 ' + AI_LANG + ' 로 쓴다. 첫 줄 맨 앞 상태 기호(✅ ⏸ ❌ 🕓)와 작업기록 절 제목은 그대로 둔다 — 상황판이 읽는다.' : null,
     '- 시작할 때: git status 와 이 솔루션 작업기록(.claude/session-state.md)을 먼저 확인한다(다른 방·도구의 미커밋 변경 덮어쓰기 금지).',
+    '- __OWNER__ 가 받아 가야 할 파일(엑셀·PDF·사진·zip 등)을 만들었으면 상황판에 내준다: curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:8800\' -d \'{"room":"<이 방 번호>","path":"<파일 전체 경로>","note":"한 줄 설명"}\' http://127.0.0.1:8800/api/files — 이 방 카드에 «📥» 내려받기 단추가 생긴다(이 솔루션 폴더·$CLAUDE_JOB_DIR 안 파일만 · 폴더는 zip 으로 · 비밀 파일 안 됨). 보고에 «📥 내려받기: <파일 이름> — 상황판 이 방 카드» 한 줄.',
     '- 끝났을 때(✅): 마지막 «/개발완료» 커밋 이후 쌓인 일이 크면 — 미커밋 파일 10개 이상 또는 마지막 /개발완료 커밋이 24시간 넘음 — 그리고 `~/dev-server/kit/bin/ai-key-wait 2>/dev/null; claude agents --json` 에 같은 솔루션 폴더의 다른 «busy» 방이 없으면, 이 솔루션의 /개발완료 절차(기록·커밋·백업)를 이어서 실행하고 보고에 적는다. 운영 배포는 하지 않는다.',
     '', '[할 일]', ''
   ]).filter((x) => x !== null).join('\n'));
@@ -5766,6 +5862,22 @@ async function handleAction(req, res, url, who) {
     return send(res, 200, { ok: true, n: items.length, cut, autoQueued: autoSent, autoHeld: autoR.held, autoWithdrawn: autoGone, message: K(proj.name + ' 들어온 문의 ' + items.length + '건으로 바꿨습니다' + (cut.length ? ' · 줄이거나 고친 칸: ' + cut.join(', ') : '') + (autoSent.length ? ' · 답장 자동 보내기로 대기열에 넣음: ' + autoSent.join(', ') : ''), proj.name + ' inquiries replaced with ' + items.length + (cut.length ? ' · trimmed/fixed: ' + cut.join(', ') : '') + (autoSent.length ? ' · auto-reply queued: ' + autoSent.join(', ') : '')) });
   }
   if (url.startsWith('/api/consult/')) return await consultAction(req, res, url, body);
+  { const dm = url.match(/^\/api\/files\/(f[0-9a-z]{8,24})\/drop$/); if (dm) { const r = fileDrop(dm[1], who, String(body.room || '')); if (r.err) return send(res, r.err[0], { ok: false, message: r.err[1] }); cache.at = 0; return send(res, 200, { ok: true, message: K('«' + r.name + '» 내려받기를 거뒀습니다', 'Withdrew «' + r.name + '»') }); } }
+  if (url === '/api/files') {
+    const rid = String(body.room || '').trim();
+    if (!/^[0-9a-f]{8}$/.test(rid)) return send(res, 400, { ok: false, message: K('room 에 이 방 번호($CLAUDE_JOB_DIR 의 마지막 폴더 이름)를 넣어 주세요', 'Put this session id (last folder name of $CLAUDE_JOB_DIR) in "room"') });
+    const a = (await agentsRecent()).list.find((x) => x.id === rid && x.kind === 'background');
+    const proj = a && projectOf(loadProjects(), a.cwd);
+    if (!proj) return send(res, 404, { ok: false, message: K('방 ' + rid + ' 을 찾지 못했거나 등록된 솔루션 폴더의 방이 아닙니다', 'Session ' + rid + ' not found or not in a registered project folder') });
+    if (!isOwner(who) && who.role !== 'agent') return send(res, 403, { ok: false, message: K('작업방만 파일을 내줄 수 있습니다', 'Only sessions can offer files') });
+    const r = fileOffer(body, proj, rid, a.name);
+    if (r.err) return send(res, r.err[0], { ok: false, message: r.err[1] });
+    cache.at = 0;
+    const days = Math.round(filesKeepMs() / 864e5);
+    return send(res, 200, { ok: true, id: r.file.id, name: r.file.name, size: r.file.size, url: '/api/files/' + r.file.id,
+      message: K('상황판 이 방 카드·끝난 일 목록에 «📥 ' + r.file.name + '» 내려받기 단추가 생겼습니다(' + days + '일 보관 · 지금 파일의 사본). 보고에 «📥 내려받기: ' + r.file.name + ' — 상황판 이 방 카드» 한 줄을 쓰세요.',
+        'A «📥 ' + r.file.name + '» download button is now on this session\'s card and in the done list (kept ' + days + ' days · a copy of the file as it is now). Add one line to the report: «📥 Download: ' + r.file.name + ' — this session\'s card on the board».') });
+  }
   if (url === '/api/fable-wait') {
     const projects = loadProjects();
     let proj = null, room = null, sessionId = null, roomName = null, cwd = null;
@@ -6510,6 +6622,7 @@ async function serveReq(req, res, who) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(html);
     }
+    { const fm = url.match(/^\/api\/files\/(f[0-9a-z]{8,24})$/); if (fm) return fileServe(req, res, who, fm[1]); }   // 📥 방이 내준 파일
     if (url === '/api/gate') {   // ⚙ 개발 사이트 관문 — 주인만
       if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있습니다', 'Owner only') });
       return send(res, 200, { ok: true, projects: gate.settings(), always: gate.ALWAYS, defaults: gate.DEFAULT_EXCEPT, names: Object.fromEntries(loadProjects().map((p) => [p.key, p.name])),
@@ -8799,12 +8912,14 @@ function deployPrepText(proj) {
   return K('[배포 준비 — 상황판 실행기]\n' +
     '__OWNER__ 는 화면을 보고 있지 않다. 이 방은 배포 «준비» 만 한다. 배포 명령(`' + c.command + '`)은 실행하지 않는다 — 이 방이 끝나면 상황판이 직접 실행하고 운영 확인·기록까지 한다(자동 허락 검사에 막히지 않게).\n' +
     '1. 이 솔루션 `.claude/commands/배포.md` 에서 배포 명령 «전에» 준비하는 것만 한다(예: 배포 기록 파일·화면 버전 만들기) — 만든 파일만 `git commit -- <경로>`. 다른 방의 미커밋 변경은 건드리지 않는다. 버전 올리기·릴리즈노트·공지·메일은 손으로 하지 않는다(새 소식은 배포 스크립트가 스스로 하면 상황판이 그 커밋을 대기열로 넘긴다).\n' +
-    '2. 나갈 범위(운영 배포 뒤 커밋)를 읽고 반쯤 된 기능·위험한 DB 변경처럼 지금 나가면 안 되는 것이 있으면: `curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:' + PORT + '\' -d \'{"project":"' + proj.key + '","room":"\'$(basename "$CLAUDE_JOB_DIR")\'","reason":"한 줄 까닭"}\' http://127.0.0.1:' + PORT + '/api/deploy-hold` 하고 첫 줄 ⏸.\n' +
-    '3. 준비가 끝나면 첫 줄 «✅ 배포 준비 끝»(앞에 다른 말 없이 보고 맨 첫 글자) + 준비한 것 한두 줄. 배포 스크립트·검사 우회(--skip-*)는 하지 않는다.',
+    '2. 배포 전 데이터 검사 먼저(11-20 ShopApp 실패 — 다른 방이 데모 매장에 넣은 시험 데이터 한 줄이 배포 스크립트 검사에 걸림 13절): 배포.md 에 «배포 전 검사»(개발 DB·개발 서버를 보는 검사 — 인스펙션·health-check·게이트 미리보기 등)가 적혀 있으면 배포 명령 대신 그 검사만 개발서버에서 돌린다. 걸린 것이 시험 데이터(확인용·데모 매장)면 개발 DB 에서 규칙에 맞는 값으로 고쳐 다시 돌려 0 을 확인하고 보고에 «고친 시험 데이터» 한 줄 · 코드·실데이터 문제거나 고칠 값을 정할 수 없으면 아래 3번(deploy-hold)으로 막고 이 솔루션 대기열에 고칠 일. 검사 끄기·기준선 올리기·--skip-* 로 넘기지 않는다. 운영 DB 는 건드리지 않는다.\n' +
+    '3. 나갈 범위(운영 배포 뒤 커밋)를 읽고 반쯤 된 기능·위험한 DB 변경처럼 지금 나가면 안 되는 것이 있으면: `curl -s -X POST -H \'Content-Type: application/json\' -H \'Origin: http://localhost:' + PORT + '\' -d \'{"project":"' + proj.key + '","room":"\'$(basename "$CLAUDE_JOB_DIR")\'","reason":"한 줄 까닭"}\' http://127.0.0.1:' + PORT + '/api/deploy-hold` 하고 첫 줄 ⏸.\n' +
+    '4. 준비가 끝나면 첫 줄 «✅ 배포 준비 끝»(앞에 다른 말 없이 보고 맨 첫 글자) + 준비한 것 한두 줄(배포 전 검사를 돌렸으면 «배포 전 검사: 통과»). 배포 스크립트·검사 우회(--skip-*)는 하지 않는다.',
     '[Deploy prep — board runner]\nThe owner is not watching. This session only PREPARES the deploy. Do not run the deploy command (`' + c.command + '`) — when this session ends the board runs it itself, checks production and records it.\n' +
     '1. From this project\'s deploy procedure do only what comes before the deploy command (e.g. deploy record file, frontend version) — commit only those files with `git commit -- <paths>`. Do not touch other sessions\' uncommitted changes. No manual version bump, release notes, announcements or emails (if the deploy script publishes «What\'s new» itself, the board queues its commit).\n' +
-    '2. Read what would ship; if something must not ship now (half-done feature, risky DB change): POST /api/deploy-hold {"project":"' + proj.key + '","room":"<this session id>","reason":"…"} and make the first line ⏸.\n' +
-    '3. When done, first line «✅ Deploy prep done» + one or two lines. Never bypass the deploy script\'s checks.');
+    '2. Pre-deploy data checks first: if the deploy procedure lists checks that read the dev DB / dev server (inspection, health-check, gate preview), run only those on dev. If a failure is test/demo data, fix that row on the dev DB to valid values, rerun to 0 and note it in the report; if it is code or real data, or the value cannot be decided, hold (step 3) and queue a fix task. Never disable checks, bless baselines or --skip-*. Never touch the production DB.\n' +
+    '3. Read what would ship; if something must not ship now (half-done feature, risky DB change): POST /api/deploy-hold {"project":"' + proj.key + '","room":"<this session id>","reason":"…"} and make the first line ⏸.\n' +
+    '4. When done, first line «✅ Deploy prep done» + one or two lines (\'pre-deploy checks: pass\' if run). Never bypass the deploy script\'s checks.');
 }
 const DEPLOY_BAD_ASK_RE = /배포 (안 함|시작 못 함|실패|결과 모름)|자동으로 다시 배포|deploy (not run|did not start|failed|result unknown)|auto[- ]redeploy/i;
 /** 실행이 끝나면 — 성공은 기록만 · 실패·모름은 맨 위에(되돌리는 길 1줄 · 실행은 안 함) */
@@ -9135,4 +9250,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

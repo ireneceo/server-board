@@ -2567,6 +2567,29 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     return w;
   }
 
+  // 📥 방이 내준 파일 — 누르면 바로 내려받기
+  function fileKb(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB'; }
+  function fileList(files) {
+    var w = el('div', 'file-list');
+    (files || []).forEach(function (f) {
+      var line = el('div'); line.style.cssText = 'margin-top:6px;';
+      var a = el('a', null, '📥 ' + f.name + ' · ' + fileKb(f.size));
+      a.href = '/api/files/' + encodeURIComponent(f.id); a.setAttribute('download', f.name); a.rel = 'noopener';
+      a.title = K('누르면 내려받기 · ', 'Click to download · ') + fmt(Date.parse(f.until)) + K(' 까지 보관', ' kept until');
+      a.style.cssText = 'display:inline-block;padding:4px 12px;border:1px solid var(--link);border-radius:999px;color:var(--link);font-weight:600;font-size:13px;text-decoration:none;word-break:break-all;';
+      a.addEventListener('click', function (ev) { ev.stopPropagation(); });
+      line.appendChild(a);
+      if (OWN_NOW) {   // 주인만 — 잘못 내준 파일 거두기
+        var x = el('button', 'more', K('✕ 거두기', '✕ Withdraw')); x.style.marginLeft = '8px';
+        x.addEventListener('click', function (ev) { ev.stopPropagation(); if (confirm(K('«' + f.name + '» 내려받기를 거둘까요? (사본이 지워짐)', 'Withdraw «' + f.name + '»? (the copy is deleted)'))) act('/api/files/' + f.id + '/drop', {}, x); });
+        line.appendChild(x);
+      }
+      if (f.note) { var nt = el('div', null, f.note); nt.style.cssText = 'color:var(--muted);font-size:12px;margin-top:2px;line-height:1.5;'; line.appendChild(nt); }
+      w.appendChild(line);
+    });
+    return w;
+  }
+
   // 🕓 나중에 할 일을 지금 시작 — 방 줄·맨 위 초록 칸 어디서 눌러도 같은 동작
   function runLater(r, b) {
     act('/api/rooms/' + r.id + '/reply', { text: K('나중에 하기로 했던 일을 지금 진행해 줘. 아직도 할 수 없는 상태면 확인한 내용과 함께 첫 줄 🕓 나중에 로 다시 보고해.', 'Go ahead now with the work that was postponed. If it still cannot be done, report again with what you checked and first line 🕓 Later.'), confirm: true }, b);
@@ -2719,6 +2742,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     if (r.status.code === 'done' && r.links && r.links.length) {
       var lc = linkList(r.links, 3); lc.style.cssText += 'padding:0 16px 8px 16px;'; row.appendChild(lc);
     }
+    if (r.files && r.files.length) { var fl0 = fileList(r.files); fl0.style.cssText = 'padding:0 16px 8px 16px;'; row.appendChild(fl0); }
     if (r.kind === 'background' && r.id) row.appendChild(quickBar(r));
 
     var d = el('div', 'detail');
@@ -4415,6 +4439,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var first = (c.report || '').split('\n').filter(function (x) { return x.trim(); })[0] || '';
       if (first) it.appendChild(el('div', 'rmeta', first.slice(0, 160)));
       if (c.links && c.links.length) { var cl = linkList(c.links, 8); cl.style.marginTop = '6px'; it.appendChild(cl); }
+      if (c.files && c.files.length) it.appendChild(fileList(c.files));
       var rb = el('button', 'more', K('진행 목록으로 다시 꺼내기', 'Move back to the active list'));
       rb.addEventListener('click', function () { act('/api/completed/' + c.sessionId + '/reopen', {}, rb); });
       it.appendChild(rb);
@@ -4758,6 +4783,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var first = (c.report || '').split('\n').filter(function (x) { return x.trim(); })[0] || '';
       if (first) it.appendChild(el('div', 'rmeta', first.slice(0, 180)));
       if (c.links && c.links.length) { var cl = linkList(c.links, 8); cl.style.marginTop = '6px'; it.appendChild(cl); }
+      if (c.files && c.files.length) it.appendChild(fileList(c.files));
       var rb = el('button', 'more', K('다시 꺼내기', 'Bring back'));
       rb.addEventListener('click', function () { act('/api/completed/' + c.sessionId + '/reopen', {}, rb); });
       it.appendChild(rb); box.appendChild(it);
@@ -5216,7 +5242,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     notifyChanges(data);
     var raw = data; data = doneView(data);
     // 바뀐 게 없으면 다시 그리지 않는다 — 읽던 대화 위치가 튀지 않게
-    var sig = JSON.stringify([JSON.stringify(data.ai || null), JSON.stringify(data.claudeCheck || null), JSON.stringify(data.update || null), JSON.stringify(data.setup || null), setupShow, JSON.stringify(data.paused || {}), (data.parked || []).length, JSON.stringify(openPending), data.rooms.map(function (r) { return r.question || ''; }), data.agentsOk, !!data.notifyAll, noticeOff, data.asks || [], data.fableWait || [], data.schedules || [], data.projects, data.queue, (data.completed || []).length, data.rooms.map(function (r) { return [r.id, r.sessionId, r.name, r.status, r.alive, (r.lastReport || '').length, (r.links || []).length, r.pendingReply || null, r.notify || '', r.doing ? r.doing.text + r.doing.at : '', r.lastActivity, r.lastReportAt]; }), Math.floor(Date.now() / 60000)]);   // «n분 전» 이 1분마다 바뀌게
+    var sig = JSON.stringify([JSON.stringify(data.ai || null), JSON.stringify(data.claudeCheck || null), JSON.stringify(data.update || null), JSON.stringify(data.setup || null), setupShow, JSON.stringify(data.paused || {}), (data.parked || []).length, JSON.stringify(openPending), data.rooms.map(function (r) { return r.question || ''; }), data.agentsOk, !!data.notifyAll, noticeOff, data.asks || [], data.fableWait || [], data.schedules || [], data.projects, data.queue, (data.completed || []).length, (data.completed || []).reduce(function (n, c) { return n + (c.files || []).length; }, 0), data.rooms.map(function (r) { return [r.id, r.sessionId, r.name, r.status, r.alive, (r.lastReport || '').length, (r.links || []).length, (r.files || []).length, r.pendingReply || null, r.notify || '', r.doing ? r.doing.text + r.doing.at : '', r.lastActivity, r.lastReportAt]; }), Math.floor(Date.now() / 60000)]);   // «n분 전» 이 1분마다 바뀌게
     if (sig === lastSig) {
       document.getElementById('sub').textContent = EN ? 'Updated ' + fmt(data.generatedAt) + (live && live.ok ? ' · live' : ' · auto-refresh every 3 s') : '마지막 갱신 ' + fmt(data.generatedAt) + (live && live.ok ? ' · 바뀌면 바로' : ' · 3초마다 자동 갱신');
       return;

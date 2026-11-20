@@ -15,3 +15,5 @@ board/deploy.lock
 board/secrets/
 install-info.json
 setup-plan.md
+board/downloads/
+board/fbtriage/
