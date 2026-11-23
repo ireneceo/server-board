@@ -5,7 +5,7 @@
 > Marks: ✔ actually walked through · ⚠ not yet walked through (update after trying)
 
 ## 1. Add a person (per project — choose their projects)
-**Who:** the final approver only (⚙ Team & roles is shown only to them · asks for the 6 digits again if the last authenticator check was over 30 minutes ago). Members, designers and AI sessions cannot add people or change roles. If you ask an AI session to "add a member", it only walks you through this section.
+**Who:** the final approver only (⚙ Team & roles is shown only to them · asks for the 6 digits again if the last authenticator check was over 30 minutes ago). Other people and AI sessions cannot add people or change access. If you ask an AI session to "add a member", it only walks you through this section.
 
 **0. First — a route in for that person** (the board is not open to the internet, so an account alone does not let them open it) — one of:
 - **SSH tunnel**: the server admin creates their server account (`sudo adduser <id>`) and puts the **public key** they send (one line of `~/.ssh/id_ed25519.pub`) into that account's `~/.ssh/authorized_keys` → they keep `ssh -N -L <port>:127.0.0.1:<port> <id>@<server>` running on their computer and open `http://localhost:<port>`. ID = that server account name. **A tunnel opened with someone else's account (e.g. the final approver's) is refused at sign-in** — route and ID must match
@@ -13,12 +13,12 @@
 
 1. Board **⚙ Team & roles** → **+ Add account**
 2. ID: pick their server account if they have one; otherwise «(Tailscale only)» plus their Tailscale login (e.g. name@example.com)
-3. Name · role (member / designer / viewer / final approver) · tick their projects → **Save**
+3. Name · job (developer, designer, planner, QA, marketer, operations, other — a label) · title (lead, member… free text — a label) · **access** (Propose / View only / Final approver — the only thing that decides buttons) · tick their projects → **Save**. An old «designer» role becomes «access Propose + job Designer» automatically
 4. Work down the four steps on their card (① route in ② save ③ invitation ④ they register) — ③ **Make invitation & copy** → paste it into chat or email to that person only. It holds the sign-in link (**single use within 24 hours**, address for their route) + the SSH tunnel command with their ID or the Tailscale address + sign-in steps + rules. A new one cancels the previous link
 5. They open it, register **their own phone's authenticator app** (QR · 6 digits), set a password (10+ characters) and are signed in — the 10 backup codes are theirs
 6. Done when step ④ shows «Registered — password ✔ · authenticator ✔». Details: [member guide](TEAM-GUIDE.md) (the invitation already holds the essentials)
 - If opening the link says «This account cannot sign in through this route»: the SSH tunnel was opened with an account other than theirs, or the Tailscale login field is empty or a different email → fix step 0
-- **Members also use an authenticator** (⚙ Team & roles ①, on by default · server-wide): turn it off and members, designers and viewers sign in with a password only. Anyone who only set a password (e.g. the setting was turned on later) is told at sign-in to get a new link — send their row's Sign-in link again. Each row shows «authenticator ✔ / ⚠ none»
+- **Members also use an authenticator** (⚙ Team & roles ①, on by default · server-wide): turn it off and everyone who is not a final approver (Propose, View only) signs in with a password only. Anyone who only set a password (e.g. the setting was turned on later) is told at sign-in to get a new link — send their row's Sign-in link again. Each row shows «authenticator ✔ / ⚠ none»
 - The app entry is named «Server Board · <server name>» (config.json `serverName`, else the host in `devSsh`). With boards on several servers, give each a different name so entries are easy to tell apart
 
 ✔ Link → password → sign-in → role shown: tested on a test board (2026-10-29) · ⚠ not yet with a real member

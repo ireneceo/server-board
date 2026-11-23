@@ -11,7 +11,7 @@
 | 무엇 | 파일 | 바꾸는 방 | 바꾼 뒤 |
 |---|---|---|---|
 | 주인 이름·언어·시간대·포트·접속 명령·서버 이름(인증 앱 항목) | `~/dev-server/board/config.json` (예: `config.example.json`) | 서버 방 | `pm2 restart dev-board` |
-| 팀원·역할·맡은 솔루션·승인 설정(`config.json` `team`) · 비밀번호·인증 앱(`board/secrets/`) | 상황판 **⚙ 팀·권한** | **최종 컨펌자만**(방은 이 칸·secrets 를 직접 쓰지 않음 — «팀원 넣어 줘» 를 받으면 [OPERATIONS 1절](OPERATIONS.ko.md) 순서를 안내: 들어올 길(서버 계정 sudo 또는 Tailscale 초대) → ⚙ 팀·권한 + 계정 넣기 → 카드 할 일 4단계 → ③ «안내문 만들기·복사» 를 그 사람에게) | 저장 즉시 |
+| 팀원(권한 `role` owner·member·viewer · 직무 `job` · 직책 `title`)·맡은 솔루션·승인 설정(`config.json` `team`) · 비밀번호·인증 앱(`board/secrets/`) | 상황판 **⚙ 팀·권한** | **최종 컨펌자만**(방은 이 칸·secrets 를 직접 쓰지 않음 — «팀원 넣어 줘» 를 받으면 [OPERATIONS 1절](OPERATIONS.ko.md) 순서를 안내: 들어올 길(서버 계정 sudo 또는 Tailscale 초대) → ⚙ 팀·권한 + 계정 넣기 → 카드 할 일 4단계 → ③ «안내문 만들기·복사» 를 그 사람에게) | 저장 즉시 |
 | 솔루션 목록과 솔루션별 버튼·배포·문의·표식 | `~/dev-server/projects.json` (2절) | 서버 방 | 저장하면 바로(다시 켤 필요 없음) |
 | 솔루션이 쓰는 외부 서비스(키 이름만) | `~/dev-server/services.json` | 서버 방 | 바로 |
 | 이 서버 모든 Claude 의 일하는 방식 | `~/.claude/CLAUDE.md` | 서버 방(주인 지시로) | 새 방부터 |

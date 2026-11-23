@@ -1,6 +1,6 @@
-# Guide for members and designers
+# Team guide (Propose and View only)
 
-> For team members and designers who request work on this board. No server knowledge needed.
+> For people who request work on this board (any job — developer, designer, planner…). No server knowledge needed.
 
 ## Getting in
 1. Install an authenticator app on your phone (Google Authenticator or any standard app). It must be **your own phone and app** — never borrow someone else's.
@@ -22,7 +22,7 @@
 - **Requests go in as proposals.** The final approver chooses do / edit & do / don't before work starts (depending on settings).
 - You can answer questions from sessions started from your own proposals (setting «Sessions members answer»).
 - Deploys, settings, deletes and team changes are for the final approver.
-- Designers: same as members for now. Direct small UI edits (text, colour, spacing, layout) open in a later stage.
+- What you can press is set by your **access** (Propose / View only). Job (developer, designer…) and title (lead, member…) are labels — they do not change access, and the session gets them with your request (e.g. «proposed by designer Park»). Direct small UI edits (text, colour, spacing, layout) open in a later stage.
 
 ## Writing a good request
 - What · why · which screen (address) · what «done» looks like, in one piece.

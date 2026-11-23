@@ -11,7 +11,7 @@
 | What | File | Changed by | After a change |
 |---|---|---|---|
 | Owner name, language, time zone, port, SSH command, server name (authenticator entry) | `~/dev-server/board/config.json` (see `config.example.json`) | server session | `pm2 restart dev-board` |
-| Members, roles, their projects, approval settings (`config.json` `team`) · passwords and authenticators (`board/secrets/`) | board **⚙ Team & roles** | **final approver only** (sessions never write this field or secrets — asked to "add a member", walk the owner through [OPERATIONS §1](OPERATIONS.md): route in (server account via sudo, or Tailscale invite) → ⚙ Team & roles + Add account → the four steps on the card → ③ «Make invitation & copy» to that person) | live on save |
+| Members (access `role` owner·member·viewer · job `job` · title `title`), their projects, approval settings (`config.json` `team`) · passwords and authenticators (`board/secrets/`) | board **⚙ Team & roles** | **final approver only** (sessions never write this field or secrets — asked to "add a member", walk the owner through [OPERATIONS §1](OPERATIONS.md): route in (server account via sudo, or Tailscale invite) → ⚙ Team & roles + Add account → the four steps on the card → ③ «Make invitation & copy» to that person) | live on save |
 | Project list and per-project buttons, deploy, inquiries, markers | `~/dev-server/projects.json` (section 2) | server session | live on save |
 | External services per project (key names only) | `~/dev-server/services.json` | server session | live |
 | How every Claude on this server works | `~/.claude/CLAUDE.md` | server session (on the owner's instruction) | new sessions |

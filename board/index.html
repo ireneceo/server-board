@@ -720,7 +720,7 @@
   .tools button.t-me { color: var(--text, inherit); font-weight: 600; }
   .teambox .tm-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
   .teambox .tm-row select, .teambox .tm-row input[type=text] { width: auto; max-width: 100%; }
-  .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-ts { width: 14em; }
+  .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-title { width: 8em; } .teambox .tm-row .tm-ts { width: 14em; }
   .teambox .tm-pj { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
   .teambox .tm-pj label, .teambox .tm-chk { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; cursor: pointer; }
   .teambox .tm-chk { display: block; } .teambox .tm-chk input { vertical-align: middle; margin-right: 4px; }
@@ -795,16 +795,17 @@
   </div>
   <!-- ⚙ 팀·권한 — 서버 계정별 역할·최종 컨펌자 승인·배포 확인 -->
   <div class="langbox teambox" id="teambox" hidden>
-    <p class="tm-intro"><!--ko-->상황판을 쓰는 사람마다 계정을 넣고 역할을 정합니다. 이 칸은 최종 컨펌자(<b id="tm-owner"></b>)에게만 보입니다 — 작업방(AI)은 계정을 넣지 못하고 순서만 안내합니다.<!--/ko--><!--en-->Add an account and a role for each person who uses the board. Only the final approver (<b id="tm-owner-en"></b>) sees this panel — AI sessions cannot add accounts, only explain the steps.<!--/en--></p>
+    <p class="tm-intro"><!--ko-->상황판을 쓰는 사람마다 계정을 넣고 권한·직무·직책을 정합니다. 이 칸은 최종 컨펌자(<b id="tm-owner"></b>)에게만 보입니다 — 작업방(AI)은 계정을 넣지 못하고 순서만 안내합니다.<!--/ko--><!--en-->Add an account with access, job and title for each person who uses the board. Only the final approver (<b id="tm-owner-en"></b>) sees this panel — AI sessions cannot add accounts, only explain the steps.<!--/en--></p>
     <ol class="tm-steps">
       <li><!--ko--><b>들어올 길 마련</b> — 상황판은 인터넷에 열려 있지 않아요. 그 사람의 <b>서버 계정</b>(SSH 통로) 또는 <b>사설망(Tailscale) 초대</b>가 먼저입니다.<!--/ko--><!--en--><b>Give them a route in</b> — the board is not on the internet. They need a <b>server account</b> (SSH tunnel) or a <b>Tailscale invite</b> first.<!--/en--></li>
-      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·아이디·역할·맡을 솔루션.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, ID, role, projects.<!--/en--></li>
+      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·아이디·직무·직책·권한·맡을 솔루션.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, ID, job, title, access, projects.<!--/en--></li>
       <li><!--ko--><b>«안내문 복사»</b> → 메신저·메일로 그 사람에게 보내기 — 로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 다 들어 있어요.<!--/ko--><!--en--><b>«Copy invitation»</b> → send it by chat or email — it holds the sign-in link (24 h, single use), how to connect and how to sign in.<!--/en--></li>
       <li><!--ko-->그 사람이 링크를 열어 비밀번호를 정하고 <b>자기 휴대폰 인증 앱</b>을 등록 → 그 줄에 <b>«✔ 등록 끝»</b> 이 보이면 끝.<!--/ko--><!--en-->They open the link, set a password and register <b>their own authenticator app</b> → the row shows <b>«✔ Registered»</b> and you are done.<!--/en--></li>
     </ol>
-    <details class="tm-more"><summary><!--ko-->역할·로그인 규칙 자세히<!--/ko--><!--en-->Roles and sign-in rules<!--/en--></summary>
+    <details class="tm-more"><summary><!--ko-->권한·직무·직책 · 로그인 규칙 자세히<!--/ko--><!--en-->Access, job, title and sign-in rules<!--/en--></summary>
       <ul>
-        <li><!--ko--><b>최종 컨펌자</b> = 모든 솔루션·모든 버튼(상황판을 돌리는 계정은 늘 최종 컨펌자 · 비밀번호 + 인증 앱) · <b>팀원·디자이너</b> = 맡은 솔루션만 보고, 일은 «제안» 으로 올림(디자이너의 화면 단순 수정 «바로 진행» 은 다음 단계) · <b>보기만</b> = 맡은 솔루션 보기만.<!--/ko--><!--en--><b>Final approver</b> = every project and button (the account running the board is always one · password + authenticator) · <b>Member / Designer</b> = assigned projects only, tasks go up as proposals (designers' direct small UI edits come later) · <b>Viewer</b> = view assigned projects only.<!--/en--></li>
+        <li><!--ko-->한 사람마다 세 칸 — <b>권한</b>(무엇을 누를 수 있나) · <b>직무</b>(개발자·디자이너·기획자…) · <b>직책</b>(팀장·팀원… 자유 글). 버튼을 가르는 건 <b>권한</b>뿐이고, 직무·직책은 이름표(화면·안내문·작업방에 «디자이너 박 제안» 처럼 보임).<!--/ko--><!--en-->Three fields per person — <b>Access</b> (what they can press) · <b>Job</b> (developer, designer, planner…) · <b>Title</b> (lead, member… free text). Only <b>Access</b> decides buttons; job and title are labels (shown on screen, in invitations and to sessions, e.g. «proposed by designer Park»).<!--/en--></li>
+        <li><!--ko-->권한 — <b>최종 컨펌자</b> = 모든 솔루션·모든 버튼(상황판을 돌리는 계정은 늘 최종 컨펌자 · 비밀번호 + 인증 앱) · <b>일 제안</b> = 맡은 솔루션만 보고, 일은 «제안» 으로 올림 · <b>보기만</b> = 맡은 솔루션 보기만. 직무가 디자이너여도 권한은 위 셋 중 고른 것 그대로입니다.<!--/ko--><!--en-->Access — <b>Final approver</b> = every project and button (the account running the board is always one · password + authenticator) · <b>Propose</b> = assigned projects only, tasks go up as proposals · <b>View only</b> = view assigned projects only. A designer's access is still whichever of these three you pick.<!--/en--></li>
         <li><!--ko-->누구든 <b>자기 아이디·비밀번호</b>로 로그인합니다 — SSH 통로·Tailscale 은 들어오는 길일 뿐 신원이 아닙니다. 아이디 = 서버 계정 이름(없으면 사설망 로그인 이메일). SSH 통로는 <b>그 사람 자기 계정으로</b> 열어야 로그인됩니다.<!--/ko--><!--en-->Everyone signs in with <b>their own ID and password</b> — the SSH tunnel and Tailscale are routes, not identity. ID = server account name (or Tailscale login). The SSH tunnel must be opened <b>with their own account</b>.<!--/en--></li>
         <li><!--ko-->인증 앱 등록은 서버마다 따로 — 앱에 «Server Board · 서버 이름» 이 서버마다 한 줄씩 생깁니다.<!--/ko--><!--en-->Authenticator registration is per server — the app shows one «Server Board · server name» entry per server.<!--/en--></li>
         <li><!--ko-->«켬» 을 끄고 저장하면 그 사람은 바로 로그아웃되고 다시 켤 때까지 못 들어옵니다. 로그인 링크를 다시 만들면 전에 보낸 링크는 안 열립니다.<!--/ko--><!--en-->Untick «On» and save to sign the person out at once until re-enabled. Making a new sign-in link cancels the previous one.<!--/en--></li>
@@ -813,7 +814,7 @@
     <h3><!--ko-->① 팀원<!--/ko--><!--en-->① Team<!--/en--></h3>
     <div id="tm-rows"></div>
     <button type="button" class="btn" id="tm-add">+ <!--ko-->계정 넣기<!--/ko--><!--en-->Add account<!--/en--></button>
-    <label class="tm-chk"><input type="checkbox" id="tm-mtotp"> <!--ko-->팀원·디자이너·보기만도 <b>자기 휴대폰 인증 앱</b>(6자리)으로 로그인 (권장) — 켜면 안내문의 로그인 링크를 연 사람이 비밀번호와 함께 자기 인증 앱을 등록합니다. 인증 앱 없이 비밀번호만 정한 사람은 새 안내문을 받아야 들어옵니다.<!--/ko--><!--en-->Members, designers and viewers also sign in with <b>their own authenticator app</b> (6 digits) (recommended) — the person opening the invitation's sign-in link registers their own app along with a password. Anyone who only set a password needs a new invitation.<!--/en--></label>
+    <label class="tm-chk"><input type="checkbox" id="tm-mtotp"> <!--ko-->최종 컨펌자가 아닌 사람(일 제안·보기만)도 <b>자기 휴대폰 인증 앱</b>(6자리)으로 로그인 (권장) — 켜면 안내문의 로그인 링크를 연 사람이 비밀번호와 함께 자기 인증 앱을 등록합니다. 인증 앱 없이 비밀번호만 정한 사람은 새 안내문을 받아야 들어옵니다.<!--/ko--><!--en-->Everyone who is not a final approver (Propose, View only) also signs in with <b>their own authenticator app</b> (6 digits) (recommended) — the person opening the invitation's sign-in link registers their own app along with a password. Anyone who only set a password needs a new invitation.<!--/en--></label>
     <div class="nsec"><h3><!--ko-->② 팀원이 넣은 일<!--/ko--><!--en-->② Tasks from members<!--/en--></h3>
       <label class="tm-chk"><input type="checkbox" id="tm-approval"> <!--ko-->최종 컨펌자가 «하기 · 고쳐서 하기 · 안 하기» 를 정한 뒤 시작<!--/ko--><!--en-->Start only after the final approver chooses do / edit & do / don't<!--/en--></label>
       <label class="tm-chk"><input type="checkbox" id="tm-small"> <!--ko-->팀원이 «소규모» 로 표시한 일은 승인 없이 바로<!--/ko--><!--en-->Tasks a member marks «small» start without approval<!--/en--></label>
@@ -1283,6 +1284,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
 (function () {
   var LANG = '__LANG__', EN = LANG === 'en', AI_LANG = '__AI_LANG__';
   function K(ko, en) { return EN ? en : ko; }
+  var PERMN = { owner: K('최종 컨펌자', 'Final approver'), member: K('일 제안', 'Propose'), designer: K('일 제안', 'Propose'), viewer: K('보기만', 'View only') };
+  var JOBS = ['developer', 'designer', 'planner', 'qa', 'marketer', 'ops', 'other'];
+  var JOBN = { developer: K('개발자', 'Developer'), designer: K('디자이너', 'Designer'), planner: K('기획자', 'Planner'), qa: K('검수(QA)', 'QA'), marketer: K('마케터', 'Marketer'), ops: K('운영', 'Operations'), other: K('기타', 'Other') };
   var TZ = '__TZ__', TZ_NAME = '__TZ_NAME__', SUPPORT_URL = '__SUPPORT_URL__';
   var CMD = { devstart: '__CMD_DEVSTART__', devdone: '__CMD_DEVDONE__', deploy: '__CMD_DEPLOY__' };
   var open = {};               // 펼친 방 기억 (10초 새로고침에도 유지)
@@ -5297,8 +5301,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var tTeam = document.getElementById('t-team'); if (tTeam) tTeam.hidden = !OWN;
     var tMe = document.getElementById('t-me');
     if (tMe && me.name && me.via !== 'terminal' && me.role !== 'agent') {
-      var RL = { owner: K('최종 컨펌자', 'Final approver'), member: K('팀원', 'Member'), designer: K('디자이너', 'Designer'), viewer: K('보기만', 'Viewer') };
-      var lab = '👤 ' + me.name + ' · ' + (RL[me.role] || me.role);
+      var lab = '👤 ' + me.name + ' · ' + [JOBN[me.job || (me.role === 'designer' ? 'designer' : '')], me.title, PERMN[me.role] || me.role].filter(Boolean).join(' · ');
       if (tMe.dataset.lab !== lab) { tMe.dataset.lab = lab; tMe.textContent = lab; iconize(tMe); }
       tMe.title = K('들어온 길: ', 'Route: ') + (me.viaName || me.via); tMe.hidden = false; tMe.dataset.totp = me.totp ? '1' : '';
     }
@@ -6448,7 +6451,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   (function () {
     var tb = document.getElementById('t-team'), box = document.getElementById('teambox'); if (!tb || !box) return;
     var rowsEl = document.getElementById('tm-rows'), st = document.getElementById('tm-st'), info = null;
-    var ROLE = { owner: K('최종 컨펌자', 'Final approver'), member: K('팀원', 'Member'), designer: K('디자이너', 'Designer'), viewer: K('보기만', 'Viewer') };
+    var ROLE = PERMN;
     var authInfo = { users: [], sessions: [] };
     var ANS = { own: K('자기가 넣은 일의 방만 (권장)', 'Only sessions of their own tasks (recommended)'), project: K('맡은 솔루션의 모든 방', 'Every session in their projects'), none: K('없음 — 최종 컨펌자만 답함', 'None — only the final approver answers') };
     Array.prototype.forEach.call(document.querySelectorAll('#tm-answers option'), function (o) { o.textContent = ANS[o.value]; });
@@ -6469,14 +6472,19 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       info.accounts.filter(function (a) { return !a.owner; }).forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = K('서버 계정 ', 'account ') + a.user; u.appendChild(o); });
       u.value = m.user || '';
       var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'tm-name'; nm.placeholder = K('이름', 'Name'); nm.value = m.name || ''; nm.setAttribute('aria-label', K('이름', 'Name'));
-      var rl = document.createElement('select'); rl.className = 'tm-role'; rl.setAttribute('aria-label', K('역할', 'Role'));
-      ['member', 'designer', 'viewer', 'owner'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = ROLE[k]; rl.appendChild(o); });
-      rl.value = m.role || 'member';
+      var rl = document.createElement('select'); rl.className = 'tm-role'; rl.setAttribute('aria-label', K('권한', 'Access'));
+      ['member', 'viewer', 'owner'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = K('권한: ', 'Access: ') + ROLE[k]; rl.appendChild(o); });
+      var mRole = m.role === 'designer' ? 'member' : (m.role || 'member'), mJob = m.job || (m.role === 'designer' ? 'designer' : '');   // 예전 «디자이너» 역할 = 일 제안 + 직무 디자이너
+      rl.value = mRole;
+      var jb = document.createElement('select'); jb.className = 'tm-job'; jb.setAttribute('aria-label', K('직무', 'Job'));
+      [''].concat(JOBS).forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = k ? JOBN[k] : K('직무 —', 'Job —'); jb.appendChild(o); });
+      jb.value = mJob;
+      var tt = document.createElement('input'); tt.type = 'text'; tt.className = 'tm-title'; tt.maxLength = 20; tt.placeholder = K('직책 (예: 팀장)', 'Title (e.g. Lead)'); tt.value = m.title || ''; tt.setAttribute('aria-label', K('직책', 'Title'));
       var on = document.createElement('label'); on.className = 'tm-on'; var onc = document.createElement('input'); onc.type = 'checkbox'; onc.className = 'tm-active'; onc.checked = m.active !== false;
       on.appendChild(onc); on.appendChild(document.createTextNode(' ' + K('켬', 'On')));
       var del = el('button', 'btn', K('빼기', 'Remove')); del.type = 'button';
       del.addEventListener('click', function () { r.remove(); toast(K('«저장» 을 누르면 빠져요', 'Press «Save» to remove')); });
-      var top = el('div', 'tm-top'); [nm, u, rl, on, el('span', 'tm-sp'), del].forEach(function (x) { top.appendChild(x); }); r.appendChild(top);
+      var top = el('div', 'tm-top'); [nm, u, jb, tt, rl, on, el('span', 'tm-sp'), del].forEach(function (x) { top.appendChild(x); }); r.appendChild(top);
       var pj = el('span', 'tm-pj');
       info.projects.forEach(function (p) {
         var l = document.createElement('label'); var c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key;
@@ -6486,12 +6494,12 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var ts = document.createElement('input'); ts.type = 'text'; ts.className = 'tm-ts'; ts.placeholder = 'name@gmail.com'; ts.value = m.tailscale || '';
       var tsl = el('div', 'tm-line'); tsl.appendChild(el('span', '', K('사설망(Tailscale) 로그인 이메일', 'Tailscale login email'))); tsl.appendChild(ts); r.appendChild(tsl);
       var todo = el('ol', 'tm-todo'); r.appendChild(todo);
-      var saved = { user: m.user || '', tailscale: m.tailscale || '', role: m.role || 'member', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
+      var saved = { user: m.user || '', tailscale: m.tailscale || '', role: mRole, job: mJob, title: m.title || '', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
       var msgBox = null;
       function step(cls, mark, build) { var li = el('li', 'tm-s-' + ({ ok: 'ok', todo: 'do', wait: 'wait' })[cls]); li.appendChild(el('span', 'tm-mk', mark)); var d = el('div'); build(d); li.appendChild(d); todo.appendChild(li); }
       function curProjects() { return Array.prototype.filter.call(pj.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; }); }
       function dirty() {
-        return fresh || u.value !== saved.user || ts.value.trim() !== saved.tailscale || rl.value !== saved.role || nm.value.trim() !== saved.name || onc.checked !== saved.active
+        return fresh || u.value !== saved.user || ts.value.trim() !== saved.tailscale || rl.value !== saved.role || jb.value !== saved.job || tt.value.trim() !== saved.title || nm.value.trim() !== saved.name || onc.checked !== saved.active
           || (rl.value !== 'owner' && curProjects().sort().join(',') !== saved.projects);
       }
       function paint() {
@@ -6546,7 +6554,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             post('/api/auth/invite', { id: lid }).then(function (j) {
               b.disabled = false;
               if (!j.ok) { toast(j.message || 'error'); return; }
-              var txt = inviteText({ name: nm.value.trim() || lid, id: lid, user: user, mail: mail, role: rl.value, projects: curProjects(), needT: needT }, j);
+              var txt = inviteText({ name: nm.value.trim() || lid, id: lid, user: user, mail: mail, role: rl.value, job: jb.value, title: tt.value.trim(), projects: curProjects(), needT: needT }, j);
               if (!msgBox) { msgBox = document.createElement('textarea'); msgBox.className = 'tm-msg'; msgBox.readOnly = true; msgBox.setAttribute('aria-label', K('안내문', 'Invitation')); }
               msgBox.value = txt;
               copyText(txt, function () { toast(K('안내문을 복사했어요 — 메신저·메일에 붙여 넣어 보내세요', 'Invitation copied — paste it into chat or email')); }, function () { toast(K('아래 안내문을 골라 복사하세요', 'Select the text below and copy it')); });
@@ -6588,7 +6596,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var pjNames = p.role === 'owner' ? K('모든 솔루션', 'all projects') : info.projects.filter(function (x) { return p.projects.indexOf(x.key) >= 0; }).map(function (x) { return x.name; }).join(', ') || K('(아직 없음)', '(none yet)');
       var L = [], n = 0;
       L.push(K('[' + srv + ' 상황판 초대]', '[' + srv + ' board invitation]'));
-      L.push(K(p.name + ' 님, ' + srv + ' 상황판에 넣었어요. 역할: ' + ROLE[p.role] + ' · 맡은 솔루션: ' + pjNames + '.', p.name + ', you have been added to the ' + srv + ' board as «' + ROLE[p.role] + '». Projects: ' + pjNames + '.'));
+      var jt = [JOBN[p.job], p.title].filter(Boolean).join(' · ');
+      L.push(K(p.name + ' 님, ' + srv + ' 상황판에 넣었어요. ' + (jt ? jt + ' · ' : '') + '권한: ' + ROLE[p.role] + ' · 맡은 솔루션: ' + pjNames + '.', p.name + ', you have been added to the ' + srv + ' board' + (jt ? ' (' + jt + ')' : '') + ' with access «' + ROLE[p.role] + '». Projects: ' + pjNames + '.'));
       L.push(K('아이디: ' + p.id, 'ID: ' + p.id));
       L.push('');
       if (p.needT) { n++; L.push(K(n + ') 휴대폰에 인증 앱 설치 — Google Authenticator 등 아무거나. 본인 휴대폰·본인 앱으로(다른 사람 것 빌리지 않기).', n + ') Install an authenticator app on your phone — Google Authenticator or any. Your own phone and app.')); L.push(''); }
@@ -6615,7 +6624,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       n++; L.push(K(n + ') 다음부터: 길을 켜고 상황판 주소를 열어 아이디 ' + p.id + ' + 비밀번호' + (p.needT ? ' + 인증 앱 6자리' : '') + ' 로 로그인', n + ') From then on: turn on the route, open the board address and sign in with ID ' + p.id + ' + password' + (p.needT ? ' + 6 digits' : '')));
       L.push('');
       L.push(K('알아 둘 것', 'Good to know'));
-      if (p.role === 'member' || p.role === 'designer') L.push(K('- 맡은 솔루션만 보여요. 일 요청은 «제안» 으로 올라가 제가 확인한 뒤 시작될 수 있어요.', '- You see only your projects. Requests go up as proposals and may start after I approve.'));
+      if (p.role === 'member') L.push(K('- 맡은 솔루션만 보여요. 일 요청은 «제안» 으로 올라가 제가 확인한 뒤 시작될 수 있어요.', '- You see only your projects. Requests go up as proposals and may start after I approve.'));
       if (p.role === 'viewer') L.push(K('- 맡은 솔루션을 보기만 할 수 있어요.', '- You can view your projects only.'));
       L.push(K('- 요청 글에 비밀번호·열쇠·고객 개인정보를 넣지 마세요(AI 작업방에 그대로 전달돼요).', '- Never put passwords, keys or customer personal data in a request (it goes to the AI session as is).'));
       L.push(K('- 로그인은 본인만. 링크가 지났거나 휴대폰을 바꿨거나 비밀번호를 잊었으면 새 링크를 요청해 주세요.', '- Your sign-in is yours only. Link expired, new phone or forgot the password? Ask me for a new link.'));
@@ -6660,7 +6669,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var b = this; if (!info) return;
       var members = Array.prototype.map.call(rowsEl.querySelectorAll('.tm-row'), function (r) {
         var role = r.querySelector('.tm-role').value;
-        return { user: r.querySelector('.tm-user').value, name: r.querySelector('.tm-name').value.trim(), role: role, tailscale: r.querySelector('.tm-ts').value.trim(), active: r.querySelector('.tm-active').checked,
+        return { user: r.querySelector('.tm-user').value, name: r.querySelector('.tm-name').value.trim(), role: role, job: r.querySelector('.tm-job').value, title: r.querySelector('.tm-title').value.trim(), tailscale: r.querySelector('.tm-ts').value.trim(), active: r.querySelector('.tm-active').checked,
           projects: role === 'owner' ? ['*'] : Array.prototype.filter.call(r.querySelectorAll('.tm-pj input'), function (c) { return c.checked; }).map(function (c) { return c.value; }) };
       }).filter(function (m) { return m.user || m.tailscale; });
       var team = { members: members, approval: document.getElementById('tm-approval').checked, smallDirect: document.getElementById('tm-small').checked, memberTotp: document.getElementById('tm-mtotp').checked,

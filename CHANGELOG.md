@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.10]
+
+**⚙ Team — access, job and title are separate**
+- Each person now has three fields: **access** (Final approver / Propose / View only — the only thing that decides buttons), **job** (developer, designer, planner, QA, marketer, operations, other) and **title** (free text such as lead or member). Job and title are labels: shown next to your name, in the invitation and in the session header («proposed by designer Park»)
+- The old «designer» role is read as access Propose + job Designer — nothing to redo; saving ⚙ Team stores the new shape. Unknown roles still fall back to Propose, never to final approver
+
 ## [0.6.9]
 **Packaging**
 - `board/downloads/` (file snapshots handed over by sessions) and `board/fbtriage/` are now in `.gitignore`, so a «dev done» / quick-save commit on the install folder never picks them up.

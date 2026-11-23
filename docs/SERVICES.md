@@ -19,7 +19,7 @@ If you'd rather spend your time on your product than on SSH keys, permissions an
 | Runs by itself | One editing session per project (queue) · auto-resume · scheduled checks |
 | Safe deploys | Sessions only prepare or block a deploy; the board runs the registered deploy command · "reviewed finished work" before deploying · other work steps aside during a deploy |
 | Open as test role | "Where to check" links open signed in as that role's test account |
-| Team and security | Personal sign-in (authenticator + backup codes) · roles (final approver, member, designer, viewer) · re-confirm important buttons every 30 min · terminal emergency recovery · optional dev-site sign-in gate |
+| Team and security | Personal sign-in (authenticator + backup codes) · access (final approver, propose, view only) + job and title labels · re-confirm important buttons every 30 min · terminal emergency recovery · optional dev-site sign-in gate |
 | Server guards | Memory slots (builds can't pile up and freeze the server) · re-login to Claude from the board · login-key guard · self-check whenever Claude Code updates |
 | Access | Never on the open internet — Tailscale private network or SSH tunnel · phone home-screen app · terminal menu (`dev`) |
 
