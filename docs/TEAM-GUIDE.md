@@ -22,7 +22,9 @@
 - **Requests go in as proposals.** The final approver chooses do / edit & do / don't before work starts (depending on settings).
 - You can answer questions from sessions started from your own proposals (setting «Sessions members answer»).
 - Deploys, settings, deletes and team changes are for the final approver.
-- What you can press is set by your **access** (Propose / View only). Job (developer, designer…) and title (lead, member…) are labels — they do not change access, and the session gets them with your request (e.g. «proposed by designer Park»). Direct small UI edits (text, colour, spacing, layout) open in a later stage.
+- **Check list before deploy** (project card «Check list n · needed k» — when the project has a «Normal tasks» mode on): the board splits finished tasks into «final check needed» (touched screens, DB structure, login, permissions, money or deletion, marked by the session, or could not be graded) and «normal». Anyone can **raise** a «normal» task to «needed» (only the final approver lowers).
+- With **Reviewer** access you «Review» «normal» tasks in your projects and approve or decline members' proposals as written (editing is for the final approver). Not your own tasks or proposals. «Final check needed» tasks and deploys stay with the final approver.
+- What you can press is set by your **access** (Reviewer / Propose / View only). Job (developer, designer…) and title (lead, member…) are labels — they do not change access, and the session gets them with your request (e.g. «proposed by designer Park»). Direct small UI edits (text, colour, spacing, layout) open in a later stage.
 
 ## Writing a good request
 - What · why · which screen (address) · what «done» looks like, in one piece.

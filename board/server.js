@@ -9,6 +9,7 @@ const path = require('path');
 const os = require('os');
 const acct = require('./account');
 const peek = require('./proc-peek');
+const review = require('./review');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { AsyncLocalStorage } = require('async_hooks');
@@ -2078,8 +2079,13 @@ function todoBrief(projKey) {
     : '- 이 솔루션에 열린 __OWNER__ 할 일 카드 ' + list.length + '장:\n' + rows + '\n  이 일을 하다가 그중 하나를 대신 했거나 이미 됐거나 필요 없어진 것을 알게 되면 뺀다: ' + api('/api/todos/drop', '{"tid":"<tid>","reason":"무엇을 보고 그렇게 판단했는지 한 줄"}') + ' — 순서·값이 바뀌었으면 같은 "tid" 로 다시 올린다. 새 할 일을 올리기 전에 이 목록을 본다(같은 일이면 그 tid 로). 일부러 찾아다니지는 않는다.\n';
 }
 // 머리글 «[할 일]» 바로 앞에 끼운다
+function reviewNote(projKey) {
+  if (reviewMode(projKey) === 'strict') return '';
+  return K('- 이 솔루션은 끝난 일을 «최종 확인 필요» 와 «보통» 으로 나눠 배포 전에 확인한다. 화면이 바뀌었거나, 의견·결정이 들어갔거나, __OWNER__ 가 직접 봐야 한다고 판단하면 ✅ 보고 둘째 줄에 «[최종 확인 필요] 까닭 한 줄» 을 쓴다(«보통» 이라고 적는 표시는 없다 — 상황판이 바뀐 파일·낱말로도 따로 가른다).\n',
+    '- This project splits finished work into «final check needed» and «normal» before deploy. If the screen changed, an opinion or decision is involved, or __OWNER__ should look herself, put «[Final check needed] one-line reason» on the second line of the ✅ report (there is no «normal» mark — the board also grades by changed files and words).\n');
+}
 function withTodoBrief(header, projKey) {
-  const b = todoBrief(projKey);
+  const b = todoBrief(projKey) + reviewNote(projKey);
   if (!b) return header;
   const re = /\n\n\[(?:할 일|Task)\]\n$/;
   return re.test(header) ? header.replace(re, (m) => '\n' + b.replace(/\n$/, '') + m) : header + b + '\n';
@@ -3334,12 +3340,12 @@ const OWNER_UID = acct.SPLIT ? ((acct.passwdOf(acct.OWNER_ACCOUNT) || {}).uid ??
 // 한 사람 = 권한(role) · 직무(job) · 직책(title) 세 칸
 //   권한만 버튼을 가른다(permit) — 직무·직책은 이름표: 화면·안내문·작업방 머리글(누가 제안했나)에만 보인다
 //   예전 role:'designer' 는 «권한 member + 직무 designer» 로 읽는다(설정을 다시 저장하면 새 모양으로 남음)
-const TEAM_ROLES = ['owner', 'member', 'viewer'];
+const TEAM_ROLES = ['owner', 'reviewer', 'member', 'viewer'];
 const TEAM_JOBS = ['developer', 'designer', 'planner', 'qa', 'marketer', 'ops', 'other'];
 const JOB_NAMES = { developer: ['개발자', 'Developer'], designer: ['디자이너', 'Designer'], planner: ['기획자', 'Planner'], qa: ['검수(QA)', 'QA'], marketer: ['마케터', 'Marketer'], ops: ['운영', 'Operations'], other: ['기타', 'Other'] };
 const cleanTitle = (x) => String(x || '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029<>\[\]]/g, '').trim().slice(0, 20);   // 직책 — 작업방 머리글 괄호·화면을 못 깨게 (Fable 완료 검증)
 const jobName = (j) => JOB_NAMES[j] ? K(JOB_NAMES[j][0], JOB_NAMES[j][1]) : '';
-const isWorker = (who) => !!who && (who.role === 'member' || who.role === 'designer');
+const isWorker = (who) => !!who && (who.role === 'member' || who.role === 'designer' || who.role === 'reviewer');
 const ANSWER_MODES = ['own', 'project', 'none'];
 function normTeam(t) {
   t = t && typeof t === 'object' ? t : {};
@@ -3360,6 +3366,10 @@ function normTeam(t) {
     memberTotp: t.memberTotp !== false,                               // 팀원·디자이너·보기만도 자기 인증 앱(6자리) — 기본 켬
     memberAnswers: ANSWER_MODES.includes(t.memberAnswers) ? t.memberAnswers : 'own',   // 팀원이 답할 수 있는 방: 자기가 넣은 일의 방 / 맡은 솔루션 방 전부 / 없음
     deployConfirm: Array.isArray(t.deployConfirm) ? t.deployConfirm.map(String).slice(0, 50) : [],   // 이 솔루션은 «확인 완료» 안 된 끝난 일이 있으면 운영 배포를 세운다
+    review: Object.fromEntries(Object.entries(t.review && typeof t.review === 'object' ? t.review : {}).filter(([k, v]) => /^[a-z0-9_-]{1,40}$/.test(k) && review.REVIEW_MODES.includes(v)).slice(0, 50)),
+    // «최종 확인 필요» 로 가를 경로(glob) — 솔루션별 · 비면 review.DEFAULT_REVIEW_PATHS
+    reviewPaths: Object.fromEntries(Object.entries(t.reviewPaths && typeof t.reviewPaths === 'object' ? t.reviewPaths : {}).filter(([k, v]) => /^[a-z0-9_-]{1,40}$/.test(k) && Array.isArray(v))
+      .map(([k, v]) => [k, v.map((x) => String(x).replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120)).filter(Boolean).slice(0, 40)]).filter(([, v]) => v.length).slice(0, 50)),
   };
 }
 let TEAM = normTeam(CONFIG.team), teamVer = 1;
@@ -3557,6 +3567,19 @@ async function permit(who, url, body) {
   if (mc) { const c = consults.get(mc[1]); return c && projOk(c.project) ? null : no(); }
   const mp = url.match(/^\/api\/proposals\/(p[0-9a-z]+)\/withdraw$/);
   if (mp) { const p = (peekState().proposals || {})[mp[1]]; return p && p.by && p.by.user === who.user ? null : no(); }
+  // «최종 확인 필요» 로 올리기 — 맡은 솔루션이면 팀원 누구나(내리기는 없음)
+  if (url === '/api/deploy-need') return projOk(body.project) ? null : no(K('맡은 솔루션이 아닙니다', 'Not one of your projects'));
+  if (who.role === 'reviewer') {
+    if (url === '/api/deploy-check') return projOk(body.project) ? null : no(K('맡은 솔루션이 아닙니다', 'Not one of your projects'));
+    const ma = url.match(/^\/api\/proposals\/(p[0-9a-z]+)\/(approve|reject)$/);
+    if (ma) {
+      const p = (peekState().proposals || {})[ma[1]];
+      if (!(p && projOk(p.project) && !(p.by && p.by.user === who.user))) return no(K('자기 제안이거나 맡은 솔루션이 아닙니다 — 최종 컨펌자가 정합니다', 'Your own proposal or not your project — the final approver decides'));
+      // «고쳐서 하기» 는 최종 컨펌자만 — 고친 글은 상황판 자격으로 대기열에 들어가 배포 문지기·«[상황판 — …]» 흉내 검사를 건너뛰므로 (Fable 완료 검증 ①)
+      if (ma[2] === 'approve' && typeof body.task === 'string' && body.task.trim() && body.task.trim() !== String(p.task || '').trim()) return no(K('중간 컨펌자는 제안 문구를 고칠 수 없습니다 — 그대로 «하기» 또는 «안 하기»(고칠 게 있으면 안 하기 까닭에 적어 주세요)', 'Reviewers cannot edit a proposal — approve as is or decline (put the change in the reason)'));
+      return null;
+    }
+  }
   return no(K('이 일은 최종 컨펌자(주인)만 할 수 있습니다', 'Only the final approver (owner) can do this'));
 }
 /** 팀원이 넣은 일 — 방에 «누가 제안·누가 승인» 한 줄 (방이 질문할 때 누구에게 묻는지 알게) */
@@ -3621,22 +3644,78 @@ function deployBase(st, key) {
   return Math.max(Date.parse(((st.prodSeen || {})[key] || {}).at || 0) || 0, Date.parse((st.deployDoneAt || {})[key] || 0) || 0,
     Date.parse((st.deployConfirmSince || {})[key] || 0) || 0);   // 설정을 켠 때부터 — 켜기 전 끝난 일까지 한꺼번에 묻지 않게
 }
-/** 확인 안 된 끝난 일 — [{ sid, id, name, at }] */
+/** 이 솔루션의 «보통» 끝난 일 확인 방식 — 배포 전 확인을 안 켰으면 strict(등급 없음) */
+const reviewMode = (key) => TEAM.deployConfirm.includes(key) ? (TEAM.review[key] || 'strict') : 'strict';
+// 등급 판정은 대화 기록을 읽어 무겁다(한 건 수십 ms) — 한 번 판정한 것은 state.deployGrade 에 두고, 새 것은 뒤에서 하나씩
+const gradeJobs = new Map(), gradeMem = new Map(); let gradeRunning = false;   // gradeMem: 판정했지만 아직 저장 전 — 그사이 다시 불려도 또 대기열에 넣지 않게 (Fable 완료 검증 ②)
+function gradeKick() {
+  if (gradeRunning || !gradeJobs.size) return;
+  gradeRunning = true;
+  let done = {}, lastSave = Date.now();
+  const flush = () => {
+    if (!Object.keys(done).length) return;
+    const s0 = loadState(); s0.deployGrade = Object.assign(s0.deployGrade || {}, done); const ks = Object.keys(s0.deployGrade); if (ks.length > 1500) for (const k of ks.slice(0, ks.length - 1500)) delete s0.deployGrade[k]; saveState(s0); cache.at = 0;
+    for (const k of Object.keys(done)) gradeMem.delete(k);
+    done = {}; lastSave = Date.now();
+  };
+  const step = () => {
+    const [sid, job] = gradeJobs.entries().next().value || [];
+    if (!sid) { gradeRunning = false; flush(); return; }
+    gradeJobs.delete(sid);
+    let g; try { g = Object.assign(review.grade(job), { at: job.at, pv: job.pv }); } catch (e) { g = { need: true, why: ['error'], at: job.at, pv: job.pv }; }
+    done[sid] = g; gradeMem.set(sid, g);
+    if (Date.now() - lastSave > 1000) flush();   // 1초마다 묶어 저장
+    setImmediate(step);
+  };
+  setImmediate(step);
+}
+const pathsVer = (key) => review.GRADER + ':' + JSON.stringify(TEAM.reviewPaths[key] || []);
+/** 한 일의 등급 — 아직 판정 전이면 «필요»(판정 중) 로 보고 뒤에서 판정 */
+function gradeItem(st, key, x, rep, cwd) {
+  const raised = (st.deployNeed || {})[x.sid];
+  const pv = pathsVer(key), m = gradeMem.get(x.sid), c = m && m.at === x.at && m.pv === pv ? m : (st.deployGrade || {})[x.sid];
+  let g;
+  if (c && c.at === x.at && c.pv === pv) g = { need: c.need, why: c.why || [] };
+  else {
+    const proj = loadProjects().find((p) => p.key === key);
+    if (!gradeJobs.has(x.sid)) gradeJobs.set(x.sid, { report: rep, transcript: review.findTranscript(HOME, cwd || (proj && proj.dir), x.sid), dir: proj && proj.dir, paths: TEAM.reviewPaths[key], at: x.at, pv });
+    gradeKick();
+    g = { need: true, why: ['pending'] };
+  }
+  if (raised) g = { need: true, why: ['raised:' + (raised.by || '?') + (raised.why ? ' — ' + raised.why : '')].concat(g.why.filter((w) => w !== 'pending')) };
+  return g;
+}
+/** 확인 안 된(배포를 막는) 끝난 일 — [{ sid, id, name, at, by?, need?, why?, mid? }]
+ *  strict: 최종 확인(level 없음·final) 이 없으면 막음 · bundle: 같음(중간 확인은 표시만) · auto: «보통» 은 중간 확인만으로 통과, «필요» 는 최종 확인 필요 */
 function uncheckedWork(board, st, key) {
   if (!TEAM.deployConfirm.includes(key)) return [];
-  const base = deployBase(st, key), chk = st.deployChecked || {}, seen = new Set(), out = [];
-  const take = (sid, id, name, rep, at) => {
-    if (!sid || seen.has(sid) || chk[sid] || !at || at <= base || GATE_NAME_RE.test(name || '') || /^\/|^(정기 점검|Routine check)/.test(name || '')) return;
+  const base = deployBase(st, key), chk = st.deployChecked || {}, seen = new Set(), out = [], roomBy = st.roomBy || {};
+  const mode = reviewMode(key);
+  const take = (sid, id, name, rep, at, cwd) => {
+    const c = sid && chk[sid];
+    if (!sid || seen.has(sid) || (c && c.level !== 'mid') || !at || at <= base || GATE_NAME_RE.test(name || '') || /^\/|^(정기 점검|Routine check)/.test(name || '')) return;
     if (!/^\s*✅/.test(String(rep || ''))) return;
-    seen.add(sid); out.push({ sid, id: id || sid.slice(0, 8), name: name || sid.slice(0, 8), at: new Date(at).toISOString() });
+    seen.add(sid);
+    const x = { sid, id: id || sid.slice(0, 8), name: name || sid.slice(0, 8), at: new Date(at).toISOString() };
+    const by = roomBy[x.id]; if (by && by.user) x.by = by.user;
+    if (c && c.level === 'mid' && !(Date.parse(c.at) < at)) x.mid = { by: c.by, at: c.at };
+    if (mode !== 'strict') { const g = gradeItem(st, key, x, rep, cwd); x.need = g.need; x.why = g.why; }
+    if (mode === 'auto' && x.mid && !x.need) return;
+    out.push(x);
   };
-  for (const r of board.rooms || []) if (r.project === key && r.kind === 'background' && !r.turnOpen) take(r.sessionId, r.id, r.name, r.lastReport, r.lastReportAt);
-  for (const c of board.completed || []) if (c.project === key) take(c.sessionId, c.id, c.name, c.report, Date.parse(c.confirmedAt || 0));
+  for (const r of board.rooms || []) if (r.project === key && r.kind === 'background' && !r.turnOpen) take(r.sessionId, r.id, r.name, r.lastReport, r.lastReportAt, r.cwd);
+  for (const c of board.completed || []) if (c.project === key) take(c.sessionId, c.id, c.name, c.report, Date.parse(c.confirmedAt || 0), c.cwd);
   return out.sort((a, b) => a.at.localeCompare(b.at));
 }
-function markChecked(st, sids, by) {
+/** 확인 표시 — level final(최종 컨펌자) | mid(중간 컨펌자). 최종은 앞선 중간 확인을 mid 칸에 남김. 예전 기록(level 없음) = final */
+function markChecked(st, sids, by, level, info) {
   st.deployChecked = st.deployChecked || {};
-  for (const s of sids) st.deployChecked[s] = { by, at: new Date().toISOString() };
+  const at = new Date().toISOString();
+  for (const s of sids) {
+    const prev = st.deployChecked[s], i = (info && info[s]) || {};
+    if (level === 'mid') st.deployChecked[s] = { by, at, level: 'mid', need: i.need || undefined, why: i.why };
+    else st.deployChecked[s] = { by, at, level: 'final', need: i.need || undefined, why: i.why, mid: prev && prev.level === 'mid' ? { by: prev.by, at: prev.at } : undefined };
+  }
   const ks = Object.keys(st.deployChecked); if (ks.length > 2000) for (const k of ks.slice(0, ks.length - 2000)) delete st.deployChecked[k];
 }
 // 들어온 문의 칸(/api/inquiries) — 판단 낱말 5종 고정 · 글자 수 상한 · 한 솔루션 최대 건수
@@ -4538,6 +4617,8 @@ async function handleAction(req, res, url, who) {
     if (new Set(n.members.map((m) => m.user || m.tailscale)).size !== n.members.length) return send(res, 400, { ok: false, message: K('같은 계정이 두 번 있습니다', 'Same account listed twice') });
     n.members.forEach((m) => { m.projects = m.projects.filter((k) => k === '*' || keys.has(k)); });
     n.deployConfirm = n.deployConfirm.filter((k) => keys.has(k));
+    n.review = Object.fromEntries(Object.entries(n.review).filter(([k]) => keys.has(k)));
+    n.reviewPaths = Object.fromEntries(Object.entries(n.reviewPaths).filter(([k]) => keys.has(k)));
     const newly = n.deployConfirm.filter((k) => !TEAM.deployConfirm.includes(k));
     const before = TEAM.members.map(loginIdOf);
     try { saveTeam(n); } catch (e) { return send(res, 500, { ok: false, message: 'config.json: ' + e.message }); }
@@ -4546,7 +4627,7 @@ async function handleAction(req, res, url, who) {
     if (n.memberTotp) for (const m of n.members) { const id = loginIdOf(m); if (m.role !== 'owner' && !auth.hasTotp(id)) { gate.bump(id); const k = auth.dropUserSessions(id); if (k) writeLog({ action: 'auth-kick', target: id, n: k, why: 'needs-totp' }); } }   // 인증 앱이 필요해졌는데 없는 사람 — 비밀번호만으로 연 접속·관문 쿠키를 끊음
     for (const m of n.members) if (!m.active) { gate.bump(loginIdOf(m)); const k = auth.dropUserSessions(loginIdOf(m)); if (k) writeLog({ action: 'auth-kick', target: loginIdOf(m), n: k, why: 'inactive' }); }
     if (newly.length) { const s0 = loadState(); s0.deployConfirmSince = s0.deployConfirmSince || {}; for (const k of newly) s0.deployConfirmSince[k] = new Date().toISOString(); saveState(s0); }
-    writeLog({ action: 'team', members: n.members.map((m) => loginIdOf(m) + ':' + m.role + (m.job ? '/' + m.job : '') + (m.active ? '' : ':off') + ':' + m.projects.join('+')), approval: n.approval, smallDirect: n.smallDirect, memberTotp: n.memberTotp, memberAnswers: n.memberAnswers, deployConfirm: n.deployConfirm });
+    writeLog({ action: 'team', members: n.members.map((m) => loginIdOf(m) + ':' + m.role + (m.job ? '/' + m.job : '') + (m.active ? '' : ':off') + ':' + m.projects.join('+')), approval: n.approval, smallDirect: n.smallDirect, memberTotp: n.memberTotp, memberAnswers: n.memberAnswers, deployConfirm: n.deployConfirm, review: n.review, reviewPaths: Object.keys(n.reviewPaths) });
     cache.at = 0;
     return send(res, 200, { ok: true, message: K('저장했습니다 — 바로 적용됩니다', 'Saved — applies right away'), risks: teamRisks() });
   }
@@ -4794,13 +4875,39 @@ async function handleAction(req, res, url, who) {
     cache.at = 0;
     return send(res, 200, { ok: true, hid, message: K(proj.name + ' 배포를 막아 두었습니다 — 상황판이 배포 명령을 누르지 않습니다(주인이 풀 때까지)', proj.name + ' deploy is on hold until the owner lifts it') });
   }
-  // 끝난 일 «확인 완료» 표시 — 주인만(permit) · { project, sids:[…] } (배포 전 확인 완료)
-  if (url === '/api/deploy-check') {
+  if (url === '/api/deploy-check' || url === '/api/deploy-need') {
+    const proj = loadProjects().find((p) => p.key === String(body.project || ''));
+    if (!proj) return send(res, 400, { ok: false, message: K('솔루션을 골라 주세요', 'Choose a project') });
+    if (!canSee(who, proj.key)) return send(res, 403, { ok: false, message: K('맡은 솔루션이 아닙니다', 'Not one of your projects') });
     const sids = Array.isArray(body.sids) ? body.sids.map(String).filter((x) => /^[0-9a-f-]{36}$/.test(x)).slice(0, 500) : [];
     if (!sids.length) return send(res, 400, { ok: false, message: K('고른 일이 없습니다', 'Nothing chosen') });
-    const s0 = loadState(); markChecked(s0, sids, who.name || who.user); saveState(s0); cache.at = 0;
-    writeLog({ action: 'deploy-check', project: body.project || null, sids: sids.map((x) => x.slice(0, 8)) });
-    return send(res, 200, { ok: true, message: EN ? `Marked ${sids.length} as checked` : `${sids.length}개를 확인 완료로 표시했습니다` });
+    const unc = uncheckedWork(await buildBoard(), loadState(), proj.key), bySid = new Map(unc.map((x) => [x.sid, x]));
+    const pick = [...new Set(sids)].map((x) => bySid.get(x)).filter(Boolean);
+    if (!pick.length) return send(res, 400, { ok: false, message: K('확인할 일이 아닙니다(다른 솔루션이거나 이미 확인됨)', 'Not a task waiting for a check (another project, or already checked)') });
+    const name = who.name || who.user;
+    if (url === '/api/deploy-need') {   // «최종 확인 필요» 로 올리기 — 볼 수 있는 사람 누구나(작업방 AI 는 permit 에서 막힘) · 내리기는 없음
+      const why = String(body.why || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200);
+      const s0 = loadState(); s0.deployNeed = s0.deployNeed || {};
+      for (const x of pick) s0.deployNeed[x.sid] = { by: name, at: new Date().toISOString(), why: why || undefined };
+      const ks = Object.keys(s0.deployNeed); if (ks.length > 1000) for (const k of ks.slice(0, ks.length - 1000)) delete s0.deployNeed[k];
+      saveState(s0); cache.at = 0;
+      writeLog({ action: 'deploy-need', project: proj.key, sids: pick.map((x) => x.id), by: actorOf(who) });
+      return send(res, 200, { ok: true, message: K('«최종 확인 필요» 로 올렸습니다 — 최종 컨펌자가 하나씩 봅니다', 'Raised to «final check needed» — the final approver checks it one by one') });
+    }
+    let level = 'final';
+    if (!isOwner(who)) {
+      if (who.role !== 'reviewer') return send(res, 403, { ok: false, message: K('확인 완료는 최종·중간 컨펌자만 합니다', 'Only approvers can mark checks') });
+      if (reviewMode(proj.key) === 'strict') return send(res, 400, { ok: false, message: K('이 솔루션은 최종 컨펌자가 모두 확인합니다(⚙ 팀 «보통 일 확인 방식»)', 'In this project the final approver checks everything (⚙ Team «Normal tasks»)') });
+      const own = pick.filter((x) => x.by && x.by === who.user);
+      if (own.length) return send(res, 403, { ok: false, message: K('자기가 낸 일은 중간 확인할 수 없습니다: ', 'You cannot review your own task: ') + own.map((x) => '«' + x.name + '»').join(', ') });
+      const nd = pick.filter((x) => x.need);
+      if (nd.length) return send(res, 403, { ok: false, message: K('«최종 확인 필요» 일은 최종 컨펌자만 확인합니다: ', '«Final check needed» tasks are checked by the final approver only: ') + nd.map((x) => '«' + x.name + '»').join(', ') });
+      level = 'mid';
+    }
+    const s0 = loadState(); markChecked(s0, pick.map((x) => x.sid), name, level, Object.fromEntries(pick.map((x) => [x.sid, { need: x.need, why: x.why }]))); saveState(s0); cache.at = 0;
+    writeLog({ action: 'deploy-check', project: proj.key, sids: pick.map((x) => x.id), level, by: actorOf(who) });
+    return send(res, 200, { ok: true, message: level === 'mid' ? K(pick.length + '개를 중간 확인했습니다 — 최종 컨펌자가 배포 때 묶음으로 승인합니다', 'Reviewed ' + pick.length + ' — the final approver approves them as a bundle at deploy')
+      : (EN ? `Marked ${pick.length} as checked` : `${pick.length}개를 확인 완료로 표시했습니다`) });
   }
   const mpr = url.match(/^\/api\/proposals\/(p[0-9a-z]+)\/(approve|reject|withdraw)$/);
   if (mpr) {
@@ -4810,7 +4917,7 @@ async function handleAction(req, res, url, who) {
     const decider = who.name || who.user;
     const done = (decision, extra) => {
       const s2 = loadState(); s2.proposals = s2.proposals || {}; delete s2.proposals[pr.pid];
-      s2.proposalDone = (s2.proposalDone || []).concat([Object.assign({ pid: pr.pid, project: pr.project, title: pr.title, by: pr.by, decision, decidedBy: decider, at: new Date().toISOString() }, extra || {})]).slice(-200);
+      s2.proposalDone = (s2.proposalDone || []).concat([Object.assign({ pid: pr.pid, project: pr.project, title: pr.title, by: pr.by, decision, decidedBy: decider, level: isOwner(who) ? 'final' : who.role === 'reviewer' ? 'mid' : undefined, at: new Date().toISOString() }, extra || {})]).slice(-200);
       saveState(s2); cache.at = 0;
     };
     if (mpr[2] === 'withdraw') { done('withdrawn'); writeLog({ action: 'proposal-withdraw', pid: pr.pid }); return send(res, 200, { ok: true, message: K('제안을 거뒀습니다', 'Proposal withdrawn') }); }
@@ -4826,7 +4933,7 @@ async function handleAction(req, res, url, who) {
     let j;
     try {
       const r = await fetch('http://127.0.0.1:' + PORT + '/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: ORIGIN, Host: 'localhost:' + PORT },
-        body: JSON.stringify({ project: pr.project, task, queue: true, name: pr.title, by: Object.assign({}, pr.by, { role: 'member', job: (pr.by && pr.by.job) || (pr.by && pr.by.role === 'designer' ? 'designer' : undefined) }), approved: true, approvedBy: decider, sourceText: edited ? pr.task : undefined }) });
+        body: JSON.stringify({ project: pr.project, task, queue: true, name: pr.title, by: Object.assign({}, pr.by, { role: pr.by && pr.by.role === 'reviewer' ? 'reviewer' : 'member', job: (pr.by && pr.by.job) || (pr.by && pr.by.role === 'designer' ? 'designer' : undefined) }), approved: true, approvedBy: decider + (isOwner(who) ? '' : K('(중간 컨펌자)', ' (reviewer)')), sourceText: edited ? pr.task : undefined }) });
       j = await r.json();
     } catch (e) { return send(res, 500, { ok: false, message: K('대기열에 넣지 못했습니다: ', 'Could not queue: ') + e.message }); }
     if (!j.ok) return send(res, 500, j);
@@ -5190,8 +5297,9 @@ async function handleAction(req, res, url, who) {
     }
     { const unc = uncheckedWork(board, peekState(), proj.key);
       const shown = Array.isArray(body.sids) ? body.sids.map(String) : null;   // 화면이 본 목록 — 그 사이 새로 끝난 일이 있으면 다시 보여 줌 (Fable 완료 검증 ③)
-      if (unc.length && (body.checkAll !== true || !shown || unc.some((x) => !shown.includes(x.sid)))) return send(res, 409, { ok: false, code: 'UNCHECKED', list: unc, message: EN ? `${proj.name}: ${unc.length} finished task(s) since the last deploy are not marked «Checked». Look at each «Where to check», then confirm.` : `${proj.name}: 지난 배포 뒤 끝난 일 ${unc.length}개가 아직 «확인 완료» 가 아닙니다. 각 일의 «확인할 곳» 을 본 뒤 확인 완료하세요.` });
-      if (unc.length) { const s0 = loadState(); markChecked(s0, unc.map((x) => x.sid), who.name || who.user); saveState(s0); writeLog({ action: 'deploy-check', project: proj.key, sids: unc.map((x) => x.id), via: 'deploy-button' }); } }
+      const needL = unc.filter((x) => x.need), needOk = Array.isArray(body.needSids) ? body.needSids.map(String) : [];
+      if (unc.length && (body.checkAll !== true || !shown || unc.some((x) => !shown.includes(x.sid)) || needL.some((x) => !needOk.includes(x.sid)))) return send(res, 409, { ok: false, code: 'UNCHECKED', list: unc, mode: reviewMode(proj.key), message: EN ? `${proj.name}: ${unc.length} finished task(s) since the last deploy are not marked «Checked»` + (needL.length ? ` — ${needL.length} need your own look one by one` : '') + `. Look at each «Where to check», then confirm.` : `${proj.name}: 지난 배포 뒤 끝난 일 ${unc.length}개가 아직 «확인 완료» 가 아닙니다` + (needL.length ? ` — 그중 ${needL.length}개는 «최종 확인 필요»(하나씩 체크)` : '') + `. 각 일의 «확인할 곳» 을 본 뒤 확인 완료하세요.` });
+      if (unc.length) { const s0 = loadState(); markChecked(s0, unc.map((x) => x.sid), who.name || who.user, 'final', Object.fromEntries(unc.map((x) => [x.sid, { need: x.need, why: x.why }]))); saveState(s0); writeLog({ action: 'deploy-check', project: proj.key, sids: unc.map((x) => x.id), need: needL.map((x) => x.id), via: 'deploy-button' }); } }
     // 실행기 솔루션(projects.json «deploy») — 조건을 먼저 보고, 맞으면 일시정지 → (준비 방) → 상황판이 배포 명령을 누른다
     let rItem = null;
     if (runner.conf(proj)) {
@@ -5454,12 +5562,18 @@ async function handleAction(req, res, url, who) {
     if (!proj) return send(res, 400, { ok: false, message: K('솔루션을 알 수 없습니다', 'Unknown project') });
     const stateText = t ? null : String(body.stateText || '').trim();
     if (!t && !stateText) return send(res, 400, { ok: false, message: K('어떤 할 일인지 알 수 없습니다', 'Which item?') });
-    const msg = String(body.message || '').trim().slice(0, 4000);
+    let msg = String(body.message || '').trim().slice(0, 4000);
+    if (Array.isArray(body.atts) && body.atts.length) {
+      if (who.role === 'agent') return send(res, 403, { ok: false, message: K('작업방은 첨부를 붙일 수 없습니다', 'Sessions cannot attach files') });
+      const ar = attachResolve(proj.key, body.atts, who);
+      if (ar.err) return send(res, 400, { ok: false, message: ar.err });
+      msg = (msg || K('첨부를 봐 주세요', 'Please look at the attachments')) + '\n\n' + attachText(ar.list);
+    }
     if (!msg) return send(res, 400, { ok: false, message: K('물어볼 말을 적어 주세요', 'Write your question') });
     const title = t ? t.title : stateText.slice(0, 120);
     const mark = '[todo-ask ' + Date.now().toString(36) + ']';
-    const who = t ? '"tid":"' + t.aid + '"' : '"project":"' + proj.key + '","stateText":' + JSON.stringify(stateText);
-    const api = (path, extra) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:" + PORT + "' --data-binary @- http://127.0.0.1:" + PORT + "" + path + " <<'EOF'\n{" + who + extra + '}\nEOF';
+    const card = t ? '"tid":"' + t.aid + '"' : '"project":"' + proj.key + '","stateText":' + JSON.stringify(stateText);
+    const api = (path, extra) => "curl -s -X POST -H 'Content-Type: application/json' -H 'Origin: http://localhost:" + PORT + "' --data-binary @- http://127.0.0.1:" + PORT + "" + path + " <<'EOF'\n{" + card + extra + '}\nEOF';
     const reviewHow = EN
       ? '① No longer needed (e.g. __OWNER__ says it is unnecessary / the plan changed) → remove it:\n' + api('/api/todos/drop', ',"reason":"one line why"') + '\n' +
         '② Still needed but the steps/explanation change → post the to-do again' + (t ? ' with the same tid (the card comes back updated): POST /api/todos {"tid":"' + t.aid + '","room":"<your session id>","title":…,"steps":[…],"why":…,"then":…}' : ': edit that line in the session log (the old card disappears, the new line shows), or post it to /api/todos') + '\n' +
@@ -6098,7 +6212,8 @@ async function handleAction(req, res, url, who) {
   const replyText = String(body.text || '').trim();
   const sayDone = /^(이제\s*|그냥\s*|이건\s*)?(완료\s*처리|끝내|끝내기|종료)\s*(해|해줘|해 줘|해요|해주세요|해 주세요|하자|해도 돼|해도 돼요|줘|라|자)?[\s.!~,]*$/.test(replyText) ||
     /^(mark (it )?(as )?done|close (it|this)( out)?)[\s.!~,]*$/i.test(replyText);
-  const doneOnly = act === 'reply' && !(a.pid && a.status === 'busy') && (sayDone ||
+  const hasAtts = act === 'reply' && Array.isArray(body.atts) && body.atts.length > 0;   // 📎 첨부가 붙은 답은 «확인» 한 마디여도 이어서 하게(완료 처리로 첨부가 버려지지 않게)
+  const doneOnly = act === 'reply' && !hasAtts && !(a.pid && a.status === 'busy') && (sayDone ||
     (/^(보여|됐어|됐다|됐어요|확인|확인했어|확인 완료|완료|완료야|완료예요|끝|끝났어|잘 돼|잘 돼요|잘 보여)[\s.!~,]*((이제\s*)?(완료|완료야|완료예요|됐어|확인|끝)[\s.!~]*)?$/i.test(replyText) ||
       /^(done|confirmed|looks good|all good|works|it works|verified|checked)[\s.!~,]*$/i.test(replyText)) &&
     !/^\s*(⏸|❌)/.test(readTranscript(transcriptPath(a.cwd, a.sessionId)).lastReport || ''));   // 질문(⏸)에 한 «확인» 은 답이다 — 이어서 하게 둔다
@@ -6169,7 +6284,18 @@ async function handleAction(req, res, url, who) {
     body.text = CHECK_TEXT; body.confirm = true;
   }
   const wq = reqCtx.getStore();
-  const text = (wq && wq.who && isWorker(wq.who) && String(body.text || '').trim() ? K('[팀원 ' + wq.who.name + ' 의 말 — 최종 컨펌자(' + OWNER + ') 말 아님] ', '[From team member ' + wq.who.name + ' — not the final approver (' + OWNER + ')] ') : '') + String(body.text || '').trim();
+  // 📎 첨부 — 답하기·방 메시지 칸에서 다시 준 파일
+  //   새 일 시키기와 같은 임시 칸(.claude/attach-tmp) · 같은 정리 규칙(올린 지 7일 · 대기열에 걸린 답은 남김) · 답 글 끝에 경로 목록
+  let attTail = '';
+  if (hasAtts) {
+    if (who.role === 'agent') return send(res, 403, { ok: false, message: K('작업방은 첨부를 붙일 수 없습니다', 'Sessions cannot attach files') });
+    if (String(body.text || '').trim().startsWith('/')) return send(res, 400, { ok: false, message: K('«/명령» 에는 첨부를 붙일 수 없어요 — 글로 적어 주세요', 'Attachments cannot go with a «/command» — write it as text') });
+    const ar = attachResolve(proj.key, body.atts, who);
+    if (ar.err) return send(res, 400, { ok: false, message: ar.err });
+    attTail = '\n\n' + attachText(ar.list);
+  }
+  const said = String(body.text || '').trim() || (attTail ? K('첨부를 봐 주세요', 'Please look at the attachments') : '');
+  const text = (wq && wq.who && isWorker(wq.who) && said ? K('[팀원 ' + wq.who.name + ' 의 말 — 최종 컨펌자(' + OWNER + ') 말 아님] ', '[From team member ' + wq.who.name + ' — not the final approver (' + OWNER + ')] ') : '') + said + attTail;
   if (!text) return send(res, 400, { ok: false, message: K('보낼 내용을 적어 주세요', 'Write a message') });
   if (text.length > 20000) return send(res, 400, { ok: false, message: K('너무 깁니다(2만 자 이하)', 'Too long (max 20,000 characters)') });
   const deny = !!body.deny && act !== 'resume';
@@ -6620,7 +6746,7 @@ async function serveReq(req, res, who) {
     }
     if (url === '/api/team') {   // ⚙ 팀·권한 칸 — 주인만
       if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있습니다', 'Owner only') });
-      return send(res, 200, { ok: true, team: TEAM, ownerUser: unixUser(OWNER_UID), accounts: humanAccounts(), projects: loadProjects().map((p) => ({ key: p.key, name: p.name, prod: !!p.prodLabel })), risks: teamRisks(), tsOwner: tsLogin, procOk: !!peerSock(-1), route: teamRoute() });
+      return send(res, 200, { ok: true, team: TEAM, reviewDefaultPaths: review.DEFAULT_REVIEW_PATHS, ownerUser: unixUser(OWNER_UID), accounts: humanAccounts(), projects: loadProjects().map((p) => ({ key: p.key, name: p.name, prod: !!p.prodLabel })), risks: teamRisks(), tsOwner: tsLogin, procOk: !!peerSock(-1), route: teamRoute() });
     }
     if (url === '/api/ping' || url === '/api/board') markFg(req);
     if (url === '/api/board') boardViewAt = Date.now();
@@ -6713,7 +6839,7 @@ async function serveReq(req, res, who) {
       out.me = { role: who.role, job: who.job || '', title: who.title || '', user: who.user, name: who.name, projects: who.projects, via: who.via, viaName: VIA_NAMES[who.via] || who.via, fresh: !!who.fresh, totp: auth.hasTotp(who.user) };   // 화면이 역할에 맞게 버튼을 숨김
       if (who.via === 'tunnel') out.me.tunShell = tunnelShell(req.socket);   // 통로 종류 — «늘 열어 두기» 권하기를 셸 창 통로에만
       { const ps = peekState(); out.proposals = Object.values(ps.proposals || {}); out.proposalDone = (ps.proposalDone || []).slice(-30); }
-      if (TEAM.deployConfirm.length) { const ps2 = peekState(); out.projects = (out.projects || []).map((p) => TEAM.deployConfirm.includes(p.key) ? Object.assign({}, p, { unchecked: uncheckedWork(data, ps2, p.key) }) : p); }
+      if (TEAM.deployConfirm.length) { const ps2 = peekState(); out.projects = (out.projects || []).map((p) => TEAM.deployConfirm.includes(p.key) ? Object.assign({}, p, { unchecked: uncheckedWork(data, ps2, p.key), reviewMode: reviewMode(p.key) }) : p); }
       out.team = { members: TEAM.members.length, approval: TEAM.approval, smallDirect: TEAM.smallDirect, deployConfirm: TEAM.deployConfirm };
       return send(res, 200, scopeBoard(out, who));
     }
@@ -9226,4 +9352,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile: (f, a, o, cb) => execFileAs(isClaudeFile(f) ? 'claude' : 'self', f, a, o, cb), execFileAs, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { uncheckedWork, markChecked, reviewMode, reviewNote, gradeKick, gradeJobs, fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile: (f, a, o, cb) => execFileAs(isClaudeFile(f) ? 'claude' : 'self', f, a, o, cb), execFileAs, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

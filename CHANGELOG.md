@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.6.13]
+
+- **Section icons no longer squeeze** — the line icon in front of «Scheduled checks», «Inquiries» and «New task» kept shrinking (22→15px wide) when the summary next to it got long; it now stays square. The ⚡ «run first / quick» mark is a line icon like the others instead of a colour emoji, the «In progress» / «Waiting for a condition» fold headers no longer show two arrows, and on phones small text links («Completed list», «External services», «Turn off» …) are at least 32px tall to tap.
+
+- **Reviewer role and «final check needed» grading** — with «Checked before deploy» on, each project can pick how «normal» finished tasks are checked (⚙ Team: as before / «needed» one by one + «normal» as one bundle / «normal» goes out on a reviewer check). The board grades each finished task from the session's transcript and report: touched screen, DB-structure, login/permission/payment paths (editable globs per project), risk words, a DB-structure command, a «[Final check needed]» line from the session, or no transcript → «needed»; everything else «normal». «Needed» tasks must be ticked one by one in the deploy dialog. New access **Reviewer**: pre-checks «normal» tasks in their projects (never their own, never «needed») and approves or declines members' proposals as written (only the final approver edits them). Anyone who sees the project can raise a task to «needed»; only the final approver lowers it. Project card «Check list n · needed k». `/api/deploy-check` now re-reads each task from the project's own unchecked list (tasks from another project are refused).
+
+- **📎 Attachments in replies too** — a session's message box, the «Reply» box at the top and a to-do's «💬 Ask before doing it» now have the same 📎 button, paste and drag-and-drop as «New task», so you can hand a session another file mid-work. Files go to the same temporary folder and follow the same cleanup (deleted 7 days after upload by default; kept while a reply waiting for its turn still refers to them). Sending only a file with no text works. A one-word «OK» sent with a file is no longer taken as «mark done».
+
 ## [0.6.12]
 
 - **install.sh as root now stops and offers a dedicated account** — creates it with no password and no sudo (so the AI sessions cannot become root), copies root's SSH keys to it and continues the install as that account. Without a keyboard it refuses (exit 5) unless `SB_AS_ROOT=1`. INSTALL: the dedicated-account section is no longer hidden. Root's SSH keys are written by the account itself (never by root following links in the account's home); an existing account with uid 0 or sudo/wheel/admin membership is refused; `SB_LANG` is limited to en/ko.

@@ -296,6 +296,7 @@
          border: 1px solid var(--btn2-line); background: var(--btn2-bg); color: var(--btn2-text); }
   .btn:hover:not(:disabled) { filter: brightness(.97); }
   .btn:disabled { opacity: .5; cursor: default; }
+  .modal .opt:disabled { opacity: .45; cursor: not-allowed; }
   .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
   /* 지금 바로 해야 할 버튼(답하기·터미널에서 예·멈춘 방 상황 물어보기) — 노랑 */
   .btn.urgent { background: var(--urgent); border-color: var(--urgent); color: var(--urgent-text); }
@@ -323,7 +324,7 @@
   .newtask.top .form { margin: 0; padding: 0 16px 12px; }
   .nt-head { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; cursor: pointer; min-height: 44px; }
   .nt-head:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
-  .nt-plus { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--sel); color: var(--sel-text); font-weight: 700; font-size: 14px; line-height: 1; }
+  .nt-plus { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--sel); color: var(--sel-text); font-weight: 700; font-size: 14px; line-height: 1; }
   .nt-title { font-weight: 700; font-size: 14px; color: var(--text); }
   .nt-fold { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; }
   .nt-head:hover .nt-fold { color: var(--link); }
@@ -553,10 +554,18 @@
   }
   /* 고르기 창 (배포·개발완료 «언제?» · 일시정지 «어떻게?») */
   .modal-bg { position: fixed; inset: 0; background: rgba(10,20,40,.45); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .rv-it { border-top: 1px solid var(--line); padding: 8px 0; font-size: 13px; }
+  .rv-t a { color: var(--link); overflow-wrap: anywhere; }
+  .rv-at { color: var(--muted); font-size: 12px; }
+  .rv-tags { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; font-size: 12px; }
+  .rv-need { color: var(--red); font-weight: 600; overflow-wrap: anywhere; } .rv-norm { color: var(--muted); } .rv-mid { color: var(--green); } .rv-by { color: var(--muted); }
+  .rv-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .rv-chk { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; } .rv-chk input { width: 18px; height: 18px; margin-top: 10px; flex: none; } .rv-chk .rv-it { flex: 1; min-width: 0; }
   .modal { background: var(--panel); color: var(--text); border-radius: 14px; max-width: 520px; width: 100%; padding: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.3); max-height: 90vh; overflow-y: auto; }
   .modal h3 { margin: 0 0 6px; font-size: 17px; }
   .svc-link { all: unset; flex: none; cursor: pointer; font-size: 11px; color: var(--link); white-space: nowrap; }
   .svc-link:hover, .svc-link:focus-visible { text-decoration: underline; }
+  @media (max-width: 760px) { .more, .svc-link, .sched .lnk { min-height: 32px; display: inline-flex; align-items: center; } .sched .lnk { min-width: 32px; justify-content: center; } }
   /* 카드 머리 요약(개발·운영·백업) + «자세히» 상자 */
   .csum { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; column-gap: 10px; row-gap: 3px; width: 100%; align-items: baseline; }
   .csum .k, .cmore > .k { font-size: 11px; font-weight: 600; color: var(--muted); opacity: .8; white-space: nowrap; }
@@ -824,6 +833,8 @@
     <div class="nsec"><h3><!--ko-->③ 운영 배포 전 «확인 완료»<!--/ko--><!--en-->③ «Checked» before production deploy<!--/en--></h3>
       <div class="nkinds" id="tm-deploy"></div>
       <small><!--ko-->체크한 솔루션은 지난 배포 뒤 끝난 일을 최종 컨펌자가 모두 «확인 완료» 해야 배포(버튼·정기 점검)가 나갑니다.<!--/ko--><!--en-->For checked projects, every task finished since the last deploy must be marked «Checked» by the final approver before a deploy (button or routine) goes out.<!--/en--></small>
+      <div id="tm-review"></div>
+      <small><!--ko-->끝난 일은 상황판이 «최종 확인 필요»(화면·DB 구조·로그인·권한·돈·삭제를 건드렸거나, 방이 표시했거나, 판정할 수 없음)와 «보통» 으로 나눕니다. «필요» 는 늘 최종 컨펌자가 하나씩 봅니다. 팀원은 «필요» 로 올릴 수만 있습니다. «중간 컨펌자» 권한은 맡은 솔루션의 «보통» 일을 미리 확인합니다(자기 일 제외).<!--/ko--><!--en-->The board splits finished tasks into «final check needed» (touched screens, DB structure, login, permissions, money or deletion, marked by the session, or could not be graded) and «normal». «Needed» is always checked one by one by the final approver; members can only raise a task to «needed». The «Reviewer» role pre-checks «normal» tasks in their projects (not their own).<!--/en--></small>
     </div>
     <div class="nsec" id="gt-sec"><h3><!--ko-->④ 개발 사이트 로그인 관문<!--/ko--><!--en-->④ Development-site sign-in gate<!--/en--></h3>
       <small><!--ko-->켜면 그 솔루션의 개발 사이트는 상황판 아이디·비밀번호로 로그인해야 열립니다(기기마다 30일). 장치는 <b>서버 단위</b>(서버 관리자가 nginx 에 한 번 넣음 — 아래 «nginx 에 넣을 것»), 켬/끔·예외 경로는 <b>솔루션 단위</b>로 여기서 — sudo 필요 없음. 예외 = 로그인 없이 통과할 경로(웹훅 등 기계가 부르는 곳)를 한 줄에 하나, «/» 로 시작하면 그 경로로 시작하는 주소 · «ua:» 로 시작하면 링크 미리보기 봇(화면 주소만, 자료 주소는 안 엶). 인증서 갱신 경로는 늘 열림. 상황판이 꺼지면 개발 사이트는 막힙니다.<!--/ko--><!--en-->When on, the project's development site opens only after signing in with a board ID and password (30 days per device). The mechanism is <b>server-wide</b> (the server admin adds it to nginx once — see «For nginx» below); on/off and exceptions are <b>per project</b> here — no sudo. Exceptions = paths that pass without sign-in (webhooks and other machine callers), one per line: starting with «/» = addresses starting with that path · starting with «ua:» = link-preview bots (page addresses only, never data). The certificate-renewal path always passes. If the board is down, the development sites are blocked.<!--/en--></small>
@@ -1284,7 +1295,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
 (function () {
   var LANG = '__LANG__', EN = LANG === 'en', AI_LANG = '__AI_LANG__';
   function K(ko, en) { return EN ? en : ko; }
-  var PERMN = { owner: K('최종 컨펌자', 'Final approver'), member: K('일 제안', 'Propose'), designer: K('일 제안', 'Propose'), viewer: K('보기만', 'View only') };
+  var PERMN = { owner: K('최종 컨펌자', 'Final approver'), reviewer: K('중간 컨펌자', 'Reviewer'), member: K('일 제안', 'Propose'), designer: K('일 제안', 'Propose'), viewer: K('보기만', 'View only') };
+  function whyText(w) {
+    w = String(w || ''); var v = w.slice(w.indexOf(':') + 1);
+    return /^marker/.test(w) ? K('방이 «최종 확인 필요» 표시', 'session marked it') : /^word:/.test(w) ? K('낱말 «' + v + '»', 'word «' + v + '»') : /^path:/.test(w) ? K('파일 ', 'file ') + v
+      : /^db-command/.test(w) ? K('DB 구조 명령', 'DB structure command') : /^shell-write/.test(w) ? K('대상을 못 푸는 쓰기 명령', 'write command with unknown targets') : /^unknown/.test(w) ? K('판정 불가(대화 기록 없음)', 'cannot grade (no transcript)') : /^pending/.test(w) ? K('판정 중', 'grading') : /^raised:/.test(w) ? K(v + ' 님이 올림', 'raised by ' + v) : w;
+  }
+  var REVIEW_MODEN = { strict: K('전부 최종 컨펌자가 (지금처럼)', 'All by the final approver (as before)'), bundle: K('«필요» 는 하나씩 · «보통» 은 묶음 한 번 (권장)', '«Needed» one by one · «normal» as one bundle (recommended)'), auto: K('«보통» 은 중간 컨펌자 확인만으로 배포', '«Normal» goes out on a reviewer check alone') };
   var JOBS = ['developer', 'designer', 'planner', 'qa', 'marketer', 'ops', 'other'];
   var JOBN = { developer: K('개발자', 'Developer'), designer: K('디자이너', 'Designer'), planner: K('기획자', 'Planner'), qa: K('검수(QA)', 'QA'), marketer: K('마케터', 'Marketer'), ops: K('운영', 'Operations'), other: K('기타', 'Other') };
   var TZ = '__TZ__', TZ_NAME = '__TZ_NAME__', SUPPORT_URL = '__SUPPORT_URL__';
@@ -1592,6 +1609,62 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   window.addEventListener('online', function () { setTimeout(flushOutbox, 1500); });
   // Enter = 보내기, Shift+Enter = 줄바꿈. 한글 조합 중(isComposing / keyCode 229)의 Enter 는 무시
   // 고르기 창 — opts: [{ v, label, desc, rec, warn }] → 고른 v (닫으면 null)
+  // 끝난 일 한 줄 — 이름(누르면 그 방) · 등급 · 중간 확인
+  function reviewRow(x) {
+    var r = el('div', 'rv-it'); var t = el('div', 'rv-t');
+    var nm = el('a', null, '«' + x.name + '»'); nm.href = '#room=' + x.id; nm.addEventListener('click', function (ev) { var rr = last && last.rooms.filter(function (y) { return y.id === x.id; })[0]; if (rr) { ev.preventDefault(); openRoom(rr); } });
+    t.appendChild(nm); t.appendChild(el('span', 'rv-at', ' ' + fmt(Date.parse(x.at)))); r.appendChild(t);
+    var tags = el('div', 'rv-tags');
+    if (x.need) tags.appendChild(el('span', 'rv-need', K('최종 확인 필요', 'Final check needed') + ((x.why || []).length ? ' — ' + x.why.map(whyText).join(' · ') : '')));
+    else if (x.need === false) tags.appendChild(el('span', 'rv-norm', K('보통', 'Normal')));
+    if (x.mid) tags.appendChild(el('span', 'rv-mid', K('중간 확인: ', 'Reviewed: ') + x.mid.by));
+    if (x.by) tags.appendChild(el('span', 'rv-by', K('낸 사람: ', 'By: ') + x.by));
+    r.appendChild(tags); return r;
+  }
+  // 배포 전 — «최종 확인 필요» 는 하나씩 체크해야 배포 단추가 켜짐 · «보통» 은 묶음 (돌려줌: 체크한 sid 목록 | null)
+  function needDialog(j) {
+    return new Promise(function (resolve) {
+      var bg = el('div', 'modal-bg'); var m = el('div', 'modal'); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+      m.appendChild(el('h3', null, K('배포 전 확인 완료', 'Checked before deploy'))); m.appendChild(el('div', 'mmsg', j.message));
+      var need = j.list.filter(function (x) { return x.need; }), norm = j.list.filter(function (x) { return !x.need; });
+      m.appendChild(el('div', 'svc-sec', K('최종 확인 필요 ', 'Final check needed ') + need.length + K(' — 하나씩 보고 체크', ' — look and tick each')));
+      var boxes = need.map(function (x) { var w = el('label', 'rv-chk'); var c = document.createElement('input'); c.type = 'checkbox'; c.value = x.sid; w.appendChild(c); w.appendChild(reviewRow(x)); m.appendChild(w); return c; });
+      if (norm.length) { m.appendChild(el('div', 'svc-sec', K('보통 ', 'Normal ') + norm.length + K(' — 묶음으로 확인 (중간 확인 ', ' — checked as a bundle (reviewed ') + norm.filter(function (x) { return x.mid; }).length + ')')); norm.forEach(function (x) { m.appendChild(reviewRow(x)); }); }
+      var go = el('button', 'opt rec'); go.type = 'button'; go.appendChild(el('b', null, K('확인 완료하고 배포', 'Mark checked and deploy'))); go.appendChild(el('span', null, K('«필요» 를 모두 체크해야 눌려요 · 누가·언제 기록', 'Enabled once every «needed» task is ticked · who and when recorded')));
+      var no = el('button', 'opt'); no.type = 'button'; no.appendChild(el('b', null, K('취소', 'Cancel')));
+      function sync() { go.disabled = boxes.some(function (c) { return !c.checked; }); }
+      boxes.forEach(function (c) { c.addEventListener('change', sync); }); sync();
+      function done(v) { document.removeEventListener('keydown', esc); bg.remove(); resolve(v); }
+      function esc(ev) { if (ev.key === 'Escape') done(null); }
+      go.addEventListener('click', function () { if (!go.disabled) done(boxes.map(function (c) { return c.value; })); }); no.addEventListener('click', function () { done(null); });
+      m.appendChild(go); m.appendChild(no); bg.addEventListener('click', function (ev) { if (ev.target === bg) done(null); }); document.addEventListener('keydown', esc);
+      bg.appendChild(m); document.body.appendChild(bg);
+    });
+  }
+  // 솔루션 카드 «확인 목록» — 중간 컨펌자: «보통» 중간 확인 · 최종 컨펌자: 하나씩·«보통» 묶음 확인 · 모두: «필요» 로 올리기
+  function openReview(p) {
+    var bg = el('div', 'modal-bg'); var m = el('div', 'modal'); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
+    m.appendChild(el('h3', null, p.name + K(' · 배포 전 확인 목록', ' · Check list before deploy')));
+    m.appendChild(el('div', 'mmsg', K('보통 일 확인 방식: ', 'Normal tasks: ') + (REVIEW_MODEN[p.reviewMode] || p.reviewMode)));
+    var isRev = ME.role === 'reviewer', canRaise = OWN_NOW || ME.role === 'member' || ME.role === 'designer' || isRev;
+    function close() { document.removeEventListener('keydown', esc); bg.remove(); lastSig = ''; load(); }
+    function esc(ev) { if (ev.key === 'Escape') close(); }
+    function call(u, b, btn) { btn.disabled = true; post(u, b).then(function (j) { toast(j.message || ''); if (j.ok) close(); else btn.disabled = false; }).catch(function (e) { btn.disabled = false; toast(e.message); }); }
+    (p.unchecked || []).forEach(function (x) {
+      var r = reviewRow(x), bs = el('div', 'rv-btns');
+      function b(label, fn) { var bt = el('button', 'btn', label); bt.type = 'button'; bt.style.cssText = 'font-size:11px;padding:3px 8px;'; bt.addEventListener('click', function () { fn(bt); }); bs.appendChild(bt); }
+      if (isRev && !x.need && !x.mid && x.by !== ME.user) b(K('중간 확인', 'Review'), function (bt) { call('/api/deploy-check', { project: p.key, sids: [x.sid] }, bt); });
+      if (OWN_NOW) b(K('확인 완료', 'Checked'), function (bt) { call('/api/deploy-check', { project: p.key, sids: [x.sid] }, bt); });
+      if (canRaise && !x.need) b(K('«필요» 로 올리기', 'Raise to «needed»'), function (bt) { var w = window.prompt(K('최종 컨펌자가 직접 봐야 하는 까닭(한 줄, 비워도 됨)', 'Why the final approver should look (one line, optional)'), ''); if (w == null) return; call('/api/deploy-need', { project: p.key, sids: [x.sid], why: w }, bt); });
+      r.appendChild(bs); m.appendChild(r);
+    });
+    var norm = (p.unchecked || []).filter(function (x) { return !x.need; });
+    if (OWN_NOW && norm.length) { var all = el('button', 'opt rec'); all.type = 'button'; all.appendChild(el('b', null, K('«보통» ' + norm.length + '개 묶음 확인 완료', 'Mark ' + norm.length + ' «normal» as checked'))); all.appendChild(el('span', null, K('중간 확인 ' + norm.filter(function (x) { return x.mid; }).length + '개 포함 · «필요» 는 하나씩', 'includes ' + norm.filter(function (x) { return x.mid; }).length + ' reviewed · «needed» one by one')));
+      all.addEventListener('click', function () { call('/api/deploy-check', { project: p.key, sids: norm.map(function (x) { return x.sid; }) }, all); }); m.appendChild(all); }
+    var cl = el('button', 'opt'); cl.type = 'button'; cl.appendChild(el('b', null, K('닫기', 'Close'))); cl.addEventListener('click', close); m.appendChild(cl);
+    bg.addEventListener('click', function (ev) { if (ev.target === bg) close(); }); document.addEventListener('keydown', esc);
+    bg.appendChild(m); document.body.appendChild(bg);
+  }
   function choose(title, msg, opts) {
     return new Promise(function (resolve) {
       var bg = el('div', 'modal-bg'); var m = el('div', 'modal'); m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true');
@@ -2061,6 +2134,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     // 응답마다 같은 처리 — «모두 확인했어요» 뒤 다시 보낸 응답이 실행기 막힘(RUNNER_BLOCKED)이면 그 선택창도 띄운다
     //
     function step(j) {
+      if (j._status === 409 && j.code === 'UNCHECKED' && (j.list || []).some(function (x) { return x.need; })) {
+        if (btn) btn.disabled = false;
+        return needDialog(j).then(function (needSids) {
+          if (!needSids) return { ok: false };
+          body.checkAll = true; body.sids = (j.list || []).map(function (x) { return x.sid; }); body.needSids = needSids; if (btn) btn.disabled = true;
+          return post(url, body).then(step);
+        });
+      }
       if (j._status === 409 && j.code === 'UNCHECKED') {
         if (btn) btn.disabled = false;
         var lines = (j.list || []).map(function (x) { return '· «' + x.name + '» — ' + fmt(Date.parse(x.at)); }).join('\n');
@@ -2282,13 +2363,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
     chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>',
     user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    bolt: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
     mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22 6 12 13 2 6"/>',
     copy: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'
   };
   var GLYPH = { '✓': 'check', '✔': 'check', '✅': 'check', '☑': 'check', '✕': 'x', '✖': 'x', '❌': 'x', '✘': 'x', '✗': 'x', '🗑': 'x',
     '‖': 'pause', '⏸': 'pause', '▶': 'play', '■': 'stop', '◷': 'clock', '🕓': 'clock', '⏳': 'sub', '↩': 'reply', '↻': 'refresh', '↳': 'sub',
-    '⚠': 'alert', '🌐': 'globe', '📱': 'phone', '🔔': 'bell', '💬': 'chat', '👤': 'user', '↗': 'ext', '🔗': 'link', '↑': 'up', '▾': 'cdown', '▸': 'cright', '▴': 'cup', '▲': 'cup', '→': 'right', '✉': 'mail' };
-  var GLYPH_RE = /(✓|✔|✅|☑|✕|✖|❌|✘|✗|🗑|‖|⏸|▶|■|◷|🕓|⏳|↩|↻|↳|⚠|🌐|📱|🔔|💬|👤|↗|🔗|↑|▾|▸|▴|▲|→|✉)[︎️]?/u;
+    '⚠': 'alert', '🌐': 'globe', '📱': 'phone', '🔔': 'bell', '💬': 'chat', '👤': 'user', '↗': 'ext', '🔗': 'link', '↑': 'up', '▾': 'cdown', '▸': 'cright', '▴': 'cup', '▲': 'cup', '→': 'right', '✉': 'mail', '⚡': 'bolt' };
+  var GLYPH_RE = /(✓|✔|✅|☑|✕|✖|❌|✘|✗|🗑|‖|⏸|▶|■|◷|🕓|⏳|↩|↻|↳|⚠|🌐|📱|🔔|💬|👤|↗|🔗|↑|▾|▸|▴|▲|→|✉|⚡)[︎️]?/u;
   var GLYPH_RE_G = new RegExp(GLYPH_RE.source, 'gu');
   var ICON_TPL = {};
   function icon(name) {
@@ -2839,6 +2921,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var ta = draftArea('reply:' + r.id, r.permission ? K('예: 그 명령은 하지 말고 화면에서 내가 고칠 수 있게 방법만 적어 줘', 'e.g. don\'t run that command — just write down how I can fix it in the UI') : r.status.code === 'waiting' ? K('질문에 대한 답을 적어 주세요', 'Write your answer to the question') : r.turnOpen ? K('일하는 중에도 보낼 수 있어요 — 이 방에 전달됩니다(새 방 안 만듦)', 'You can send while it works — delivered to this session (no new session)') : K('이 방에 하고 싶은 말을 적어 주세요', 'Write a message to this session'));
       enterToSubmit(ta, { click: function () { sendBtn.click(); } });
       box.appendChild(ta);
+      if (!r.permission && r.project && r.project !== 'other') box.appendChild(attBox('reply:' + r.id, function () { return r.project; }, ta, box));   // 📎 다시 줄 파일
       var rowb = el('div', 'row fillrow');
       if (r.status.code === 'done') {
         var okBtn = el('button', 'btn ok', K('✓ 확인 완료 (완료 목록으로)', '✓ Confirm done (to the done list)'));
@@ -2858,19 +2941,22 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         if (busyRoom) sendBtn.title = nowMode ? K('하던 명령을 끊고 이 말을 바로 전달합니다(같은 대화로 이어서 — 새 방 안 만듦)', 'Interrupts the running command and delivers now (same conversation — no new session)') : K('하던 일은 끊지 않고, 지금 차례가 끝나는 순간 같은 방에 전달합니다', 'Does not interrupt — delivered to the same session the moment this turn ends');
         sendBtn.addEventListener('click', function (ev) {
           ev.stopPropagation();
-          var text = (drafts['reply:' + r.id] || '').trim();
+          var text = (drafts['reply:' + r.id] || '').trim(), ratts = r.permission ? [] : attIds('reply:' + r.id);
+          if (!r.permission && attBusy('reply:' + r.id)) { toast(K('첨부를 올리는 중이에요 — 끝나면 다시 눌러 주세요', 'Still uploading — press again when done')); return; }
+          if (!text && ratts.length) text = K('첨부를 봐 주세요', 'Please look at the attachments');
           if (!text) { toast(K('보낼 내용을 적어 주세요', 'Write a message')); return; }
           stick[r.id] = true;
           // 보낸 말은 바로 대화에 표시(답은 방이 쓰는 대로 뜸)
           var c1 = row.querySelector('.chat');
           var when = busyRoom ? (sendBtn._when || (nowMode ? 'now' : 'after')) : null;
-          var pend = (chatCache[r.id] || []).concat([{ who: 'owner', at: new Date().toISOString(), text: text }, { who: 'system', at: null, text: when === 'after' ? K('이 차례가 끝나면 전달합니다 — 하던 일은 그대로 계속', 'Delivered when this turn ends — the current work continues') : when === 'now' ? K('끼어드는 중 — 하던 명령을 멈추고 이 말을 전달(몇 초)…', 'Interrupting — stopping the running command and delivering this (a few seconds)…') : K('보냈습니다 — 방이 읽고 답을 쓰는 중…', 'Sent — the session is reading and replying…') }]);
+          var pend = (chatCache[r.id] || []).concat([{ who: 'owner', at: new Date().toISOString(), text: text + (ratts.length ? '\n📎 ' + attList('reply:' + r.id).filter(function (x) { return x.st === 'ok'; }).map(function (x) { return x.name; }).join(' · ') : '') }, { who: 'system', at: null, text: when === 'after' ? K('이 차례가 끝나면 전달합니다 — 하던 일은 그대로 계속', 'Delivered when this turn ends — the current work continues') : when === 'now' ? K('끼어드는 중 — 하던 명령을 멈추고 이 말을 전달(몇 초)…', 'Interrupting — stopping the running command and delivering this (a few seconds)…') : K('보냈습니다 — 방이 읽고 답을 쓰는 중…', 'Sent — the session is reading and replying…') }]);
           if (c1) fillChat(c1, pend, r.id);
           delete drafts['reply:' + r.id]; ta.value = '';
           watchSince[r.id] = Date.now();
           if (NEED[r.status.code]) { sentRoom[r.id] = { t: Date.now(), rep: r.lastReportAt || null }; renderAgain(); }
-          act('/api/rooms/' + r.id + '/reply', { text: text, deny: r.permission || undefined, priority: sendBtn._prio || undefined, when: when || undefined }, sendBtn).then(function (j) {
+          act('/api/rooms/' + r.id + '/reply', { text: text, deny: r.permission || undefined, priority: sendBtn._prio || undefined, when: when || undefined, atts: ratts.length ? ratts : undefined }, sendBtn).then(function (j) {
             if (!j.ok) { drafts['reply:' + r.id] = text; ta.value = text; delete watchSince[r.id]; if (sentRoom[r.id]) { delete sentRoom[r.id]; renderAgain(); } return; }
+            if (ratts.length) attClear('reply:' + r.id);
             if (when) return;   // 일하는 방 — 펼친 채로 두고 실시간 흐름으로 지켜본다
             // 답했으면 다음 차례는 방이다 — 펼친 줄을 접는다(답이 오면 «볼 것»·알림으로 다시 알림)
             open[key(r)] = false; row.classList.remove('open'); btn.setAttribute('aria-expanded', 'false');
@@ -3592,6 +3678,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var ta = draftArea('todo:' + k, enterLabel(K('묻거나 말할 것을 적고 Enter — 예: 이 키는 어디서 찾아? / 3번 화면이 안 보여 / 지금은 못 해, 다음 주에', 'Write your question and press Enter — e.g. where do I find this key? / step 3 screen is missing / cannot do it until next week')));
         ta.setAttribute('aria-label', K('할 일에 대해 묻기: ', 'Ask about: ') + a.title);
         f.appendChild(ta);
+        var tKey = 'todo:' + k;
+        if (a.project && a.project !== 'other') f.appendChild(attBox(tKey, function () { return a.project; }, ta, f));
         var row = el('div', 'row');
         var send = el('button', 'btn urgent', enterLabel(K('묻기 보내기 — 아직 안 함 (Enter)', 'Send question — not done yet (Enter)')));
         var sendDone = el('button', 'btn', isCheck ? K('좋아요 + 이 말 같이 보내기', 'OK + send this note') : K('다 했어요 + 이 말 같이 보내기', 'Done + send this note'));
@@ -3600,21 +3688,26 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         enterToSubmit(ta, send);
         var noteOf = function () {
           var note = (drafts['todo:' + k] || '').trim();
+          if (attBusy(tKey)) { toast(K('첨부를 올리는 중이에요 — 끝나면 다시 눌러 주세요', 'Still uploading — press again when done')); return ''; }
+          if (!note && attIds(tKey).length) note = K('첨부를 봐 주세요', 'Please look at the attachments');
           if (!note) { toast(K('보낼 말을 적어 주세요', 'Write something first')); ta.focus(); }
           return note;
         };
         send.addEventListener('click', function () {
           var note = noteOf(); if (!note) return;
+          var tatts = attIds(tKey);
           var body = a.aid ? { tid: a.aid, message: note } : { project: a.project, stateText: a.stateText || a.question, room: a.room || undefined, message: note };
+          if (tatts.length) body.atts = tatts;
           act('/api/todos/ask', body, send).then(function (j) {
             if (!j || !j.ok) return;
-            delete drafts['todo:' + k]; askOpen[k] = false;
+            delete drafts['todo:' + k]; askOpen[k] = false; if (tatts.length) attClear(tKey);
             var pos = ((last && last.asks) || []).filter(isMine).findIndex(function (x) { return askKey(x) === k; });
             sentAsk[k] = { t: Date.now(), a: a, pos: pos < 0 ? 0 : pos, label: K('💬 보냄 — 방이 다시 판단 중', '💬 Sent — the session is re-judging') };
             renderAgain(); setTimeout(renderAgain, SENT_SHOW_MS + 50);
           });
         });
         sendDone.addEventListener('click', function () {
+          if (attIds(tKey).length) { toast(K('첨부는 «묻기 보내기» 로 보내 주세요 — «다 했어요» 에는 파일이 같이 가지 않아요', 'Send attachments with «Send question» — «Done» does not carry files'), 6000); return; }
           var note = noteOf(); if (!note) return;
           delete drafts['todo:' + k]; ta.value = ''; doneTodo(a, note, sendDone);
         });
@@ -3876,6 +3969,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var ta = draftArea('ask:' + k, perm ? K('예: 그 명령은 하지 말고, 화면에서 내가 고칠 수 있게 방법만 적어 줘', 'e.g. don\'t run that command — just write down how I can fix it in the UI') : enterLabel(K('답을 적고 Enter (줄바꿈 Shift+Enter)', 'Write your answer and press Enter (Shift+Enter for a new line)')));
     ta.setAttribute('aria-label', (perm ? K('아니오 · 다른 지시: ', 'No + other instruction: ') : K('답: ', 'Answer: ')) + a.title);
     f.appendChild(ta);
+    var aKey = 'ask:' + k, aProj = (r && r.project && r.project !== 'other') ? r.project : a.project;
+    if (!perm && aProj && aProj !== 'other') f.appendChild(attBox(aKey, function () { return aProj; }, ta, f));
     var who = el('div', 'ask-who', r ? (EN ? '«' + r.name + '» continues ' + (perm ? 'with this instruction instead of that command' : 'in the same conversation with this answer') : '«' + r.name + '» 방이 ' + (perm ? '그 명령은 하지 않고 이 지시대로' : '이 답을 들고 같은 대화로') + ' 이어서 합니다')
                                    : K('이 답을 들고 새 방이 이어서 합니다(대기열)', 'A new session continues with this answer (queued)'));
     var row = el('div', 'row');
@@ -3883,10 +3978,12 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var cancel = el('button', 'btn', K('닫기', 'Close'));
     enterToSubmit(ta, send);
     send.addEventListener('click', function () {
-      var ans = (drafts['ask:' + k] || '').trim();
+      var ans = (drafts['ask:' + k] || '').trim(), atts = perm ? [] : attIds(aKey);
+      if (!perm && attBusy(aKey)) { toast(K('첨부를 올리는 중이에요 — 끝나면 다시 눌러 주세요', 'Still uploading — press again when done')); return; }
+      if (!ans && atts.length) ans = K('첨부를 봐 주세요', 'Please look at the attachments');
       if (!ans) { toast(perm ? K('어떻게 할지 적어 주세요', 'Write what to do instead') : K('답을 적어 주세요', 'Write your answer')); ta.focus(); return; }
       delete drafts['ask:' + k]; ta.value = '';
-      sendAnswer(a, r, k, send, ans, perm, true);
+      sendAnswer(a, r, k, send, ans, perm, true, null, atts);
     });
     cancel.addEventListener('click', function () { askOpen[k] = false; renderAgain(); });
     row.appendChild(send); row.appendChild(cancel); row.appendChild(who);
@@ -3894,20 +3991,21 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     return f;
   }
   // 보내자마자 목록에서 빼고, 실패하면 되돌린다(답 칸에서 쓴 글이면 칸을 다시 열어 글도 되돌림) — 답 칸 «보내기»·«권고대로» 공용
-  function sendAnswer(a, r, k, btn, ans, perm, fromForm, label) {
+  function sendAnswer(a, r, k, btn, ans, perm, fromForm, label, atts) {
     var pos = ((last && last.asks) || []).findIndex(function (x) { return askKey(x) === k; });
     sentAsk[k] = { t: Date.now(), a: a, pos: pos < 0 ? 0 : pos, label: label || K('✓ 답 보냄', '✓ Answer sent') }; if (r) sentRoom[r.id] = { t: Date.now(), rep: r.lastReportAt || null };
     askOpen[k] = false; renderAgain(); setTimeout(renderAgain, SENT_SHOW_MS + 50);
     toast(K('보내는 중… (곧 목록에서 빠집니다)', 'Sending… (leaves the list shortly)'));
-    return answerAsk(a, r, btn, ans, perm).then(function (j) {
-      if (j && j.ok) return;
+    return answerAsk(a, r, btn, ans, perm, atts).then(function (j) {
+      if (j && j.ok) { if (atts && atts.length) attClear('ask:' + k); return; }
       delete sentAsk[k]; if (r) delete sentRoom[r.id];
       if (fromForm) { drafts['ask:' + k] = ans; askOpen[k] = true; }
       renderAgain(); if (fromForm) focusAsk(k);
     });
   }
   // 답은 그 방으로(같은 대화로 이어서) · 방이 없으면 대기열에 «이 질문의 답» 으로 넣는다
-  function answerAsk(a, r, btn, ans, deny) {
+  function answerAsk(a, r, btn, ans, deny, atts) {
+    atts = atts && atts.length ? atts : undefined;
     ans = String(ans || '').trim();
     if (!ans) return Promise.resolve({ ok: false });
     var done = function (j) {
@@ -3915,17 +4013,17 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       return post('/api/asks/answered', { aid: a.aid || undefined, project: a.project, stateText: a.from === 'state' ? (a.stateText || undefined) : undefined })
         .catch(function () {}).then(function () { lastSig = ''; load(); return j; });
     };
-    if (r && a.live) return act('/api/rooms/' + r.id + '/reply', { text: ans, deny: deny || undefined }, btn).then(function (j) { if (j && j.ok) { lastSig = ''; load(); } return j; });
+    if (r && a.live) return act('/api/rooms/' + r.id + '/reply', { text: ans, deny: deny || undefined, atts: atts }, btn).then(function (j) { if (j && j.ok) { lastSig = ''; load(); } return j; });
     if (r) {
       var text = EN ? (a.from === 'state' ? 'Session log («' + (a.section || 'Waiting for answer') + '») question: ' + (a.stateText || a.title) + '\n' + a.question + '\n\n__OWNER__\'s answer: ' + ans + '\n\nProceed according to this answer and move that question to «(previous)» in the session log.' : '__OWNER__\'s answer to the posted question (' + a.title + '): ' + ans) : (a.from === 'state' ? '작업기록(«' + (a.section || '답 기다림') + '»)의 이 질문: ' + (a.stateText || a.title) + '\n' + a.question + '\n\n' : '올린 질문(' + a.title + ')에 대한 ') + '__OWNER__ 답: ' + ans +
                  (a.from === 'state' ? '\n\n이 답대로 진행하고, 작업기록에서 그 질문은 «(이전)» 으로 옮긴다.' : '');
-      return act('/api/rooms/' + r.id + '/reply', { text: text, deny: deny || undefined }, btn).then(done);
+      return act('/api/rooms/' + r.id + '/reply', { text: text, deny: deny || undefined, atts: atts }, btn).then(done);
     }
     var task = EN ? '__OWNER__ answered this question from ' + a.projectName + ' ' + (a.from === 'state' ? 'session log («' + (a.section || 'Waiting for answer') + '»)' : 'session') + ':\n\nQuestion: ' + (a.from === 'state' ? (a.stateText || a.title) + '\n' : '') + a.question +
                '\n\n__OWNER__\'s answer: ' + ans + '\n\nProceed according to this answer and move that question to «(previous)» in the session log. Deploy to production, write to the production DB or send externally only if the answer says so.'
       : (a.projectName + ' ' + (a.from === 'state' ? '작업기록(«' + (a.section || '답 기다림') + '»)' : '작업방') + '의 이 질문에 __OWNER__ 가 답했어:\n\n질문: ' + (a.from === 'state' ? (a.stateText || a.title) + '\n' : '') + a.question +
                ((a.terminal || []).length ? '\n\n안내한 명령(__OWNER__ 가 직접 실행):\n' + a.terminal.join('\n') : '') + '\n\n__OWNER__ 답: ' + ans + '\n\n이 답대로 진행하고(명령을 실행했다고 하면 먼저 됐는지 읽기로 확인), 작업기록에서 그 질문은 «(이전)» 으로 옮긴다. 운영 배포·운영 DB 쓰기·외부 발송은 답에 그렇게 적혀 있을 때만 한다.');
-    return act('/api/rooms', { project: a.project, task: task, queue: true, fromPending: a.from === 'state' ? (a.stateText || a.question) : undefined, name: (K('답: ', 'Answer: ') + a.title).slice(0, 40) }, btn).then(done);
+    return act('/api/rooms', { project: a.project, task: task, queue: true, atts: atts, fromPending: a.from === 'state' ? (a.stateText || a.question) : undefined, name: (K('답: ', 'Answer: ') + a.title).slice(0, 40) }, btn).then(done);
   }
   // AI 다시 로그인 칸 — ① «다시 로그인» → 상황판이 claude auth login 을 띄워 주소를 받음 ② 그 주소를 아무 브라우저에서 열어 로그인 → 나온 코드 복사 ③ 칸에 붙여 넣고 «연결»
   //   쓰는 중엔 화면을 다시 그리지 않으니(typing) 붙여 넣은 코드는 그대로 남는다
@@ -5239,7 +5337,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   }
   window.addEventListener('pagehide', flushSnap);
   document.addEventListener('visibilitychange', function () { if (document.hidden) flushSnap(); });
-  var OWN_NOW = true;   // 지금 화면이 주인(최종 컨펌자)인가 — 주인만 쓰는 버튼(문의 «방에 답장 맡기기»)
+  var OWN_NOW = true, ME = { role: 'owner' };   // 지금 화면이 주인(최종 컨펌자)인가 — 주인만 쓰는 버튼(문의 «방에 답장 맡기기»)
   var lastData = null;   // 화면 곳곳에서 솔루션 이름을 찾을 때
   function render(data) {
     lastData = data;
@@ -5297,7 +5395,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var askRoom = {}; asks.forEach(function (a) { if (a.room) askRoom[a.room] = true; });
     var need = rooms.filter(function (r) { return NEED[r.status.code] && !askRoom[r.id] && !r.pendingReply && !hideSentRoom(r); });
     var ownerTodos = asks.filter(function (a) { return !a.deferred; });
-    var me = data.me || { role: 'owner' }, OWN = me.role === 'owner' || me.role === 'system'; OWN_NOW = OWN;
+    var me = data.me || { role: 'owner' }, OWN = me.role === 'owner' || me.role === 'system'; OWN_NOW = OWN; ME = me;
     var tTeam = document.getElementById('t-team'); if (tTeam) tTeam.hidden = !OWN;
     var tMe = document.getElementById('t-me');
     if (tMe && me.name && me.via !== 'terminal' && me.role !== 'agent') {
@@ -5436,7 +5534,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     if (going.length) {
       var gb = el('div', 'going-box'); gb.setAttribute('data-v', vsig(going));
       var gCnt = {}; going.forEach(function (r) { var n = (data.projects.find(function (p) { return p.key === r.project; }) || {}).name || K('기타', 'Other'); gCnt[n] = (gCnt[n] || 0) + 1; });
-      gb.appendChild(foldHead('going', EN ? '▶ In progress: ' + going.length : '▶ 진행 중 ' + going.length + '개', '',
+      gb.appendChild(foldHead('going', EN ? 'In progress: ' + going.length : '진행 중 ' + going.length + '개', '',
         Object.keys(gCnt).map(function (n) { return n + ' ' + gCnt[n]; }).join(' · ') + K(' · 보기만 하는 칸(할 것 없음)', ' · view only (nothing to do)')));
       var gu = el('ul');
       going.forEach(function (r) {
@@ -5466,7 +5564,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       //   여기엔 시작할 수 없는 조건(Fable 한도·아직 안 된 운영 배포)이 걸린 것만 남는다. 조건이 되면 상황판이 저절로 차례에 넣는다
       //
       var nLaterAll = later.length + nLaterAsk + fw.length + nLaterMine;
-      lb.appendChild(foldHead('later', EN ? '⏳ Waiting for a condition: ' + nLaterAll + ' — start by themselves (not your to-do)' : '⏳ 조건이 되면 저절로 시작 ' + nLaterAll + '개 (__OWNER__ 님 할 일 아님)'));
+      lb.appendChild(foldHead('later', EN ? 'Waiting for a condition: ' + nLaterAll + ' — start by themselves (not your to-do)' : '조건이 되면 저절로 시작 ' + nLaterAll + '개 (__OWNER__ 님 할 일 아님)'));
       if (!folded('later')) {
       lb.appendChild(el('div', 'later-sub', K('지금 시작해도 할 수 없는 일만 여기 있어요 — Fable 한도·아직 안 된 운영 배포·적힌 날짜 전·다른 일이나 __OWNER__ 님 행동을 기다림. 카드마다 «↳ 저절로 풀림» 또는 «👉 __OWNER__ 님» 한 줄이 언제 어떻게 풀리는지 알려 줘요. 차례에 들어가면 «▶ 진행 중» 의 «⏭ 다음 차례» 로 옮겨 갑니다.',
         'Only work that cannot proceed yet is here — Fable limit, a production deploy not done yet, a date not reached, or waiting for other work or for you. Each card has a «↳ Resolves by itself» or «👉 You» line saying how it resolves. Once queued it moves to «⏭ Next» under «▶ In progress».')));
@@ -5823,6 +5921,12 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             gateAct('/api/projects/' + p.key + '/deploy', { typed: typed }, dep);
           });
           btnRow.appendChild(dep);
+          if (p.unchecked && p.unchecked.length && p.reviewMode && p.reviewMode !== 'strict') {
+            var nNeed = p.unchecked.filter(function (x) { return x.need; }).length;
+            var rvb = el('button', 'btn', K('확인 목록 ', 'Check list ') + p.unchecked.length + (nNeed ? K(' · 필요 ', ' · needed ') + nNeed : ''));
+            rvb.style.cssText = 'font-size:12px;padding:5px 10px;white-space:nowrap;'; rvb.title = K('끝난 일 — «최종 확인 필요» 와 «보통» · 중간 확인 · 올리기', 'Finished tasks — «needed» vs «normal» · review · raise');
+            rvb.addEventListener('click', function () { openReview(p); }); btnRow.appendChild(rvb);
+          }
           if (p.runner) runnerAfter = runnerLine(p);
           else if (OWN_NOW) { runnerAfter = el('div', 'runner-row cm-body'); var lg = el('button', 'svc-link', K('⚙ 배포 연결 설정', '⚙ Deploy connection')); lg.type = 'button'; lg.addEventListener('click', function () { openDeploySetup(p); }); runnerAfter.appendChild(lg); }
         } else if (p.key !== 'server') {
@@ -6473,7 +6577,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       u.value = m.user || '';
       var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'tm-name'; nm.placeholder = K('이름', 'Name'); nm.value = m.name || ''; nm.setAttribute('aria-label', K('이름', 'Name'));
       var rl = document.createElement('select'); rl.className = 'tm-role'; rl.setAttribute('aria-label', K('권한', 'Access'));
-      ['member', 'viewer', 'owner'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = K('권한: ', 'Access: ') + ROLE[k]; rl.appendChild(o); });
+      ['member', 'reviewer', 'viewer', 'owner'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = K('권한: ', 'Access: ') + ROLE[k]; rl.appendChild(o); });
       var mRole = m.role === 'designer' ? 'member' : (m.role || 'member'), mJob = m.job || (m.role === 'designer' ? 'designer' : '');   // 예전 «디자이너» 역할 = 일 제안 + 직무 디자이너
       rl.value = mRole;
       var jb = document.createElement('select'); jb.className = 'tm-job'; jb.setAttribute('aria-label', K('직무', 'Job'));
@@ -6624,6 +6728,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       n++; L.push(K(n + ') 다음부터: 길을 켜고 상황판 주소를 열어 아이디 ' + p.id + ' + 비밀번호' + (p.needT ? ' + 인증 앱 6자리' : '') + ' 로 로그인', n + ') From then on: turn on the route, open the board address and sign in with ID ' + p.id + ' + password' + (p.needT ? ' + 6 digits' : '')));
       L.push('');
       L.push(K('알아 둘 것', 'Good to know'));
+      if (p.role === 'reviewer') L.push(K('- 중간 컨펌자예요: 맡은 솔루션의 «보통» 끝난 일을 솔루션 카드 «확인 목록» 에서 먼저 확인하고, 팀원 제안을 정할 수 있어요(자기 일·자기 제안은 빼고). «최종 확인 필요» 일은 제가 봐요.', '- You are a reviewer: pre-check «normal» finished tasks in your projects from the project card «Check list» and decide members\' proposals (not your own). I check «final check needed» tasks.'));
       if (p.role === 'member') L.push(K('- 맡은 솔루션만 보여요. 일 요청은 «제안» 으로 올라가 제가 확인한 뒤 시작될 수 있어요.', '- You see only your projects. Requests go up as proposals and may start after I approve.'));
       if (p.role === 'viewer') L.push(K('- 맡은 솔루션을 보기만 할 수 있어요.', '- You can view your projects only.'));
       L.push(K('- 요청 글에 비밀번호·열쇠·고객 개인정보를 넣지 마세요(AI 작업방에 그대로 전달돼요).', '- Never put passwords, keys or customer personal data in a request (it goes to the AI session as is).'));
@@ -6647,6 +6752,19 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         j.projects.filter(function (p) { return p.prod; }).forEach(function (p) {   // 운영 서버가 있는 솔루션만
           var l = document.createElement('label'); var c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key; c.checked = j.team.deployConfirm.indexOf(p.key) >= 0;
           l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.name)); dp.appendChild(l);
+        });
+        var rv = document.getElementById('tm-review'); rv.textContent = '';
+        j.projects.filter(function (p) { return p.prod; }).forEach(function (p) {
+          var line = el('div', 'tm-line tm-rv'); line.dataset.key = p.key;
+          line.appendChild(el('span', '', p.name + K(' · 보통 일 확인 방식', ' · Normal tasks')));
+          var sel = document.createElement('select'); sel.className = 'tm-rv-mode';
+          ['strict', 'bundle', 'auto'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = REVIEW_MODEN[k]; sel.appendChild(o); });
+          sel.value = (j.team.review || {})[p.key] || 'strict'; line.appendChild(sel);
+          var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('«최종 확인 필요» 로 가를 경로', 'Paths that mean «final check needed»')));
+          var ta = document.createElement('textarea'); ta.className = 'tm-rv-paths'; ta.rows = 4; ta.style.cssText = 'width:100%;font-family:monospace;font-size:12px;';
+          ta.placeholder = (j.reviewDefaultPaths || []).join('\n'); ta.value = ((j.team.reviewPaths || {})[p.key] || []).join('\n');
+          dt.appendChild(ta); dt.appendChild(el('small', '', K('한 줄에 하나(glob, 솔루션 폴더 기준). 비우면 회색 글씨의 기본값.', 'One glob per line, relative to the project folder. Empty = the grey defaults.')));
+          line.appendChild(dt); rv.appendChild(line);
         });
         risks(j.risks, j.procOk);
       }).catch(function () { st.textContent = K('불러오지 못했습니다', 'Could not load'); });
@@ -6674,7 +6792,11 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       }).filter(function (m) { return m.user || m.tailscale; });
       var team = { members: members, approval: document.getElementById('tm-approval').checked, smallDirect: document.getElementById('tm-small').checked, memberTotp: document.getElementById('tm-mtotp').checked,
         memberAnswers: document.getElementById('tm-answers').value,
-        deployConfirm: Array.prototype.filter.call(document.querySelectorAll('#tm-deploy input'), function (c) { return c.checked; }).map(function (c) { return c.value; }) };
+        deployConfirm: Array.prototype.filter.call(document.querySelectorAll('#tm-deploy input'), function (c) { return c.checked; }).map(function (c) { return c.value; }), review: {}, reviewPaths: {} };
+      Array.prototype.forEach.call(document.querySelectorAll('#tm-review .tm-rv'), function (line) {
+        var k = line.dataset.key; team.review[k] = line.querySelector('.tm-rv-mode').value;
+        var ps = line.querySelector('.tm-rv-paths').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); if (ps.length) team.reviewPaths[k] = ps;
+      });
       b.disabled = true;
       post('/api/team', { team: team }).then(function (j) { b.disabled = false; st.textContent = j.message || ''; toast(j.message || ''); if (j.ok) load(); })
         .catch(function () { b.disabled = false; st.textContent = K('저장하지 못했습니다', 'Could not save'); });
