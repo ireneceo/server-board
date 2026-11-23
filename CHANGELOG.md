@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.14]
+
+- **Adding a team member is one flow** — ⚙ Team & roles now takes the person's server account name and SSH public key; after saving, the card shows one «Paste in a terminal» line (creates the account if missing, installs the key as that account, sets the shell) with a copy button, and the row turns «✔ Ready» once it has run. Only job «Developer» gets a shell; every other job gets the board tunnel only (nologin + `restrict,port-forwarding,permitopen` on the key — no shell, commands or other destinations). The «no server account (Tailscale only)» choice is gone — Tailscale stays as an optional extra route; tunnel-only accounts now show in the account list; admin (sudo) and system accounts are refused.
+
+- **Team account line hardened** — the pasted line now also limits reverse tunnels (`permitlisten`) so a tunnel-only key cannot take over another port, no longer opens `localhost` (only `127.0.0.1` on the board port), never downgrades an existing shell account to tunnel-only (asks for a new name instead), re-checks system / admin / owner accounts every time the line is built, treats membership of `docker`, `lxd` or `disk` (also as primary group) as admin-level, and shows «replaces the key» when the account already exists.
+- **Phone (Termius) guide fixed** — an SSH login alone does not open the board (the tunnel is a separate step); uses your existing key if you have one (default «Export to host»), the four «New Host» fields, «Continue» on the fingerprint prompt, what a password prompt means (key not installed), the real Port Forwarding wizard order and why `127.0.0.1`. INSTALL now says «your board port (`config.json` `port`)» instead of «must be 8800»; one line on Tailscale's personal plan pricing.
+
 ## [0.6.13]
 
 - **Section icons no longer squeeze** — the line icon in front of «Scheduled checks», «Inquiries» and «New task» kept shrinking (22→15px wide) when the summary next to it got long; it now stays square. The ⚡ «run first / quick» mark is a line icon like the others instead of a colour emoji, the «In progress» / «Waiting for a condition» fold headers no longer show two arrows, and on phones small text links («Completed list», «External services», «Turn off» …) are at least 32px tall to tap.

@@ -242,18 +242,21 @@ The **terminal** (server commands, opening a session) goes through SSH either wa
 
 **Phone or tablet with Termius:**
 
-1. Termius → Keychain → **Generate key** (ed25519). Use a **new key for the phone**, not your laptop's key.
-2. Copy its public key → on the server, add it as a new line in `~/.ssh/authorized_keys` (from your laptop: `ssh myserver` then `nano ~/.ssh/authorized_keys`).
-3. Hosts → add `SERVER_IP`, user `USER`, that key.
-4. **Port Forwarding** → New rule → Local · port **`8800`** (it must be 8800 — any other number is refused with 403) → destination `127.0.0.1` port `8800` → turn it on.
-5. Open http://localhost:8800 in Safari/Chrome → **"Add to Home Screen"**.
-6. Turn on Termius app lock (Settings → Security).
+Connecting in Termius (the black screen) does not open the board by itself. `localhost` means «this phone», so the **tunnel (Port Forwarding)** must be turned on separately (step 5). "Port" below is the board port (`port` in `board/config.json`, default 8800) — the board's «Open on other devices» panel shows this server's actual number.
+
+1. **Key** (registers this phone so the server recognises it) — if Termius → Keychain already has a key (e.g. `id_ed25519`, synced), use it instead of making a new one. Otherwise **+** → Generate Key → ed25519 (a new key for the phone, not your laptop's key).
+2. Hosts → **+** → in New Host fill only 4 fields: Label (any name) · IP or Hostname `SERVER_IP` · Username `USER` · Key (that key). Leave the rest as is → save.
+3. Register the key — Keychain → that key → **Export to host** → that Host → Export (asks for the server password once). The script shown only adds one line to `authorized_keys`; leave it as is. Backup way (server refuses password login): copy the public key and add it as a new line in `~/.ssh/authorized_keys` on the server (from your laptop: `ssh myserver` then `nano ~/.ssh/authorized_keys`).
+4. Tap the Host to connect — the first time a fingerprint prompt appears → **Continue**. **A Password prompt means the key is not registered yet** → Cancel → step 3.
+5. **Port Forwarding** → **+** → Local → Continue → Port number = the port (leave Bind address empty) → pick the Host → Destination address `127.0.0.1` · port = the port → save → tap the rule to turn it on. Both numbers must equal the board port (anything else is refused with 403). `127.0.0.1` is «itself» from the server's side, not the server IP.
+6. Open `http://localhost:<port>` in Safari/Chrome → **"Add to Home Screen"**.
+7. Turn on Termius app lock (Settings → Security).
 
 iPhones close the tunnel a few minutes after Termius goes to the background. When the board shows a red "could not reach" banner, open Termius (the rule reconnects) and reload. Sessions keep working on the server the whole time.
 
 **Always-on without a tunnel — Tailscale (optional · free personal, paid for teams · best for phones):**
 
-Tailscale is a **private network only your own devices can see** (free for a personal account · paid for company/team accounts). The board stays closed to the internet, yet your phone and laptop open it any time at `https://<your-server>.ts.net` — no Termius, no SSH — and it stays connected when the phone app is in the background. Everyone uses **their own Tailscale account and their own server**; there is nothing to type into the board — it detects its server's Tailscale name by itself and accepts only that name, and only from devices of the account that added the server to Tailscale.
+Tailscale is a **private network only your own devices can see** (the personal plan counts people, so one person with several servers is free · company/team accounts are paid — may change, check the [official pricing](https://tailscale.com/pricing)). The board stays closed to the internet, yet your phone and laptop open it any time at `https://<your-server>.ts.net` — no Termius, no SSH — and it stays connected when the phone app is in the background. Everyone uses **their own Tailscale account and their own server**; there is nothing to type into the board — it detects its server's Tailscale name by itself and accepts only that name, and only from devices of the account that added the server to Tailscale.
 
 1. Create an account at tailscale.com → **turn on two-factor login** (this account becomes a key to your server).
 2. On the server: `curl -fsSL https://tailscale.com/install.sh | sh` → `sudo tailscale up` (open the printed link to log in) → `sudo tailscale serve --bg 8800` (the first time it prints a link to enable HTTPS — allow it, then run it again). If nginx or another web server on this machine uses 443, run `sudo tailscale serve --bg --https=8443 8800` instead — sharing 443 makes the web server fail with «Address already in use» on its next restart (address becomes `https://<server>.ts.net:8443`; the board reads the port itself).

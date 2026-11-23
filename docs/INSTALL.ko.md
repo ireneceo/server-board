@@ -243,18 +243,21 @@ node -e 'const fs=require("fs"),p=require("path"),f=p.join(require("os").homedir
 
 **휴대폰·태블릿 (Termius):**
 
-1. Termius → Keychain → **Generate key**(ed25519). 노트북 열쇠가 아니라 **휴대폰용 새 열쇠**.
-2. 공개 열쇠 복사 → 서버 `~/.ssh/authorized_keys` 에 새 줄로 추가(노트북에서 `ssh myserver` → `nano ~/.ssh/authorized_keys`).
-3. Hosts → `SERVER_IP`, 사용자 `USER`, 그 열쇠.
-4. **Port Forwarding** → 새 규칙 → Local · 포트 **`8800`**(꼭 8800 — 다른 번호는 403 으로 거절) → 목적지 `127.0.0.1` 포트 `8800` → 켜기.
-5. Safari/Chrome 에서 http://localhost:8800 → **«홈 화면에 추가»**.
-6. Termius 앱 잠금 켜기(Settings → Security).
+Termius 접속(까만 화면)만으로는 상황판이 안 열립니다. `localhost` 는 «이 휴대폰» 이라는 뜻이라 **통로(Port Forwarding)** 를 따로 켜야 합니다(5단계). 아래 «포트» 는 상황판 포트(`board/config.json` 의 `port`, 기본 8800)입니다 — 상황판 «다른 기기에서 열기» 패널에는 이 서버의 실제 번호가 채워져 나옵니다.
+
+1. **열쇠**(서버가 이 휴대폰을 알아보게 등록하는 것) — Termius → Keychain 에 이미 열쇠(`id_ed25519` 등, 동기화된 것)가 있으면 새로 만들지 말고 그것을 씁니다. 없으면 **+** → Generate Key → ed25519(노트북 열쇠가 아니라 휴대폰용 새 열쇠).
+2. Hosts → **+** → New Host 에서 4칸만: Label(아무 이름) · IP or Hostname `SERVER_IP` · Username `USER` · Key(그 열쇠). 나머지는 그대로 → 저장.
+3. 열쇠 등록 — Keychain → 그 열쇠 → **Export to host** → 그 Host → Export(서버 비밀번호를 한 번 물음). 나오는 스크립트는 `authorized_keys` 에 한 줄 더하는 것뿐이니 그대로 둡니다. 예비 길(비밀번호 접속이 막힌 서버): 공개 열쇠를 복사해 서버 `~/.ssh/authorized_keys` 에 새 줄로 추가(노트북에서 `ssh myserver` → `nano ~/.ssh/authorized_keys`).
+4. Host 를 눌러 접속 — 처음 한 번 지문 확인 창 → **Continue**. **Password 창이 뜨면 열쇠가 아직 등록 안 된 것** → Cancel → 3단계.
+5. **Port Forwarding** → **+** → Local → Continue → Port number = 포트(Bind address 는 비움) → Host 고르기 → Destination address `127.0.0.1` · port = 포트 → 저장 → 규칙을 눌러 켜기. 두 번호 모두 상황판 포트와 같아야 합니다(다르면 403 으로 거절). `127.0.0.1` 은 서버 입장에서 «나 자신» 이라 서버 IP 가 아닙니다.
+6. Safari/Chrome 에서 `http://localhost:<포트>` → **«홈 화면에 추가»**.
+7. Termius 앱 잠금 켜기(Settings → Security).
 
 아이폰은 Termius 가 뒤로 가고 몇 분 지나면 통로가 닫힙니다. 상황판에 빨간 «연결하지 못했습니다» 띠가 뜨면 Termius 를 열고(규칙이 다시 붙음) 새로고침. 그동안에도 작업방은 서버에서 계속 일합니다.
 
 **통로 없이 늘 열기 — Tailscale (선택 · 개인 무료 · 팀은 유료 · 휴대폰에 알맞음):**
 
-Tailscale 은 **내 기기끼리만 보이는 사설망**입니다(혼자 쓰는 개인 계정 무료 · 회사·팀 계정은 유료). 상황판이 인터넷에 열리지 않은 채로, 내 휴대폰·노트북에서는 Termius·SSH 없이 `https://<내 서버>.ts.net` 으로 언제든 열립니다. 휴대폰에서 앱을 뒤로 보내도 끊기지 않습니다. 각자 **자기 Tailscale 계정·자기 서버**로 하며, 상황판에 넣을 값은 없습니다 — 상황판이 그 서버의 Tailscale 이름을 스스로 알아내 그 이름 하나만, 그리고 서버를 Tailscale 에 올린 계정의 기기에서 온 요청만 받습니다.
+Tailscale 은 **내 기기끼리만 보이는 사설망**입니다(개인 요금제는 사람 수 기준이라 혼자면 서버 여러 대도 무료 · 회사·팀 계정은 유료 — 바뀔 수 있으니 [공식 요금표](https://tailscale.com/pricing) 확인). 상황판이 인터넷에 열리지 않은 채로, 내 휴대폰·노트북에서는 Termius·SSH 없이 `https://<내 서버>.ts.net` 으로 언제든 열립니다. 휴대폰에서 앱을 뒤로 보내도 끊기지 않습니다. 각자 **자기 Tailscale 계정·자기 서버**로 하며, 상황판에 넣을 값은 없습니다 — 상황판이 그 서버의 Tailscale 이름을 스스로 알아내 그 이름 하나만, 그리고 서버를 Tailscale 에 올린 계정의 기기에서 온 요청만 받습니다.
 
 1. tailscale.com 에서 계정 만들기 → **2단계 인증 켜기**(이 계정이 서버로 가는 열쇠가 됩니다).
 2. 서버에서: `curl -fsSL https://tailscale.com/install.sh | sh` → `sudo tailscale up`(나온 주소를 브라우저로 열어 로그인) → `sudo tailscale serve --bg 8800`(처음이면 HTTPS 를 켜라는 주소가 나옴 — 열어서 허용한 뒤 다시 실행). 이 서버에 nginx 같은 웹서버가 443 을 쓰고 있으면 `sudo tailscale serve --bg --https=8443 8800` 으로 — 443 을 같이 쓰면 웹서버가 다시 켜질 때 «Address already in use» 로 못 켜진다(주소는 `https://<서버>.ts.net:8443`, 상황판이 포트를 스스로 읽음).

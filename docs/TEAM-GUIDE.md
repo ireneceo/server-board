@@ -5,13 +5,14 @@
 ## Getting in
 1. Install an authenticator app on your phone (Google Authenticator or any standard app). It must be **your own phone and app** — never borrow someone else's.
 2. Open the **sign-in link** the final approver sent you (24 hours, single use). Follow the screen: app ＋ → scan the QR (on a phone, tap «Add to authenticator») → type the 6 digits of the new **«Server Board · server name»** entry → set a password (10+ characters) → write down the **10 backup codes** (password manager or paper — not photos, chat or an AI chat).
-3. Next time, open the board address and sign in with **ID + password + the 6 digits**. ID = your server account name (or your Tailscale login email if you have none).
+3. Next time, open the board address and sign in with **ID + password + the 6 digits**. ID = your server account name.
 - **Several servers?** Each server has its own link and registration. The app shows one «Server Board · server name» entry per server — use the one for the server you are signing in to.
 - Lost your phone? A backup code (each works once) gets you in. To register a new phone, ask the final approver for a **new sign-in link** (you set the password again too).
 - If the final approver turned off «Members also use an authenticator» on a server, its link has no app step — password only.
-- **Route in** (the board is not open to the internet — the final approver sets up one of these for you):
-  - SSH tunnel: send the final approver your public key (one line of `~/.ssh/id_ed25519.pub` · none yet? `ssh-keygen -t ed25519`), get a server account, then keep `ssh -N -L <port>:127.0.0.1:<port> <your id>@<server>` running and open `http://localhost:<port>`. The tunnel must be opened **with your own account**
-  - Tailscale: join the tailnet from the final approver's invite, turn on the Tailscale app and open `https://<server>.ts.net`
+- **Route in** (the board is not open to the internet — the final approver creates your server account):
+  - SSH tunnel: send the final approver your public key (one line of `~/.ssh/id_ed25519.pub` · none yet? `ssh-keygen -t ed25519`), they create your server account; then keep `ssh -N -L <port>:127.0.0.1:<port> <your id>@<server>` running and open `http://localhost:<port>`. The tunnel must be opened **with your own account**
+  - Only job «Developer» gets a server shell — other accounts get the board tunnel only (no shell or commands)
+  - Tailscale (optional, if the final approver added it): accept the invite, turn on the Tailscale app and open `https://<server>.ts.net`
   - Any route gives the same ID and role. Open the sign-in link on the address that matches your route (localhost or ts.net).
 4. **👤 name · role** at the top: sign out · change password · new backup codes.
 - After 48 hours idle or 7 days you sign in again.

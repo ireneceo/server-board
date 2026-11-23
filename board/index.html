@@ -534,6 +534,7 @@
   .connect .cx-steps.on[hidden] { display: none; }
   .connect .cx-steps li { margin: 8px 0; overflow-wrap: anywhere; }
   .connect .cx-steps li.cx-note { list-style: none; margin-left: -22px; color: var(--muted); font-size: 13px; }
+  .connect .cx-steps li .cx-d { display: block; margin-top: 2px; color: var(--muted); }
   .connect .off { display: none !important; }
   .connect .cx-cp { font-size: 12px; padding: 2px 10px; margin-left: 4px; }
   .connect .cx-term { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
@@ -729,7 +730,7 @@
   .tools button.t-me { color: var(--text, inherit); font-weight: 600; }
   .teambox .tm-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
   .teambox .tm-row select, .teambox .tm-row input[type=text] { width: auto; max-width: 100%; }
-  .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-title { width: 8em; } .teambox .tm-row .tm-ts { width: 14em; }
+  .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-title { width: 8em; } .teambox .tm-row .tm-ts { width: 14em; } .teambox .tm-row .tm-user { width: 10em; } .teambox .tm-row .tm-key { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; } .teambox .tm-keyhelp { flex-basis: 100%; color: var(--muted); }
   .teambox .tm-pj { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
   .teambox .tm-pj label, .teambox .tm-chk { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; cursor: pointer; }
   .teambox .tm-chk { display: block; } .teambox .tm-chk input { vertical-align: middle; margin-right: 4px; }
@@ -806,8 +807,8 @@
   <div class="langbox teambox" id="teambox" hidden>
     <p class="tm-intro"><!--ko-->상황판을 쓰는 사람마다 계정을 넣고 권한·직무·직책을 정합니다. 이 칸은 최종 컨펌자(<b id="tm-owner"></b>)에게만 보입니다 — 작업방(AI)은 계정을 넣지 못하고 순서만 안내합니다.<!--/ko--><!--en-->Add an account with access, job and title for each person who uses the board. Only the final approver (<b id="tm-owner-en"></b>) sees this panel — AI sessions cannot add accounts, only explain the steps.<!--/en--></p>
     <ol class="tm-steps">
-      <li><!--ko--><b>들어올 길 마련</b> — 상황판은 인터넷에 열려 있지 않아요. 그 사람의 <b>서버 계정</b>(SSH 통로) 또는 <b>사설망(Tailscale) 초대</b>가 먼저입니다.<!--/ko--><!--en--><b>Give them a route in</b> — the board is not on the internet. They need a <b>server account</b> (SSH tunnel) or a <b>Tailscale invite</b> first.<!--/en--></li>
-      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·아이디·직무·직책·권한·맡을 솔루션.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, ID, job, title, access, projects.<!--/en--></li>
+      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·서버 계정·직무·권한·맡을 솔루션 + 그 사람이 보낸 <b>SSH 공개 열쇠</b> 한 줄.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, server account, job, access, projects + the <b>SSH public key</b> line they sent.<!--/en--></li>
+      <li><!--ko--><b>터미널에 붙여 넣기</b> — 나온 한 줄을 서버 창에 그대로 → 그 줄에 <b>«✔ 준비됨»</b>. 직무 «개발자» 만 터미널이 열리고, 나머지는 상황판 통로만.<!--/ko--><!--en--><b>Paste in a terminal</b> — run the line in a server shell → the row shows <b>«✔ Ready»</b>. Only «Developer» gets a shell; everyone else gets the board tunnel only.<!--/en--></li>
       <li><!--ko--><b>«안내문 복사»</b> → 메신저·메일로 그 사람에게 보내기 — 로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 다 들어 있어요.<!--/ko--><!--en--><b>«Copy invitation»</b> → send it by chat or email — it holds the sign-in link (24 h, single use), how to connect and how to sign in.<!--/en--></li>
       <li><!--ko-->그 사람이 링크를 열어 비밀번호를 정하고 <b>자기 휴대폰 인증 앱</b>을 등록 → 그 줄에 <b>«✔ 등록 끝»</b> 이 보이면 끝.<!--/ko--><!--en-->They open the link, set a password and register <b>their own authenticator app</b> → the row shows <b>«✔ Registered»</b> and you are done.<!--/en--></li>
     </ol>
@@ -815,7 +816,7 @@
       <ul>
         <li><!--ko-->한 사람마다 세 칸 — <b>권한</b>(무엇을 누를 수 있나) · <b>직무</b>(개발자·디자이너·기획자…) · <b>직책</b>(팀장·팀원… 자유 글). 버튼을 가르는 건 <b>권한</b>뿐이고, 직무·직책은 이름표(화면·안내문·작업방에 «디자이너 박 제안» 처럼 보임).<!--/ko--><!--en-->Three fields per person — <b>Access</b> (what they can press) · <b>Job</b> (developer, designer, planner…) · <b>Title</b> (lead, member… free text). Only <b>Access</b> decides buttons; job and title are labels (shown on screen, in invitations and to sessions, e.g. «proposed by designer Park»).<!--/en--></li>
         <li><!--ko-->권한 — <b>최종 컨펌자</b> = 모든 솔루션·모든 버튼(상황판을 돌리는 계정은 늘 최종 컨펌자 · 비밀번호 + 인증 앱) · <b>일 제안</b> = 맡은 솔루션만 보고, 일은 «제안» 으로 올림 · <b>보기만</b> = 맡은 솔루션 보기만. 직무가 디자이너여도 권한은 위 셋 중 고른 것 그대로입니다.<!--/ko--><!--en-->Access — <b>Final approver</b> = every project and button (the account running the board is always one · password + authenticator) · <b>Propose</b> = assigned projects only, tasks go up as proposals · <b>View only</b> = view assigned projects only. A designer's access is still whichever of these three you pick.<!--/en--></li>
-        <li><!--ko-->누구든 <b>자기 아이디·비밀번호</b>로 로그인합니다 — SSH 통로·Tailscale 은 들어오는 길일 뿐 신원이 아닙니다. 아이디 = 서버 계정 이름(없으면 사설망 로그인 이메일). SSH 통로는 <b>그 사람 자기 계정으로</b> 열어야 로그인됩니다.<!--/ko--><!--en-->Everyone signs in with <b>their own ID and password</b> — the SSH tunnel and Tailscale are routes, not identity. ID = server account name (or Tailscale login). The SSH tunnel must be opened <b>with their own account</b>.<!--/en--></li>
+        <li><!--ko-->누구든 <b>자기 아이디·비밀번호</b>로 로그인합니다 — SSH 통로·Tailscale 은 들어오는 길일 뿐 신원이 아닙니다. 아이디 = 서버 계정 이름. SSH 통로는 <b>그 사람 자기 계정으로</b> 열어야 로그인됩니다.<!--/ko--><!--en-->Everyone signs in with <b>their own ID and password</b> — the SSH tunnel and Tailscale are routes, not identity. ID = server account name. The SSH tunnel must be opened <b>with their own account</b>.<!--/en--></li>
         <li><!--ko-->인증 앱 등록은 서버마다 따로 — 앱에 «Server Board · 서버 이름» 이 서버마다 한 줄씩 생깁니다.<!--/ko--><!--en-->Authenticator registration is per server — the app shows one «Server Board · server name» entry per server.<!--/en--></li>
         <li><!--ko-->«켬» 을 끄고 저장하면 그 사람은 바로 로그아웃되고 다시 켤 때까지 못 들어옵니다. 로그인 링크를 다시 만들면 전에 보낸 링크는 안 열립니다.<!--/ko--><!--en-->Untick «On» and save to sign the person out at once until re-enabled. Making a new sign-in link cancels the previous one.<!--/en--></li>
       </ul>
@@ -998,14 +999,17 @@
         <li>통로 열기 — 이 창을 켜 둔 동안 열려 있습니다(아무것도 안 나오는 것이 정상).<pre class="js-rc">ssh -N <span class="js-alias">myserver</span></pre></li>
         <li>브라우저에서 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> → 즐겨찾기.</li>
       </ol>
-      <!-- SSH 통로 · 휴대폰 (Termius) -->
+      <!-- SSH 통로 · 휴대폰 (Termius) — 실제 Termius 화면 순서 -->
       <ol class="cx-steps" data-for="ssh-ios ssh-android">
-        <li><b>Termius</b> 앱을 받습니다(무료 기능으로 충분) — <a href="https://termius.com/download" target="_blank" rel="noopener">termius.com/download</a> 또는 <span data-show="ios">App Store</span><span data-show="android">Google Play</span> 에서 «Termius».</li>
-        <li>Keychain → <b>+</b> → Generate Key → 종류 <b>ed25519</b>(컴퓨터와 <b>다른</b> 열쇠) → 만든 열쇠의 공개 열쇠(Public key)를 복사해 서버 <code>~/.ssh/authorized_keys</code> 맨 끝에 한 줄로 붙입니다(서버 관리자에게 보내도 됩니다).</li>
-        <li>Hosts → <b>+</b> → 주소 <b class="js-host"></b> · 사용자 <b class="js-user"></b> · 방금 만든 열쇠 → 저장.</li>
-        <li>Port Forwarding → <b>+</b> → Local → 이 기기 포트 <b class="js-port">8800</b>(꼭 이 번호) · 대상 <code>127.0.0.1</code> · 대상 포트 <b class="js-port">8800</b> · 위 Host → 저장 → 켜기.</li>
+        <li class="cx-note"><b>먼저</b> — Termius 접속(까만 화면)만으로는 상황판이 안 열려요. <code>localhost</code> 는 «이 휴대폰» 이라는 뜻이라 <b>통로(Port Forwarding)</b>를 따로 켜야 해요(6단계).</li>
+        <li value="1"><b>Termius</b> 앱을 받습니다(무료 기능으로 충분) — <a href="https://termius.com/download" target="_blank" rel="noopener">termius.com/download</a> 또는 <span data-show="ios">App Store</span><span data-show="android">Google Play</span> 에서 «Termius».</li>
+        <li><b>열쇠</b>(서버가 이 휴대폰을 알아보게 등록하는 것) — Keychain 에 이미 열쇠(<code>id_ed25519</code> 등, 동기화된 것)가 있으면 <b>새로 만들지 말고 그것</b>을 씁니다. 없으면 Keychain → <b>+</b> → Generate Key → <b>ed25519</b>.</li>
+        <li>Hosts → <b>+</b> → New Host 에서 <b>4칸만</b>: Label(아무 이름) · IP or Hostname <b class="js-host"></b> · Username <b class="js-user"></b> · Key(위 열쇠). <b>나머지는 그대로</b> → 저장.</li>
+        <li>열쇠 등록 — Keychain → 그 열쇠 → <b>Export to host</b> → 위 Host → Export(서버 비밀번호를 한 번 물음). 나오는 스크립트는 서버 <code>authorized_keys</code> 에 한 줄 더하는 것뿐이니 그대로 두면 됩니다. <span class="cx-d">비밀번호 접속이 막힌 서버면 예비 길: 그 열쇠의 공개 열쇠(Public key)를 복사해 서버 <code>~/.ssh/authorized_keys</code> 맨 끝에 한 줄로 붙입니다(서버 관리자에게 보내도 됨).</span></li>
+        <li>Host 를 눌러 접속 — 처음 한 번 지문 확인 창 → <b>Continue</b>. <b>Password 창이 뜨면 = 열쇠가 아직 등록 안 된 것</b> → Cancel → 4단계.</li>
+        <li>Port Forwarding → <b>+</b> → <b>Local</b> → Continue → Port number <b class="js-port">8800</b>(Bind address 는 비움) → Host 고르기(위 Host) → Destination address <code>127.0.0.1</code> · port <b class="js-port">8800</b> → 저장 → 규칙을 눌러 <b>켜기</b>. <span class="cx-d"><code>127.0.0.1</code> = 서버 입장에서 «나 자신»(서버 IP 아님). 두 포트 모두 꼭 이 번호 — 다르면 상황판이 거절합니다.</span></li>
         <li>휴대폰 브라우저에서 <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a>.</li>
-        <li class="cx-note"><span data-show="ios">아이폰은 Termius 를 뒤로 보내면 몇 분 뒤 끊깁니다.</span><span data-show="android">Termius 를 닫으면 끊깁니다.</span> 휴대폰으로 자주 볼 거면 Tailscale 이 편합니다. Termius 설정에서 앱 잠금을 켜 두세요.</li>
+        <li class="cx-note"><span data-show="ios">아이폰은 Termius 를 뒤로 보내면 몇 분 뒤 끊깁니다.</span><span data-show="android">Termius 를 닫으면 끊깁니다.</span> 휴대폰으로 자주 볼 거면 Tailscale 이 편합니다 — 개인 요금제는 사람 수 기준이라 혼자면 서버 여러 대도 무료(바뀔 수 있으니 <a href="https://tailscale.com/pricing" target="_blank" rel="noopener">공식 요금표</a> 확인) · 회사·팀 계정은 유료. Termius 설정에서 앱 잠금을 켜 두세요.</li>
       </ol>
       <!-- Tailscale — 서버 쪽 처음 설정(아직이면) -->
       <div class="cx-steps cx-tsfirst js-nots" data-for="ts-mac ts-win ts-ios ts-android">
@@ -1026,7 +1030,7 @@
         <li class="cx-note">상황판은 이 서버의 Tailscale 주소로, 서버를 올린 계정의 기기에서 온 요청만 받습니다. 공개 기능 <code>funnel</code> 은 켜지 마세요(켜지면 상황판이 거절) · 다른 사람을 초대하지 마세요 · 기기를 잃으면 Tailscale 관리 화면에서 그 기기만 지우세요.</li>
       </ol>
     </div>
-    <p class="cx-term"><b>서버 명령(터미널)</b>은 어느 길을 고르든 SSH 로 합니다 — 컴퓨터는 위 «SSH 통로» 1~5단계, 휴대폰은 Termius 1~3단계.</p>
+    <p class="cx-term"><b>서버 명령(터미널)</b>은 어느 길을 고르든 SSH 로 합니다 — 컴퓨터는 위 «SSH 통로» 1~5단계, 휴대폰은 Termius 1~5단계.</p>
     </details>
     <div class="cx-more-list">
       <details class="cx-more" id="reconnect"><summary><b>연결이 끊겼을 때 — 자세한 진단</b>(SSH 통로·맥)</summary>
@@ -1138,12 +1142,15 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         <li>In the browser open <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a> → bookmark it.</li>
       </ol>
       <ol class="cx-steps" data-for="ssh-ios ssh-android">
-        <li>Get the <b>Termius</b> app (the free features are enough) — <a href="https://termius.com/download" target="_blank" rel="noopener">termius.com/download</a> or «Termius» in <span data-show="ios">the App Store</span><span data-show="android">Google Play</span>.</li>
-        <li>Keychain → <b>+</b> → Generate Key → type <b>ed25519</b> (a <b>different</b> key from your computer) → copy its public key and add it as one line to the end of <code>~/.ssh/authorized_keys</code> on the server (or send it to whoever runs the server).</li>
-        <li>Hosts → <b>+</b> → address <b class="js-host"></b> · user <b class="js-user"></b> · the key you just made → save.</li>
-        <li>Port Forwarding → <b>+</b> → Local → local port <b class="js-port">8800</b> (exactly this number) · destination <code>127.0.0.1</code> · destination port <b class="js-port">8800</b> · the Host above → save → turn on.</li>
+        <li class="cx-note"><b>First</b> — connecting in Termius (the black screen) does not open the board. <code>localhost</code> means «this phone», so the <b>tunnel (Port Forwarding)</b> must be turned on separately (step 6).</li>
+        <li value="1">Get the <b>Termius</b> app (the free features are enough) — <a href="https://termius.com/download" target="_blank" rel="noopener">termius.com/download</a> or «Termius» in <span data-show="ios">the App Store</span><span data-show="android">Google Play</span>.</li>
+        <li><b>Key</b> (registers this phone so the server recognises it) — if Keychain already has a key (e.g. <code>id_ed25519</code>, synced), <b>use that, don't make a new one</b>. Otherwise Keychain → <b>+</b> → Generate Key → <b>ed25519</b>.</li>
+        <li>Hosts → <b>+</b> → in New Host fill <b>only 4 fields</b>: Label (any name) · IP or Hostname <b class="js-host"></b> · Username <b class="js-user"></b> · Key (the key above). <b>Leave the rest as is</b> → save.</li>
+        <li>Register the key — Keychain → that key → <b>Export to host</b> → the Host above → Export (asks for the server password once). The script shown only adds one line to the server's <code>authorized_keys</code>, so leave it as is. <span class="cx-d">If the server refuses password login, backup way: copy the key's public key and add it as one line to the end of <code>~/.ssh/authorized_keys</code> on the server (or send it to whoever runs the server).</span></li>
+        <li>Tap the Host to connect — the first time a fingerprint prompt appears → <b>Continue</b>. <b>A Password prompt = the key is not registered yet</b> → Cancel → step 4.</li>
+        <li>Port Forwarding → <b>+</b> → <b>Local</b> → Continue → Port number <b class="js-port">8800</b> (leave Bind address empty) → pick the Host above → Destination address <code>127.0.0.1</code> · port <b class="js-port">8800</b> → save → tap the rule to <b>turn it on</b>. <span class="cx-d"><code>127.0.0.1</code> = «itself» from the server's side (not the server IP). Both ports must be exactly this number — otherwise the board refuses.</span></li>
         <li>In the phone browser open <a href="http://localhost:8800" class="js-lh">http://localhost:8800</a>.</li>
-        <li class="cx-note"><span data-show="ios">iPhones drop the tunnel a few minutes after Termius goes to the background.</span><span data-show="android">Closing Termius drops the tunnel.</span> If you check from the phone often, Tailscale is easier. Turn on app lock in Termius settings.</li>
+        <li class="cx-note"><span data-show="ios">iPhones drop the tunnel a few minutes after Termius goes to the background.</span><span data-show="android">Closing Termius drops the tunnel.</span> If you check from the phone often, Tailscale is easier — the personal plan counts people, so one person with several servers is free (may change — check the <a href="https://tailscale.com/pricing" target="_blank" rel="noopener">official pricing</a>) · company/team accounts are paid. Turn on app lock in Termius settings.</li>
       </ol>
       <div class="cx-steps cx-tsfirst js-nots" data-for="ts-mac ts-win ts-ios ts-android">
         <p><b>First, once on the server</b> (this server has no Tailscale yet — whoever runs the server does this once)</p>
@@ -1163,7 +1170,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         <li class="cx-note">The board accepts only this server's Tailscale name, and only from devices of the account that added the server. Never turn on <code>funnel</code> (public sharing — the board then refuses) · don't invite other people · lost a device: remove just that device in the Tailscale admin page.</li>
       </ol>
     </div>
-    <p class="cx-term"><b>Server commands (terminal)</b> always go through SSH, whichever way you pick — computer: «SSH tunnel» steps 1–5, phone: Termius steps 1–3.</p>
+    <p class="cx-term"><b>Server commands (terminal)</b> always go through SSH, whichever way you pick — computer: «SSH tunnel» steps 1–5, phone: Termius steps 1–5.</p>
     </details>
     <div class="cx-more-list">
       <details class="cx-more" id="reconnect"><summary><b>When the connection drops — detailed check</b> (SSH tunnel · Mac)</summary>
@@ -6571,9 +6578,11 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     function row(m, fresh) {
       var R = (info && info.route) || {};
       var r = el('div', 'tm-row');
-      var u = document.createElement('select'); u.className = 'tm-user'; u.setAttribute('aria-label', K('아이디', 'ID'));
-      var o0 = document.createElement('option'); o0.value = ''; o0.textContent = K('서버 계정 없음 (사설망만)', 'No server account (Tailscale only)'); u.appendChild(o0);
-      info.accounts.filter(function (a) { return !a.owner; }).forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = K('서버 계정 ', 'account ') + a.user; u.appendChild(o); });
+      var u = document.createElement('input'); u.type = 'text'; u.className = 'tm-user'; u.placeholder = K('서버 계정 (예: kim)', 'Server account (e.g. kim)'); u.setAttribute('aria-label', K('서버 계정 = 아이디', 'Server account = ID'));
+      u.autocapitalize = 'none'; u.spellcheck = false; u.maxLength = 32;
+      var dl = document.createElement('datalist'); dl.id = 'tm-acc-' + Math.random().toString(36).slice(2, 8); u.setAttribute('list', dl.id);
+      info.accounts.filter(function (a) { return !a.owner && !a.admin; }).forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = a.shell === 'tunnel' ? K('통로만', 'tunnel only') : K('터미널 됨', 'shell'); dl.appendChild(o); });
+      r.appendChild(dl);
       u.value = m.user || '';
       var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'tm-name'; nm.placeholder = K('이름', 'Name'); nm.value = m.name || ''; nm.setAttribute('aria-label', K('이름', 'Name'));
       var rl = document.createElement('select'); rl.className = 'tm-role'; rl.setAttribute('aria-label', K('권한', 'Access'));
@@ -6595,60 +6604,63 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         c.checked = (m.projects || []).indexOf(p.key) >= 0 || (m.projects || []).indexOf('*') >= 0; l.appendChild(c); l.appendChild(document.createTextNode(' ' + p.name)); pj.appendChild(l);
       });
       var pjl = el('div', 'tm-line'); pjl.appendChild(el('span', '', K('맡을 솔루션', 'Projects'))); pjl.appendChild(pj); r.appendChild(pjl);
+      var kk = document.createElement('input'); kk.type = 'text'; kk.className = 'tm-key'; kk.placeholder = 'ssh-ed25519 AAAA…'; kk.value = m.pubkey || ''; kk.spellcheck = false; kk.setAttribute('aria-label', K('SSH 공개 열쇠', 'SSH public key'));
+      var kl = el('div', 'tm-line'); kl.appendChild(el('span', '', K('그 사람 SSH 공개 열쇠', 'Their SSH public key'))); kl.appendChild(kk); r.appendChild(kl);
+      kl.appendChild(el('small', 'tm-keyhelp', K('받는 법: 그 사람 컴퓨터 터미널에서 ssh-keygen -t ed25519 → cat ~/.ssh/id_ed25519.pub 한 줄', 'How: on their computer run ssh-keygen -t ed25519 → the one line of cat ~/.ssh/id_ed25519.pub')));
       var ts = document.createElement('input'); ts.type = 'text'; ts.className = 'tm-ts'; ts.placeholder = 'name@gmail.com'; ts.value = m.tailscale || '';
-      var tsl = el('div', 'tm-line'); tsl.appendChild(el('span', '', K('사설망(Tailscale) 로그인 이메일', 'Tailscale login email'))); tsl.appendChild(ts); r.appendChild(tsl);
+      var tsl = el('div', 'tm-line'); tsl.appendChild(el('span', '', K('Tailscale 로도 (선택) 로그인 이메일', 'Also via Tailscale (optional) login email'))); tsl.appendChild(ts); r.appendChild(tsl);
+      if (!R.tsHost && !m.tailscale) tsl.style.display = 'none';
       var todo = el('ol', 'tm-todo'); r.appendChild(todo);
-      var saved = { user: m.user || '', tailscale: m.tailscale || '', role: mRole, job: mJob, title: m.title || '', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
+      var saved = { user: m.user || '', pubkey: m.pubkey || '', tailscale: m.tailscale || '', role: mRole, job: mJob, title: m.title || '', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
       var msgBox = null;
       function step(cls, mark, build) { var li = el('li', 'tm-s-' + ({ ok: 'ok', todo: 'do', wait: 'wait' })[cls]); li.appendChild(el('span', 'tm-mk', mark)); var d = el('div'); build(d); li.appendChild(d); todo.appendChild(li); }
       function curProjects() { return Array.prototype.filter.call(pj.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; }); }
       function dirty() {
-        return fresh || u.value !== saved.user || ts.value.trim() !== saved.tailscale || rl.value !== saved.role || jb.value !== saved.job || tt.value.trim() !== saved.title || nm.value.trim() !== saved.name || onc.checked !== saved.active
+        return fresh || u.value.trim().toLowerCase() !== saved.user || kk.value.trim() !== saved.pubkey || ts.value.trim() !== saved.tailscale || rl.value !== saved.role || jb.value !== saved.job || tt.value.trim() !== saved.title || nm.value.trim() !== saved.name || onc.checked !== saved.active
           || (rl.value !== 'owner' && curProjects().sort().join(',') !== saved.projects);
       }
       function paint() {
         pjl.style.display = rl.value === 'owner' ? 'none' : '';
         todo.textContent = '';
-        var user = u.value, mail = ts.value.trim(), lid = (user || mail).toLowerCase();
+        var user = u.value.trim().toLowerCase(), mail = ts.value.trim(), lid = user;
         var ui = authInfo.users.filter(function (x) { return x.id === lid; })[0], ns = authInfo.sessions.filter(function (x) { return x.id === lid; }).length;
         var needT = (info.team && info.team.memberTotp !== false) || rl.value === 'owner';
-        var routeOk = !!user || (!!mail && !!R.tsHost);
-        // ① 들어올 길
-        step(routeOk ? 'ok' : 'todo', routeOk ? '✔' : '1', function (d) {
-          if (user) {
-            var acc = info.accounts.filter(function (a) { return a.user === user; })[0] || {}, home = acc.home || ('/home/' + user);
-            d.appendChild(el('b', '', K('들어올 길: SSH 통로 — 서버 계정 ' + user + ' 있음', 'Route: SSH tunnel — server account ' + user + ' exists')));
-            d.appendChild(el('small', '', K('그 사람의 SSH 공개 열쇠가 이 계정에 들어 있어야 통로가 열려요(상황판은 확인 못 함). 아직이면 그 사람에게 공개 열쇠 한 줄(~/.ssh/id_ed25519.pub)을 받아, 서버 관리자가 서버 창에서 «공개 열쇠» 자리를 바꿔 실행:',
-              'Their SSH public key must be in this account for the tunnel (the board cannot check). If not yet: get their one-line public key (~/.ssh/id_ed25519.pub) and have the server admin run this in a server shell, replacing «PUBLIC KEY»:')));
-            cmdLine(d, "sudo install -d -m 700 -o " + user + " -g $(id -gn " + user + ") " + home + "/.ssh && echo '" + K('공개 열쇠', 'PUBLIC KEY') + "' | sudo tee -a " + home + "/.ssh/authorized_keys >/dev/null && sudo chown " + user + ": " + home + "/.ssh/authorized_keys && sudo chmod 600 " + home + "/.ssh/authorized_keys");
-            if (mail && R.tsHost) d.appendChild(el('small', '', K('사설망 계정도 적어서 Tailscale 로도 들어올 수 있어요(초대는 Tailscale 관리 화면 Users → Invite).', 'Tailscale login also set — they can come in via Tailscale too (invite: Tailscale admin → Users → Invite).')));
-          } else {
-            d.appendChild(el('b', '', R.tsHost ? K('들어올 길: 사설망(Tailscale)', 'Route: Tailscale') : K('들어올 길이 없어요', 'No route in')));
-            if (R.tsHost) {
-              d.appendChild(el('small', '', mail ? K('Tailscale 관리 화면 Users → Invite 로 ' + mail + ' 을 초대했는지 보세요(초대 안 하면 링크가 안 열려요).', 'Make sure ' + mail + ' is invited (Tailscale admin → Users → Invite) — otherwise the link will not open.')
-                : K('위 «사설망 로그인 이메일» 칸에 그 사람의 Tailscale 로그인 이메일을 적고, Tailscale 관리 화면 Users → Invite 로 초대하세요.', 'Fill in their Tailscale login email above and invite them (Tailscale admin → Users → Invite).')));
-              var a = document.createElement('a'); a.href = 'https://login.tailscale.com/admin/users'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = K('Tailscale 관리 화면 열기', 'Open Tailscale admin'); d.appendChild(a);
-            } else d.appendChild(el('small', '', K('이 서버는 Tailscale 주소가 없어 SSH 통로만 쓸 수 있어요. 서버 관리자가 서버 창에서 그 사람 계정을 만든 뒤(아래 «아이디» 자리를 바꿔 실행) 이 칸을 다시 열어 «서버 계정» 에서 고르세요:',
-              'This server has no Tailscale address, so only the SSH tunnel works. Have the server admin create their account (replace «ID»), then reopen this panel and pick it under «server account»:')));
-            if (!R.tsHost) cmdLine(d, 'sudo adduser ' + K('아이디', 'ID'));
-            else d.appendChild(el('small', '', K('SSH 통로로 들어오게 하려면: 서버 관리자가 sudo adduser <아이디> 로 계정을 만든 뒤 이 칸을 다시 열어 고르기.', 'For an SSH tunnel instead: the server admin runs sudo adduser <ID>, then reopen this panel and pick it.')));
-          }
-        });
-        // ② 저장
+        var shellOk = jb.value === 'developer';
+        // ① 저장
         var isDirty = dirty();
-        step(isDirty ? 'todo' : 'ok', isDirty ? '2' : '✔', function (d) {
+        step(isDirty ? 'todo' : 'ok', isDirty ? '1' : '✔', function (d) {
           if (!isDirty) { d.appendChild(el('b', '', K('저장됨', 'Saved'))); return; }
-          d.appendChild(el('b', '', fresh ? K('아직 저장 안 함', 'Not saved yet') : K('바뀐 것 저장 안 함', 'Unsaved changes')));
-          if (!lid) d.appendChild(el('small', '', K('서버 계정을 고르거나 사설망 이메일을 적어야 저장돼요.', 'Pick a server account or enter a Tailscale email to save.')));
-          var sb = el('button', 'btn primary', K('저장', 'Save')); sb.type = 'button'; sb.disabled = !lid;
+          d.appendChild(el('b', '', fresh ? K('이름·서버 계정·직무·공개 열쇠 넣고 저장', 'Fill in name, account, job, public key and save') : K('바뀐 것 저장 안 함', 'Unsaved changes')));
+          d.appendChild(el('small', '', shellOk ? K('개발자 — 터미널(셸) 접속까지 열려요.', 'Developer — shell access too.') : K('개발자가 아니면 상황판 통로만 열려요(터미널·명령 안 됨).', 'Not a developer — board tunnel only (no shell or commands).')));
+          var sb = el('button', 'btn primary', K('저장', 'Save')); sb.type = 'button'; sb.disabled = !user;
           sb.addEventListener('click', function () { document.getElementById('tm-save').click(); }); d.appendChild(sb);
+        });
+        // ② 서버 계정 — 터미널에 붙여 넣기 한 줄 (만들기 + 공개 열쇠 + 셸/통로만) → 실행하면 «준비됨»
+        var su = !isDirty && info.setup ? info.setup[saved.user] : null;
+        var acctOk = !!(su && su.ready && !su.needKey);
+        step(isDirty || !su ? 'wait' : acctOk ? 'ok' : 'todo', acctOk ? '✔' : '2', function (d) {
+          if (isDirty || !su) { d.appendChild(el('b', '', K('서버 계정 만들기 — 저장하면 붙여 넣을 한 줄이 나와요', 'Server account — save to get the line to paste'))); return; }
+          var kind = su.shell === 'login' ? K('터미널 됨', 'shell') : K('상황판 통로만', 'board tunnel only');
+          if (su.block) { d.appendChild(el('b', '', su.block === 'downgrade' ? K('터미널 되는 계정은 통로 전용으로 못 바꿔요 — 새 계정 이름으로 넣어 주세요', 'A shell account cannot be turned tunnel-only — use a new account name')
+            : su.block === 'admin' ? K('관리자 계정이라 팀원 계정으로 쓰지 않아요 — 다른 이름으로', 'Admin account — not used for members; pick another name') : K('시스템 계정이라 쓸 수 없어요 — 다른 이름으로', 'System account — pick another name'))); return; }
+          if (su.needKey) { d.appendChild(el('b', '', K('공개 열쇠를 넣고 저장하면 한 줄이 나와요', 'Add the public key and save to get the line'))); return; }
+          if (acctOk) {
+            d.appendChild(el('b', '', K('✔ 준비됨 — 서버 계정 ' + su.user + ' · ' + kind, '✔ Ready — account ' + su.user + ' · ' + kind)));
+            var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('열쇠를 바꿨으면 다시 붙여 넣기', 'Key changed? Paste again'))); cmdLine(dt, su.cmd); d.appendChild(dt);
+            return;
+          }
+          d.appendChild(el('b', '', K('터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Paste in a server terminal → done when it prints OK')));
+          d.appendChild(el('small', '', (su.exists ? K('있는 계정 ' + su.user + ' 을 «' + kind + '» 로 맞추고 열쇠를 이 열쇠 하나로 바꿉니다.', 'Sets existing account ' + su.user + ' to «' + kind + '» and replaces its keys with this one.') : K('계정 ' + su.user + ' 을 «' + kind + '» 로 만듭니다.', 'Creates account ' + su.user + ' as «' + kind + '».')) + K(' sudo 비밀번호를 물어요.', ' Asks for your sudo password.')));
+          cmdLine(d, su.cmd);
+          var rb = el('button', 'btn', K('실행했어요 — 다시 보기', 'Done — check again')); rb.type = 'button';
+          rb.addEventListener('click', function () { load(); }); d.appendChild(rb);
         });
         // ③ 안내문 보내기 (로그인 링크 포함)
         var regDone = !!(ui && ui.pwAt) && (!needT || ui.totp);
         var inv = ui && ui.inviteExp;
-        step(isDirty || !lid ? 'wait' : regDone ? 'ok' : inv ? 'ok' : 'todo', isDirty || !lid ? '3' : regDone || inv ? '✔' : '3', function (d) {
+        step(isDirty || !lid || !acctOk ? 'wait' : regDone ? 'ok' : inv ? 'ok' : 'todo', isDirty || !lid || !acctOk ? '3' : regDone || inv ? '✔' : '3', function (d) {
           d.appendChild(el('b', '', regDone ? K('안내문 보냄 · 등록 끝', 'Invitation used · registered') : inv ? K('안내문(로그인 링크) 만듦 · ' + hhmm(inv) + ' 까지 열림', 'Invitation link made · open until ' + hhmm(inv)) : K('안내문 복사해서 그 사람에게 보내기', 'Copy the invitation and send it')));
-          if (isDirty || !lid) { d.appendChild(el('small', '', K('먼저 저장하면 여기서 안내문을 만들 수 있어요.', 'Save first to make the invitation.'))); return; }
+          if (isDirty || !lid || !acctOk) { d.appendChild(el('small', '', K('서버 계정이 «준비됨» 이면 여기서 만들어요.', 'Available once the account is «Ready».'))); return; }
           if (!onc.checked) { d.appendChild(el('small', '', K('«켬» 이 꺼져 있어 링크를 못 만들어요.', '«On» is off — no link can be made.'))); return; }
           d.appendChild(el('small', '', regDone ? K('휴대폰을 바꿨거나 비밀번호를 잊었으면 새 안내문을 보내요(비밀번호·인증 앱을 다시 정함).', 'Lost phone or password? Send a new invitation (they set password and app again).')
             : K('로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 들어 있어요. 메신저·메일로 그 사람에게만 보내세요. 다시 만들면 전에 보낸 링크는 안 열려요.', 'Holds the sign-in link (24 h, single use), how to connect and how to sign in. Send it to that person only. A new one cancels the previous link.')));
@@ -6658,7 +6670,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             post('/api/auth/invite', { id: lid }).then(function (j) {
               b.disabled = false;
               if (!j.ok) { toast(j.message || 'error'); return; }
-              var txt = inviteText({ name: nm.value.trim() || lid, id: lid, user: user, mail: mail, role: rl.value, job: jb.value, title: tt.value.trim(), projects: curProjects(), needT: needT }, j);
+              var txt = inviteText({ name: nm.value.trim() || lid, id: lid, user: user, mail: mail, shell: su && su.shell === 'login', role: rl.value, job: jb.value, title: tt.value.trim(), projects: curProjects(), needT: needT }, j);
               if (!msgBox) { msgBox = document.createElement('textarea'); msgBox.className = 'tm-msg'; msgBox.readOnly = true; msgBox.setAttribute('aria-label', K('안내문', 'Invitation')); }
               msgBox.value = txt;
               copyText(txt, function () { toast(K('안내문을 복사했어요 — 메신저·메일에 붙여 넣어 보내세요', 'Invitation copied — paste it into chat or email')); }, function () { toast(K('아래 안내문을 골라 복사하세요', 'Select the text below and copy it')); });
@@ -6686,7 +6698,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       }
       [u, rl, onc].forEach(function (x) { x.addEventListener('change', paint); });
       Array.prototype.forEach.call(pj.querySelectorAll('input'), function (x) { x.addEventListener('change', paint); });
-      [nm, ts].forEach(function (x) { x.addEventListener('change', paint); });
+      [nm, ts, kk, u, jb].forEach(function (x) { x.addEventListener('change', paint); });
+      r._dirty = dirty;
       paint();
       rowsEl.appendChild(r);
       if (fresh) nm.focus();
@@ -6707,14 +6720,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       if (p.needT) { n++; L.push(K(n + ') 휴대폰에 인증 앱 설치 — Google Authenticator 등 아무거나. 본인 휴대폰·본인 앱으로(다른 사람 것 빌리지 않기).', n + ') Install an authenticator app on your phone — Google Authenticator or any. Your own phone and app.')); L.push(''); }
       n++; L.push(K(n + ') 들어오는 길 켜기 (상황판은 인터넷에 열려 있지 않아요)', n + ') Turn on your route in (the board is not on the internet)'));
       if (viaSsh) {
-        L.push(K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 처음 한 번: SSH 공개 열쇠를 저에게 보내 주세요(이미 보냈으면 건너뛰기).', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — first time only: send me your SSH public key (skip if already sent).'));
-        L.push(K('      열쇠가 없으면 컴퓨터 터미널에서: ssh-keygen -t ed25519 → 보낼 것 = ~/.ssh/id_ed25519.pub 파일 내용 한 줄(.pub 만!)', '      No key yet? In a terminal: ssh-keygen -t ed25519 → send the one line in ~/.ssh/id_ed25519.pub (only the .pub file!)'));
-        L.push(K('      쓸 때마다: 컴퓨터 터미널에서 아래 명령을 켜 두기(창을 닫으면 끊겨요)', '      Each time: keep this running in a terminal (closing the window disconnects)'));
+        L.push(K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 보내 주신 공개 열쇠가 있는 그 컴퓨터에서, 쓸 때마다 터미널에 아래 명령을 켜 두기(창을 닫으면 끊겨요)', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — on the computer whose public key you sent, keep this running in a terminal each time (closing the window disconnects)'));
         L.push('      ' + ssh);
         L.push(K('      상황판 주소: http://localhost:' + port, '      Board address: http://localhost:' + port));
+        L.push(p.shell ? K('      서버 터미널: ', '      Server shell: ') + 'ssh ' + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'))
+          : K('      이 계정은 상황판 통로만 열려요(서버 터미널은 안 됨).', '      This account opens the board tunnel only (no server shell).'));
       }
       if (viaTs) {
-        L.push(K((viaSsh ? '  [B] ' : '  ') + '사설망(Tailscale) — 초대 메일을 받아 ' + p.mail + ' 로 들어간 뒤, 휴대폰·컴퓨터에 Tailscale 앱을 깔고 켜 두기', (viaSsh ? '  [B] ' : '  ') + 'Tailscale — accept the invite email as ' + p.mail + ', install the Tailscale app on your phone or computer and keep it on'));
+        L.push(K((viaSsh ? '  [B] ' : '  ') + 'Tailscale — 초대 메일을 받아 ' + p.mail + ' 로 들어간 뒤, 휴대폰·컴퓨터에 Tailscale 앱을 깔고 켜 두기', (viaSsh ? '  [B] ' : '  ') + 'Tailscale — accept the invite email as ' + p.mail + ', install the Tailscale app on your phone or computer and keep it on'));
         L.push(K('      상황판 주소: https://' + R.tsHost, '      Board address: https://' + R.tsHost));
       }
       L.push('');
@@ -6782,14 +6795,22 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         rk.appendChild(d);
       });
     }
+    // 서버 창에서 한 줄을 실행하고 돌아오면 «준비됨» 을 다시 봄 — 고치는 중인 줄이 있으면 건드리지 않음
+    window.addEventListener('focus', function () {
+      if (box.hidden || !info || !info.setup) return;
+      var rows = rowsEl.querySelectorAll('.tm-row'); for (var i = 0; i < rows.length; i++) if (rows[i]._dirty && rows[i]._dirty()) return;
+      var wait = Object.keys(info.setup).some(function (k) { var x = info.setup[k]; return x && !x.ready && !x.needKey; });
+      if (wait) load();
+    });
     document.getElementById('tm-add').addEventListener('click', function () { if (!info) return; var p = rowsEl.querySelector('p'); if (p) p.remove(); row({ role: 'member', projects: [] }, true); });
     document.getElementById('tm-save').addEventListener('click', function () {
       var b = this; if (!info) return;
       var members = Array.prototype.map.call(rowsEl.querySelectorAll('.tm-row'), function (r) {
         var role = r.querySelector('.tm-role').value;
-        return { user: r.querySelector('.tm-user').value, name: r.querySelector('.tm-name').value.trim(), role: role, job: r.querySelector('.tm-job').value, title: r.querySelector('.tm-title').value.trim(), tailscale: r.querySelector('.tm-ts').value.trim(), active: r.querySelector('.tm-active').checked,
+        return { user: r.querySelector('.tm-user').value, name: r.querySelector('.tm-name').value.trim(), role: role, job: r.querySelector('.tm-job').value, title: r.querySelector('.tm-title').value.trim(), tailscale: r.querySelector('.tm-ts').value.trim(), pubkey: r.querySelector('.tm-key').value.trim(), active: r.querySelector('.tm-active').checked,
           projects: role === 'owner' ? ['*'] : Array.prototype.filter.call(r.querySelectorAll('.tm-pj input'), function (c) { return c.checked; }).map(function (c) { return c.value; }) };
-      }).filter(function (m) { return m.user || m.tailscale; });
+      }).filter(function (m) { return m.user || m.tailscale || m.name; });
+      members.forEach(function (m) { m.user = m.user.trim().toLowerCase(); });
       var team = { members: members, approval: document.getElementById('tm-approval').checked, smallDirect: document.getElementById('tm-small').checked, memberTotp: document.getElementById('tm-mtotp').checked,
         memberAnswers: document.getElementById('tm-answers').value,
         deployConfirm: Array.prototype.filter.call(document.querySelectorAll('#tm-deploy input'), function (c) { return c.checked; }).map(function (c) { return c.value; }), review: {}, reviewPaths: {} };
