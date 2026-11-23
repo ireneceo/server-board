@@ -7,7 +7,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execFile: rawExecFile, spawn } = require('child_process');
+const acct = require('./account');
+const peek = require('./proc-peek');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { AsyncLocalStorage } = require('async_hooks');
@@ -24,7 +25,9 @@ for (const k of Object.keys(process.env)) {
 }
 
 const HOST = '127.0.0.1';
-const HOME = os.homedir();
+const HOME = acct.WORK_HOME;
+const BOARD_DIR = acct.BOARD_DIR;
+const WORK_DIR = acct.WORK_DIR;
 
 // AI 1년 열쇠 — bin/ai-longkey setup 이 만든 열쇠가 있으면
 //   상황판이 띄우는 claude(방·상태 확인)에 CLAUDE_CODE_OAUTH_TOKEN 으로 넘긴다 → 8시간 열쇠 갱신 고장과 무관. 파일이 없어지면(ai-longkey off) 거둬들인다.
@@ -91,7 +94,7 @@ const HIDE_LINK_RE = new RegExp(['127\\.0\\.0\\.1'].concat((CONFIG.hideLinkHosts
 const LINK_PATH_RE = new RegExp('(?:^|[\\s(«])(\\/(?:' + (CONFIG.linkPaths || []).join('|') + ')[^\\s)»,]*)');
 const T = (t) => t.replace(/__OWNER__/g, OWNER).replace(/https:\/\/dev\.example\.com\/admin\/orders/g, CONFIG.linkExample)
   .replace(/localhost:8800/g, 'localhost:' + PORT).replace(/127\.0\.0\.1:8800/g, '127.0.0.1:' + PORT);
-const PROJECTS_FILE = path.join(HOME, 'dev-server', 'projects.json');
+const PROJECTS_FILE = path.join(BOARD_DIR, 'projects.json');
 const STUCK_MS = 30 * 60 * 1000;
 const LIMIT_BUSY_MS = 60 * 1000;   // 한도 줄 뒤 이만큼 «busy» 만 남아 있으면 한도로 멈춘 방(judge)   // «일하는 중» 인데 30분 넘게 기록이 없으면 «멈춘 것 같음»
 const CACHE_MS = 2000;
@@ -150,7 +153,7 @@ function siteUrlOf(p) {
   return /^https?:\/\//.test(u) && !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(u) ? u.replace(/\/?$/, '/') : null;
 }
 
-const SERVICES_FILE = path.join(HOME, 'dev-server', 'services.json');
+const SERVICES_FILE = path.join(BOARD_DIR, 'services.json');
 let svcCache = { mtime: -1, data: null };
 function loadServices() {
   try {
@@ -185,16 +188,16 @@ function claudeBin() {
 const keyWin = require('./key-window').create({
   credFile: path.join(HOME, '.claude', '.credentials.json'), offFile: path.join(HOME, '.claude-cred-guard', 'KEYWIN-OFF'),
   log: (e) => { try { writeLog(e); } catch (_) {} },
-  refresh: (n, done) => rawExecFile(claudeBin(), ['-p', '--no-session-persistence', '--model', 'haiku', '--tools', '', '--strict-mcp-config', '--system-prompt', 'Reply with OK only.', 'ping'],   // 실제 대답을 받아야 끝나는 명령 = 갱신을 끝까지 하고 저장
+  refresh: (n, done) => acct.execFile('claude', claudeBin(), ['-p', '--no-session-persistence', '--model', 'haiku', '--tools', '', '--strict-mcp-config', '--system-prompt', 'Reply with OK only.', 'ping'],   // 실제 대답을 받아야 끝나는 명령 = 갱신을 끝까지 하고 저장
     { cwd: os.tmpdir(), timeout: 300000, maxBuffer: 256 * 1024 }, (err) => done(err && (err.killed ? 'timeout' : err.code || err.message))),   // 갱신 도중 죽이면 같은 고장 — 넉넉히 5분
 });
 function isClaudeFile(f) { return f === claudeBinCache || path.basename(String(f)) === 'claude'; }
-function execFile(file, args, opts, cb) {
+function execFileAs(verb, file, args, opts, cb) {
   if (isClaudeFile(file) && !(Array.isArray(args) && args[0] === '-p') && keyWin.closed()) {
     const late = () => { const e = Object.assign(new Error(K('AI 열쇠 갱신 중 — 1~2분 뒤 다시 해 주세요', 'AI key is refreshing — try again in a minute or two')), { code: 'KEYWIN' }); if (typeof cb === 'function') cb(e, '', e.message); };
-    keyWin.wait(() => rawExecFile(file, args, opts, cb), late); return null;   // 90초 넘게 기다리면 «갱신 중» 오류로 답함 — 요청이 매달리지 않게
+    keyWin.wait(() => acct.execFile(verb, file, args, opts, cb), late); return null;   // 90초 넘게 기다리면 «갱신 중» 오류로 답함 — 요청이 매달리지 않게
   }
-  return rawExecFile(file, args, opts, cb);
+  return acct.execFile(verb, file, args, opts, cb);
 }
 function bgIsolationOf(dir) {
   for (const f of [path.join(dir, '.claude', 'settings.local.json'), path.join(dir, '.claude', 'settings.json'), path.join(HOME, '.claude', 'settings.json')]) {
@@ -205,7 +208,7 @@ function bgIsolationOf(dir) {
 function worktreeWarn(proj) {
   return new Promise((resolve) => {
     if (!proj || !proj.dir || bgIsolationOf(proj.dir) === 'none') return resolve('');
-    rawExecFile('git', ['-C', proj.dir, 'status', '--porcelain', '--untracked-files=normal'], { timeout: 8000 }, (e, o) => {
+    acct.execFile('git', 'git', ['-C', proj.dir, 'status', '--porcelain', '--untracked-files=normal'], { timeout: 8000 }, (e, o) => {
       const n = e ? 0 : String(o || '').split('\n').filter(Boolean).length;
       resolve(n ? K(' ⚠ 이 솔루션 폴더에 커밋 안 한 변경 ' + n + '개 — 방이 별도 가지(worktree)에서 일해 이 변경을 못 봅니다. 먼저 커밋하거나 ~/.claude/settings.json 의 worktree.bgIsolation 을 «none» 으로',
         ' ⚠ ' + n + ' uncommitted change(s) in this project folder — sessions work on a separate branch (worktree) and will not see them. Commit first, or set worktree.bgIsolation to «none» in ~/.claude/settings.json') : '');
@@ -216,7 +219,7 @@ let agentsLastOk = null;
 function listAgents() {
   return new Promise((resolve) => {
     if (keyWin.closed()) return resolve(agentsLastOk || { ok: false, error: 'key-window', list: [] });   // 갱신 창 — 직전 방 목록(대개 1~2분 · 갱신이 안 되면 최대 30분) · 재시작 직후라 없으면 «못 읽음»
-    execFile(claudeBin(), ['agents', '--json', '--all'], { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+    execFileAs('claude', claudeBin(), ['agents', '--json', '--all'], { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
       if (err) return resolve({ ok: false, error: String(err.message || err).slice(0, 200), list: [] });
       try { agentsLastOk = { ok: true, list: JSON.parse(stdout) }; resolve(agentsLastOk); } catch (e) { resolve({ ok: false, error: K('JSON 해석 실패', 'could not parse JSON'), list: [] }); }
     });
@@ -225,7 +228,7 @@ function listAgents() {
 
 let authCache = { at: 0, v: null, busy: false };
 function authAsk(cb) {
-  execFile(claudeBin(), ['auth', 'status', '--json'], { timeout: 60000, maxBuffer: 256 * 1024 }, (err, out) => {
+  execFileAs('claude', claudeBin(), ['auth', 'status', '--json'], { timeout: 60000, maxBuffer: 256 * 1024 }, (err, out) => {
     let v = null;
     const txt = String(out || ''), a = txt.indexOf('{'), b = txt.lastIndexOf('}');
     try { const d = JSON.parse(a >= 0 && b > a ? txt.slice(a, b + 1) : txt); v = { loggedIn: !!d.loggedIn, method: d.authMethod || null, plan: d.subscriptionType || null }; }
@@ -283,7 +286,7 @@ function aiLoginStart(how) {
   return new Promise((resolve) => {
     const args = ['auth', 'login'].concat(how === 'console' ? ['--console'] : []);
     let p;
-    try { p = spawn(claudeBin(), args, { stdio: ['pipe', 'pipe', 'pipe'], env: Object.assign({}, process.env, { BROWSER: 'true' }) }); }
+    try { p = acct.spawn('claude', claudeBin(), args, { stdio: ['pipe', 'pipe', 'pipe'], env: Object.assign({}, process.env, { BROWSER: 'true' }) }); }
     catch (e) { return resolve({ ok: false, message: String(e.message || e).slice(0, 200) }); }
     const me = { proc: p, url: null, how: how === 'console' ? 'console' : 'claudeai', at: Date.now(), out: '', okAt: aiLogin.okAt };
     aiLogin = me;
@@ -331,7 +334,7 @@ function aiLoginCode(code) {
 
 const CC_EVERY_MS = 60 * 60 * 1000, CC_FAIL_RETRY_MS = 6 * 3600 * 1000;
 function ccRun(args, timeout = 20000) {
-  return new Promise((resolve) => execFile(claudeBin(), args, { timeout, maxBuffer: 4 * 1024 * 1024 }, (err, out, se) =>
+  return new Promise((resolve) => execFileAs('claude', claudeBin(), args, { timeout, maxBuffer: 4 * 1024 * 1024 }, (err, out, se) =>
     resolve({ ok: !err, out: String(out || ''), err: err ? String(se || err.message).trim().slice(-300) : null })));
 }
 async function claudeVersion() { const v = await ccRun(['--version']); return (v.out.match(/\d+\.\d+\.\d+/) || [])[0] || null; }
@@ -375,7 +378,7 @@ function runSelfTests() {
     let files = []; try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.test.js') && f !== 'public.test.js').map((f) => path.join(dir, f)); } catch (_) { /* 없음 */ }
     if (!files.length) return resolve(null);
     const env = Object.assign({}, process.env); delete env.NODE_TEST_CONTEXT;
-    execFile(process.execPath, ['--test', '--test-reporter=tap'].concat(files), { cwd: __dirname, env, timeout: 180000, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
+    execFileAs('self', process.execPath, ['--test', '--test-reporter=tap'].concat(files), { cwd: __dirname, env, timeout: 180000, maxBuffer: 8 * 1024 * 1024 }, (err, out) => {
       const s = String(out || '');
       const n = (k) => +((s.match(new RegExp('^# ' + k + ' (\\d+)', 'm')) || [])[1] || 0);
       const failed = [...s.matchAll(/^not ok \d+ - (.+)$/gm)].map((m) => m[1].slice(0, 120)).filter((x) => !/\.test\.js$/.test(x)).slice(0, 10);
@@ -511,7 +514,7 @@ const PUB_AUTO_GAP_MS = 20 * 3600 * 1000;     // 자동 내기는 하루 한 번
 const PUB_PACK_MS = 30 * 60 * 1000;
 const PUB_PATHS = ['board/server.js', 'board/index.html', 'board/deploy-runner.js', 'board/auth.js', 'board/auth-cli.js', 'board/gate.js', 'board/cred-guard.js', 'board/key-window.js', 'board/updater.js', 'board/update-runner.js', 'board/config.example.json', 'board/test', 'public', 'kit', 'morning-check.sh', 'bin'];
 let pubCache = { at: 0, v: null, busy: false };
-function pubGit(dir, args) { return new Promise((r) => execFile('git', ['-C', dir].concat(args), { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (e, o) => r(e ? null : String(o || '').trim()))); }
+function pubGit(dir, args) { return new Promise((r) => execFileAs('git', 'git', ['-C', dir].concat(args), { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (e, o) => r(e ? null : String(o || '').trim()))); }
 /** [Unreleased] 절 — 굵은 제목(**…**)과 줄(- …) 수 */
 function pubUnreleased(text) {
   const m = String(text || '').match(/^## \[Unreleased\][^\n]*\n([\s\S]*?)(?=^## \[|(?![\s\S]))/m);
@@ -1074,7 +1077,7 @@ function consultOpen(proj, fresh) {
   const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--permission-mode', 'plan', '--restricted', '--tools', 'Read,Grep,Glob', '--strict-mcp-config', '--settings', CONSULT_SETTINGS,
     '-n', '💬 ' + K('상의', 'Chat') + ' · ' + proj.name, '--append-system-prompt', consultPrompt(proj)].concat(sid ? ['--resume', sid] : []);
-  const proc = spawn(claudeBin(), args.map(OWN), { cwd: proj.dir, stdio: ['pipe', 'pipe', 'pipe'] });
+  const proc = acct.spawn('claude', claudeBin(), args.map(OWN), { cwd: proj.dir, stdio: ['pipe', 'pipe', 'pipe'] });
   const cid = 'c' + Date.now().toString(36);
   const c = { cid, project: proj.key, name: proj.name, dir: proj.dir, proc, sessionId: sid, startedAt: Date.now(), lastAt: Date.now(), busy: false,
     events: sid ? consultHistory(proj.dir, sid) : [], partial: '', clients: new Set(), err: '', closed: false };
@@ -1294,7 +1297,7 @@ function pendingQuestion(id, { wait = false } = {}) {
 }
 function pendingQuestionRaw(id) {
   return new Promise((resolve) => {
-    execFile(claudeBin(), ['logs', id], { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (err, out) => {
+    execFileAs('claude', claudeBin(), ['logs', id], { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (err, out) => {
       if (err) return resolve(null);
       let t = String(out || '');
       t = t.replace(/\x1b\[(\d+)C/g, (m0, n) => ' '.repeat(Math.min(200, +n)))
@@ -1815,7 +1818,7 @@ function lastDevDoneFromGit(dir) {
 }
 function lastDevDoneFromGitRaw(dir) {
   return new Promise((resolve) => {
-    execFile('git', ['-C', dir, 'log', '-1', '--grep=' + K('개발완료', 'dev-done'), '-i', '--format=%cI|%h|%s'], { timeout: 5000 }, (err, out) => {
+    execFileAs('git', 'git', ['-C', dir, 'log', '-1', '--grep=' + K('개발완료', 'dev-done'), '-i', '--format=%cI|%h|%s'], { timeout: 5000 }, (err, out) => {
       const line = String(out || '').trim();
       if (err || !line) return resolve(null);
       const [at, hash, ...rest] = line.split('|');
@@ -1850,7 +1853,7 @@ function readProdMarker(m) {
   });
 }
 function commitsSince(dir, at) {
-  return new Promise((resolve) => execFile('git', ['-C', dir, 'rev-list', '--count', '--since=' + at, 'HEAD'], { timeout: 5000 }, (e, o) => resolve(e ? null : parseInt(String(o).trim(), 10))));
+  return new Promise((resolve) => execFileAs('git', 'git', ['-C', dir, 'rev-list', '--count', '--since=' + at, 'HEAD'], { timeout: 5000 }, (e, o) => resolve(e ? null : parseInt(String(o).trim(), 10))));
 }
 async function prodTick() {
   const reads = [];
@@ -2817,7 +2820,7 @@ function deployGuard(key) {
 }
 /** 그 솔루션에 상황판 배포가 남긴 stash 가 있는가 — 있으면 일시정지를 풀지 않는다(멈춘 방이 사라진 자기 파일을 보고 다시 만들기 시작하면 소실 사고) */
 function boardStashLeft(dir) {
-  return new Promise((res) => execFile('git', ['-C', dir, 'stash', 'list'], { timeout: 10000 }, (e, o) => res(!e && String(o).includes(STASH_TAG))));
+  return new Promise((res) => execFileAs('git', 'git', ['-C', dir, 'stash', 'list'], { timeout: 10000 }, (e, o) => res(!e && String(o).includes(STASH_TAG))));
 }
 
 function noAiDeployCmd(proj) {
@@ -3273,7 +3276,7 @@ let tsHost = null, tsLogin = null, tsCheckedAt = 0;
 function refreshTailscale(force) {
   if (!force && Date.now() - tsCheckedAt < 30000) return;
   tsCheckedAt = Date.now();
-  execFile('tailscale', ['status', '--json'], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => {
+  execFileAs('tailscale', 'tailscale', ['status', '--json'], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => {
     let h = null, login = null;
     try {
       const j = JSON.parse(out);
@@ -3284,7 +3287,7 @@ function refreshTailscale(force) {
     } catch (_) {}
     if (!h || !login) return setTs(null);
     tsLogin = login;
-    execFile('tailscale', ['serve', 'status', '--json'], { timeout: 5000 }, (e2, o2) => {
+    execFileAs('tailscale', 'tailscale', ['serve', 'status', '--json'], { timeout: 5000 }, (e2, o2) => {
       let funnel = true;   // 확인 못 하면 안전하게 «켜짐» 으로 봄
       let port = '443';
       try {
@@ -3327,6 +3330,7 @@ refreshTailscale(true);
 setInterval(() => refreshTailscale(true), 10 * 60 * 1000);
 
 const BOARD_UID = typeof process.getuid === 'function' ? process.getuid() : -1;
+const OWNER_UID = acct.SPLIT ? ((acct.passwdOf(acct.OWNER_ACCOUNT) || {}).uid ?? -2) : BOARD_UID;
 // 한 사람 = 권한(role) · 직무(job) · 직책(title) 세 칸
 //   권한만 버튼을 가른다(permit) — 직무·직책은 이름표: 화면·안내문·작업방 머리글(누가 제안했나)에만 보인다
 //   예전 role:'designer' 는 «권한 member + 직무 designer» 로 읽는다(설정을 다시 저장하면 새 모양으로 남음)
@@ -3381,19 +3385,6 @@ function peerSock(rport, lport) {
   }
   return any ? { uid: null } : null;
 }
-/** 접속을 쥔 프로그램 번호 — 못 찾으면 null. sealedSsh = 들여다볼 수 없는 sshd(주인 계정 SSH 접속·통로)가 있음
- */
-function pidOfInode(inode) {
-  const want = 'socket:[' + inode + ']';
-  let sealedSsh = false;
-  for (const p of fs.readdirSync('/proc')) {
-    if (!/^\d+$/.test(p)) continue;
-    try { if (fs.statSync('/proc/' + p).uid !== BOARD_UID) continue; } catch (_) { continue; }
-    let fds; try { fds = fs.readdirSync('/proc/' + p + '/fd'); } catch (_) { try { if (/^sshd/.test(fs.readFileSync('/proc/' + p + '/comm', 'utf8'))) sealedSsh = true; } catch (_) {} continue; }
-    for (const d of fds) { try { if (fs.readlinkSync('/proc/' + p + '/fd/' + d) === want) return { pid: Number(p) }; } catch (_) {} }
-  }
-  return { pid: null, sealedSsh };
-}
 /** SSH 통로가 «셸 창과 함께 연 것(ssh -L 서버 → 터미널 창)» 인지 «셸 없이 통로만(ssh -N — 맥 자동 통로)» 인지 — 'shell' | 'noshell' | ''(모름)
  *  sshd 는 셸·명령을 열면 이름이 «sshd: 사용자@pts/N»·«@notty» 로 바뀌고, -N 은 «sshd: 사용자» 그대로 남는다(OpenSSH session_proctitle).
  *  어느 sshd 인지는 소켓의 cgroup(로그인 세션 scope)으로 짝지음 — sshd 의 fd 는 같은 계정도 못 읽어서(dumpable 0).
@@ -3402,13 +3393,13 @@ function tunnelShell(sk) {
   if (sk._tunShell !== undefined) return sk._tunShell;
   let r = '';
   try {
-    const out = require('child_process').execFileSync('ss', ['-Htnpe', 'state', 'established', '( sport = :' + sk.remotePort + ' and dport = :' + sk.localPort + ' )'], { timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const out = acct.execFileSync('self', 'ss', ['-Htnpe', 'state', 'established', '( sport = :' + sk.remotePort + ' and dport = :' + sk.localPort + ' )'], { timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
     const m = /cgroup:(\S*\/session-\d+\.scope)/.exec(out);
     if (m) {
       for (const p of fs.readdirSync('/proc')) {
         if (!/^\d+$/.test(p)) continue;
         try {
-          if (fs.statSync('/proc/' + p).uid !== BOARD_UID) continue;
+          if (fs.statSync('/proc/' + p).uid !== OWNER_UID) continue;
           if (!fs.readFileSync('/proc/' + p + '/cgroup', 'utf8').trim().endsWith(m[1])) continue;
           const cmd = fs.readFileSync('/proc/' + p + '/cmdline', 'utf8').replace(/\0+$/, '');
           if (!/^sshd: /.test(cmd) || /\[(priv|net)\]/.test(cmd)) continue;
@@ -3420,26 +3411,17 @@ function tunnelShell(sk) {
   sk._tunShell = r;
   return r;
 }
-/** 주인 계정 프로그램이 사람(SSH 터미널·통로)인지 작업방 AI(claude 아래)인지 — claude 를 먼저 본다(터미널에서 띄운 claude 도 AI) */
-function ownerKind(pid) {
-  if (pid === process.pid) return 'system';
-  let ssh = false;
-  for (let p = pid, i = 0; p > 1 && i < 40; i++) {
-    let argv0 = '', comm = '', ppid = 0;
-    try { argv0 = fs.readFileSync('/proc/' + p + '/cmdline', 'utf8').split('\0')[0]; } catch (_) {}
-    try { comm = fs.readFileSync('/proc/' + p + '/comm', 'utf8').trim(); } catch (_) {}
-    try { ppid = Number(fs.readFileSync('/proc/' + p + '/stat', 'utf8').replace(/^.*\)\s+/, '').split(' ')[1]); } catch (_) {}
-    if (/(^|\/)claude$/.test(argv0)) return 'agent';
-    try { if (/(^|\0)CLAUDECODE=1(\0|$)/.test(fs.readFileSync('/proc/' + p + '/environ', 'utf8'))) return 'agent'; } catch (_) {}
-    if (/^sshd/.test(comm) || /^sshd:/.test(argv0)) ssh = true;
-    p = ppid;
-  }
-  return ssh ? 'owner' : 'agent';   // 모르는 주인 계정 프로그램(cron 등)은 AI 와 같게 — 넣기만
+/** 계정이 갈렸을 때 — 주인 계정 소켓의 길을 run-as «peer» 로(그 계정만 fd 를 읽을 수 있음). 실패하면 agent(가장 좁은 권한) */
+function peerKindAs(inode) {
+  try {
+    const k = String(acct.execFileSync('peer', 'proc-peek', ['sock', String(inode)], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] })).trim();
+    return ['terminal', 'agent', 'tunnel'].includes(k) ? k : 'agent';
+  } catch (_) { return 'agent'; }
 }
 const whoSeen = new Map();
 const SESS_COOKIE = 'sb_sess_' + PORT;
 const OLD_SESS_COOKIE = 'sb_sess';
-const OWNER_ID = String(unixUser(BOARD_UID)).toLowerCase();
+const OWNER_ID = String(acct.SPLIT ? acct.OWNER_ACCOUNT : unixUser(BOARD_UID)).toLowerCase();
 /** 로그인 아이디 — 서버 계정이 있으면 그 이름, 없으면(사설망만) 사설망 계정 */
 const loginIdOf = (m) => String((m && (m.user || m.tailscale)) || '').toLowerCase();
 function memberOf(m) { return { role: m.role, job: m.job || '', title: m.title || '', user: loginIdOf(m), name: m.name || m.user || m.tailscale, projects: m.role === 'owner' ? ['*'] : m.projects }; }
@@ -3473,11 +3455,9 @@ function sockOf(req) {
   if (!ps) return { kind: 'noproc' };
   if (ps.uid === null) return { kind: 'unknown' };
   if (ps.uid === 0) return { kind: tsHost && String(req.headers.host || '').toLowerCase() === tsHost ? 'tailscale' : 'root' };
-  if (ps.uid === BOARD_UID) {
-    const po = pidOfInode(ps.inode);
-    if (po.pid) { const k = ownerKind(po.pid); return { kind: k === 'owner' ? 'terminal' : k }; }
-    return { kind: po.sealedSsh ? 'tunnel' : 'agent' };
-  }
+  if (ps.uid === OWNER_UID && !acct.SPLIT) return { kind: peek.sockKind(ps.inode, BOARD_UID, process.pid) };
+  if (ps.uid === OWNER_UID) return { kind: peerKindAs(ps.inode) };   // 계정이 갈림 — 주인 계정이 같은 판정을 돌려 줌
+  if (ps.uid === BOARD_UID) return { kind: peek.pidOfInode(ps.inode, BOARD_UID).pid === process.pid ? 'system' : 'agent' };   // board 계정의 다른 프로그램(상황판 시험 등)은 사람이 아님
   return { kind: 'other', user: unixUser(ps.uid).toLowerCase() };
 }
 /** 이 사람이 이 길로 와도 되나 — 다른 서버 계정의 통로는 그 계정의 팀원만 · Tailscale 은 그 사람의 사설망 계정만(주인은 이 서버를 올린 계정) */
@@ -3593,7 +3573,7 @@ function humanAccounts() {
   try {
     for (const l of fs.readFileSync('/etc/passwd', 'utf8').split('\n')) {
       const f = l.split(':'); const uid = Number(f[2]);
-      if (f.length > 6 && uid >= 1000 && uid < 60000 && !/nologin|false$/.test(f[6])) out.push({ user: f[0], uid, home: f[5], owner: uid === BOARD_UID });
+      if (f.length > 6 && uid >= 1000 && uid < 60000 && !/nologin|false$/.test(f[6])) out.push({ user: f[0], uid, home: f[5], owner: uid === OWNER_UID });
     }
   } catch (_) {}
   return out;
@@ -3614,15 +3594,15 @@ function teamRisks() {
     const walk = (f, depth) => {
       let st; try { st = fs.lstatSync(f); } catch (_) { return; }
       if (st.isSymbolicLink()) return;
-      for (const m of others) if (st.uid === BOARD_UID && canWrite(st, m.user)) hit.set(m.user, (hit.get(m.user) || []).concat(f));
+      for (const m of others) if (st.uid === OWNER_UID && canWrite(st, m.user)) hit.set(m.user, (hit.get(m.user) || []).concat(f));
       if (st.isDirectory() && depth < 3) { let es = []; try { es = fs.readdirSync(f); } catch (_) {} for (const e of es.slice(0, 400)) walk(path.join(f, e), depth + 1); }
     };
     for (const sp of [...new Set(spots)]) walk(sp, 0);
     const roots = [...new Set(spots)].filter((sp) => fs.existsSync(sp)).filter((sp, i, a) => !a.some((o) => o !== sp && sp.startsWith(o + '/')));   // 다른 칸 안에 든 것은 한 번만
     // 오래가는 막기: 그룹을 주인 계정 그룹으로 바꾸고 쓰기를 뺀 뒤 폴더의 «그룹 물려받기»(setgid)를 끈다 — g-w 만 하면 umask 002 로 새 파일이 다시 그룹 쓰기가 됨(실측)
-    const og = (() => { try { const gid = prim.get(unixUser(BOARD_UID)); for (const l of fs.readFileSync('/etc/group', 'utf8').split('\n')) { const f = l.split(':'); if (Number(f[2]) === gid) return f[0]; } } catch (_) {} return unixUser(BOARD_UID); })();
+    const og = (() => { try { const gid = prim.get(unixUser(OWNER_UID)); for (const l of fs.readFileSync('/etc/group', 'utf8').split('\n')) { const f = l.split(':'); if (Number(f[2]) === gid) return f[0]; } } catch (_) {} return unixUser(OWNER_UID); })();
     const q = roots.map((sp) => "'" + sp + "'").join(' ');
-    let foreign = false; const look = (f, d) => { let st; try { st = fs.lstatSync(f); } catch (_) { return; } if (st.uid !== BOARD_UID) foreign = true; if (!foreign && st.isDirectory() && d < 4) { let es = []; try { es = fs.readdirSync(f); } catch (_) {} for (const e of es.slice(0, 400)) look(path.join(f, e), d + 1); } };
+    let foreign = false; const look = (f, d) => { let st; try { st = fs.lstatSync(f); } catch (_) { return; } if (st.uid !== OWNER_UID) foreign = true; if (!foreign && st.isDirectory() && d < 4) { let es = []; try { es = fs.readdirSync(f); } catch (_) {} for (const e of es.slice(0, 400)) look(path.join(f, e), d + 1); } };
     roots.forEach((r) => look(r, 0));
     const su = foreign ? 'sudo ' : '';
     for (const [u, files] of hit) risks.push({ project: p.key, user: u, count: files.length, sample: files.slice(0, 5).map((f) => f.replace(p.dir + '/', '')), sudo: foreign,
@@ -3993,7 +3973,7 @@ function writeLog(entry) {
 
 function runClaude(args, cwd) {
   return new Promise((resolve) => {
-    execFile(claudeBin(), args.map(OWN), { cwd, timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+    execFileAs('claude', claudeBin(), args.map(OWN), { cwd, timeout: 60000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
       resolve({ ok: !err, out: String(stdout || '').trim().slice(-1500), err: err ? String(stderr || err.message).trim().slice(-800) : null });
     });
   });
@@ -4055,7 +4035,7 @@ function makeTitle(task) {
   const prompt = K('아래 업무 요청을 상황판에 보일 한국어 제목으로 요약해. 15자 이내, 명사형, 따옴표·마침표·설명 없이 제목만 한 줄로.\n\n---\n', 'Summarize the task below as a short English title for a dashboard. At most 6 words, no quotes, no period, no explanation — only the title on one line.\n\n---\n')
     + task.slice(0, 4000);
   return new Promise((resolve) => {
-    execFile(claudeBin(), ['-p', '--model', 'haiku', '--permission-mode', 'plan', '--no-session-persistence', OWN(prompt)],
+    execFileAs('claude', claudeBin(), ['-p', '--model', 'haiku', '--permission-mode', 'plan', '--no-session-persistence', OWN(prompt)],
       { cwd: os.tmpdir(), timeout: 25000, maxBuffer: 256 * 1024 }, (err, stdout) => {
         const line = String(stdout || '').split('\n').map((x) => x.trim()).filter(Boolean).pop() || '';
         const t = line.replace(/^["'«“]+|["'»”.]+$/g, '').trim();
@@ -4089,7 +4069,7 @@ function checkOk(q, now) {
 function checkHeld(q) { return !!(needsCheck(q) && q.check && !q.check.err && !q.check.decided && q.check.wait); }
 function gitRecent(dir, days) {
   return new Promise((resolve) => {
-    execFile('git', ['-C', dir, 'log', '--since=' + days + '.days', '--format=%h %ct %s'], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 }, (err, out) =>
+    execFileAs('git', 'git', ['-C', dir, 'log', '--since=' + days + '.days', '--format=%h %ct %s'], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 }, (err, out) =>
       resolve(err ? [] : String(out || '').split('\n').filter(Boolean).map((l) => { const m = l.match(/^(\S+) (\d+) (.*)$/); return (m ? m[1] + ' ' + tzYMDHM(+m[2] * 1000) + ' ' + m[3] : l).slice(0, 180); })));
   });
 }
@@ -4173,8 +4153,8 @@ function parseCheck(out) {
 // haiku 한 번 — 프롬프트가 커서(커밋 수백 줄·한글) 인자 대신 표준 입력으로 넘긴다
 function runCheckModel(prompt) {
   return new Promise((resolve) => {
-    const { spawn } = require('child_process');
-    const p = spawn(claudeBin(), ['-p', '--model', 'haiku', '--permission-mode', 'plan', '--no-session-persistence'], { cwd: os.tmpdir(), stdio: ['pipe', 'pipe', 'pipe'] });
+    
+    const p = acct.spawn('claude', claudeBin(), ['-p', '--model', 'haiku', '--permission-mode', 'plan', '--no-session-persistence'], { cwd: os.tmpdir(), stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '', err = '', done = false;
     const fin = (x) => { if (done) return; done = true; clearTimeout(t); resolve(x); };
     const t = setTimeout(() => { try { p.kill('SIGKILL'); } catch (_) {} fin({ err: 'timeout' }); }, CHECK_TIMEOUT_MS);
@@ -4293,7 +4273,7 @@ function seenEvAt(a) {
   const proj = loadProjects().find((p) => p.key === a.project);
   const h = (String(a.question || '').match(/(?:커밋|commit) ([0-9a-f]{7,40})/) || [])[1];
   if (proj && h) {
-    try { const t = require('child_process').execFileSync('git', ['-C', proj.dir, 'show', '-s', '--format=%cI', h], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); if (!isNaN(Date.parse(t))) return new Date(t).toISOString(); } catch (_) {}
+    try { const t = acct.execFileSync('git', 'git', ['-C', proj.dir, 'show', '-s', '--format=%cI', h], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); if (!isNaN(Date.parse(t))) return new Date(t).toISOString(); } catch (_) {}
   }
   return null;
 }
@@ -4554,7 +4534,7 @@ async function handleAction(req, res, url, who) {
     const n = normTeam(t);
     const bad = n.members.find((m) => m.user && !accts.has(m.user));
     if (bad) return send(res, 400, { ok: false, message: K('이 서버에 없는 계정입니다: ', 'No such account on this server: ') + bad.user });
-    if (n.members.some((m) => m.user === unixUser(BOARD_UID))) return send(res, 400, { ok: false, message: K('상황판을 돌리는 계정은 늘 최종 컨펌자입니다 — 목록에 넣지 않아도 됩니다', 'The account running the board is always the final approver — no need to list it') });
+    if (n.members.some((m) => m.user === unixUser(OWNER_UID))) return send(res, 400, { ok: false, message: K('상황판을 돌리는 계정은 늘 최종 컨펌자입니다 — 목록에 넣지 않아도 됩니다', 'The account running the board is always the final approver — no need to list it') });
     if (new Set(n.members.map((m) => m.user || m.tailscale)).size !== n.members.length) return send(res, 400, { ok: false, message: K('같은 계정이 두 번 있습니다', 'Same account listed twice') });
     n.members.forEach((m) => { m.projects = m.projects.filter((k) => k === '*' || keys.has(k)); });
     n.deployConfirm = n.deployConfirm.filter((k) => keys.has(k));
@@ -4612,7 +4592,7 @@ async function handleAction(req, res, url, who) {
       let isLink = false; try { isLink = fs.lstatSync(c.script).isSymbolicLink(); } catch (_) {}
       if (isLink) return send(res, 400, { ok: false, message: K('배포 스크립트가 링크 파일이에요 — 실제 스크립트 파일 경로를 넣으세요', 'The deploy script is a symlink — enter the real script file path') });
       const rel = path.relative(proj.dir, c.script);
-      const tracked = await new Promise((r) => execFile('git', ['-C', proj.dir, 'ls-tree', '--name-only', 'HEAD', '--', rel], { timeout: 10000 }, (e, o) => r(!e && String(o).trim() === rel)));
+      const tracked = await new Promise((r) => execFileAs('git', 'git', ['-C', proj.dir, 'ls-tree', '--name-only', 'HEAD', '--', rel], { timeout: 10000 }, (e, o) => r(!e && String(o).trim() === rel)));
       if (!tracked) return send(res, 400, { ok: false, message: K('배포 스크립트가 git 에 커밋되어 있지 않아요: ' + rel + ' — 그 솔루션 방에서 커밋한 뒤 연결하세요(상황판은 커밋된 스크립트만 누름)', 'The deploy script is not committed in git: ' + rel + ' — commit it in that project first') });
     }
     // 저장 전 옛 파일을 기록 폴더에 남김(되돌리기용) · 쓰다 끊겨도 반쪽 파일이 안 남게
@@ -5744,7 +5724,7 @@ async function handleAction(req, res, url, who) {
     s.days = (s.days || []).slice().sort();
     s.steps = SCHED_STEPS.filter((k) => s.steps.includes(k));
     if (s.on) {
-      const cron = await new Promise((r) => execFile('crontab', ['-l'], { timeout: 5000 }, (e, o) => r(String(o || ''))));
+      const cron = await new Promise((r) => execFileAs('crontab', 'crontab', ['-l'], { timeout: 5000 }, (e, o) => r(String(o || ''))));
       if (/^[^#\n]*morning-check\.sh/m.test(cron)) {
         if (!msc[1]) { s.on = false; } else return send(res, 409, { ok: false, message: K('crontab 에 옛 아침 점검(08:00) 줄이 아직 있어 켜면 두 번 돕니다 — 먼저 서버 터미널에서 지워 주세요: crontab -l | grep -v morning-check.sh | crontab -', 'crontab still has a morning-check line, so turning this on would run it twice — remove it first in the server terminal: crontab -l | grep -v morning-check.sh | crontab -') });
       }
@@ -6640,7 +6620,7 @@ async function serveReq(req, res, who) {
     }
     if (url === '/api/team') {   // ⚙ 팀·권한 칸 — 주인만
       if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있습니다', 'Owner only') });
-      return send(res, 200, { ok: true, team: TEAM, ownerUser: unixUser(BOARD_UID), accounts: humanAccounts(), projects: loadProjects().map((p) => ({ key: p.key, name: p.name, prod: !!p.prodLabel })), risks: teamRisks(), tsOwner: tsLogin, procOk: !!peerSock(-1), route: teamRoute() });
+      return send(res, 200, { ok: true, team: TEAM, ownerUser: unixUser(OWNER_UID), accounts: humanAccounts(), projects: loadProjects().map((p) => ({ key: p.key, name: p.name, prod: !!p.prodLabel })), risks: teamRisks(), tsOwner: tsLogin, procOk: !!peerSock(-1), route: teamRoute() });
     }
     if (url === '/api/ping' || url === '/api/board') markFg(req);
     if (url === '/api/board') boardViewAt = Date.now();
@@ -6699,7 +6679,7 @@ async function serveReq(req, res, who) {
       if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있어요', 'Owner only') });
       const proj = loadProjects().find((p) => p.key === (new URL(req.url, ORIGIN).searchParams.get('p') || ''));
       if (!proj || proj.key === 'server') return send(res, 404, { ok: false });
-      const files = await new Promise((r) => execFile('git', ['-C', proj.dir, 'ls-files'], { timeout: 10000, maxBuffer: 32 * 1024 * 1024 }, (e, o) => r(e ? '' : String(o))));
+      const files = await new Promise((r) => execFileAs('git', 'git', ['-C', proj.dir, 'ls-files'], { timeout: 10000, maxBuffer: 32 * 1024 * 1024 }, (e, o) => r(e ? '' : String(o))));
       const candidates = files.split('\n').filter((f) => /(^|\/)[^/]*deploy[^/]*\.sh$/i.test(f) && !/(^|\/)(node_modules|vendor|test|tests)\//.test(f) && f.split('/').length <= 3).slice(0, 12)
         .map((f) => { let x = false; try { fs.accessSync(path.join(proj.dir, f), fs.constants.X_OK); x = true; } catch (_) {} return { path: './' + f, exec: x }; });
       return send(res, 200, { ok: true, key: proj.key, name: proj.name, dir: proj.dir, connected: !!proj.prodLabel,
@@ -6927,18 +6907,18 @@ async function setAsideRoom(r) {
 let queueBusy = false;
 const SETUP_ROOM_NAME = K('처음 설정', 'Setup');
 const SETTINGS_FILE = path.join(HOME, '.claude', 'settings.json');
-const INSTALL_INFO = path.join(HOME, 'dev-server', 'install-info.json');
+const INSTALL_INFO = path.join(BOARD_DIR, 'install-info.json');
 function setupPromptPath() {
   const f = 'AI-SETUP-PROMPT' + (EN ? '.md' : '.ko.md');
-  for (const d of ['docs', 'public/docs']) { const p = path.join(HOME, 'dev-server', d, f); if (fs.existsSync(p)) return p; }
-  return path.join(HOME, 'dev-server', 'docs', f);
+  for (const d of ['docs', 'public/docs']) { const p = path.join(BOARD_DIR, d, f); if (fs.existsSync(p)) return p; }
+  return path.join(BOARD_DIR, 'docs', f);
 }
 function readJson(p) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) { return null; } }
 // 권한 설정 한 줄 — 주인이 서버 창에서 직접(상황판·AI 가 바꾸지 않는다). 백업 → 두 값만 합치기 → 임시 파일 뒤 바꿔치기. 깨진 파일이면 손대지 않고 멈춤
 const PERM_CMD = 'node -e \'const fs=require("fs"),os=require("os"),path=require("path"),p=path.join(os.homedir(),".claude","settings.json");let d={};try{d=JSON.parse(fs.readFileSync(p,"utf8"));fs.copyFileSync(p,p+".bak-"+new Date().toISOString().slice(0,10).replace(/-/g,""))}catch(e){if(e.code!=="ENOENT")throw e}(d.permissions=d.permissions||{}).defaultMode="auto";(d.worktree=d.worktree||{}).bgIsolation="none";fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p+".tmp",JSON.stringify(d,null,2));fs.renameSync(p+".tmp",p);console.log("ok")\'';
 let setupCache = { at: 0, v: null, busy: false };
-function execText(cmd, args, ms) {
-  return new Promise((resolve) => execFile(cmd, args, { timeout: ms || 15000, maxBuffer: 512 * 1024 }, (err, out, er) => resolve({ err, out: String(out || '').trim(), errOut: String(er || '').trim() })));
+function execText(verb, cmd, args, ms) {
+  return new Promise((resolve) => execFileAs(verb, cmd, args, { timeout: ms || 15000, maxBuffer: 512 * 1024 }, (err, out, er) => resolve({ err, out: String(out || '').trim(), errOut: String(er || '').trim() })));
 }
 // 이 서버에 들어오는 접속 명령 — config.devSsh(install.sh 가 넣음) · 없으면 실행 계정@이 서버 주소(공인 주소 먼저 · 도커·Tailscale 주소는 뺌)
 //   처음 설정 칸 맨 위 «서버 창 열기» 에 그대로 복사되게
@@ -6955,7 +6935,7 @@ function sshSeenRefresh() {
   if (sshSeen.busy || Date.now() - sshSeen.at < 10e3) return;
   sshSeen.busy = true;
   const ports = sshdPorts();
-  Promise.all([execText('ss', ['-Htn', 'state', 'established'], 5000), execText('env', ['LC_ALL=C', 'ps', '-u', os.userInfo().username, '-o', 'lstart=,args='], 5000)]).then(([ss, ps]) => {
+  Promise.all([execText('self', 'ss', ['-Htn', 'state', 'established'], 5000), execText('self', 'env', ['LC_ALL=C', 'ps', '-u', acct.OWNER_ACCOUNT, '-o', 'lstart=,args='], 5000)]).then(([ss, ps]) => {
     // ① 들어와 있는 ssh 연결의 «이 서버 쪽» 주소 — 가장 많이 쓰인 공인 주소
     const cnt = {};
     if (!ss.err) for (const ln of ss.out.split('\n')) {
@@ -6983,7 +6963,7 @@ function teamRoute() {
 }
 function sshGuess() {
   if (CONFIG.devSsh) return String(CONFIG.devSsh);
-  const user = os.userInfo().username || 'user';
+  const user = acct.OWNER_ACCOUNT || 'user';   // 사람이 들어오는 계정 = 주인 계정(상황판이 board 로 옮겨도)
   if (sshSeen.addr) return 'ssh ' + (sshSeen.port && sshSeen.port !== '22' ? '-p ' + sshSeen.port + ' ' : '') + user + '@' + sshSeen.addr;
   const p0 = sshdPorts()[0]; const pf = p0 && p0 !== '22' ? '-p ' + p0 + ' ' : '';
   const all = [];
@@ -7008,10 +6988,10 @@ async function bootLine() {
     if (!d) continue; const c = path.join(d, 'pm2');
     try { fs.accessSync(c, fs.constants.X_OK); pm2 = c; break; } catch (_) {}
   }
-  if (!pm2) { const w = await execText('bash', ['-lc', 'command -v pm2'], 8000); const c = (w.out.split('\n').pop() || '').trim(); if (c.startsWith('/') && fs.existsSync(c)) pm2 = c; }
+  if (!pm2) { const w = await execText('self', 'bash', ['-lc', 'command -v pm2'], 8000); const c = (w.out.split('\n').pop() || '').trim(); if (c.startsWith('/') && fs.existsSync(c)) pm2 = c; }
   try { if (pm2) pm2 = fs.realpathSync(pm2); } catch (_) {}
   if (!pm2 || /[\s'"$`\\;&|]/.test(pm2)) return '';
-  return 'sudo env PATH=$PATH:' + path.dirname(process.execPath) + ' ' + pm2 + ' startup systemd -u ' + os.userInfo().username + ' --hp ' + HOME;
+  return 'sudo env PATH=$PATH:' + path.dirname(process.execPath) + ' ' + pm2 + ' startup systemd -u ' + os.userInfo().username + ' --hp ' + os.homedir();
 }
 // 로그인 여부 — claude auth status 를 못 읽었을 때, 열쇠가 하나도 없으면 «안 됨» 은 확실하다(있으면 모름 그대로)
 function loginGuess() {
@@ -7026,7 +7006,7 @@ async function setupRefresh() {
   try {
     const items = [];
     const S = (t, cmd) => (cmd ? { t, cmd } : { t });
-    const ver = await execText(claudeBin(), ['--version'], 15000);
+    const ver = await execText('claude', claudeBin(), ['--version'], 15000);
     const cOk = !ver.err ? true : ver.err.code === 'ENOENT' ? false : null;
     items.push({ key: 'claude', ok: cOk, need: true, detail: cOk ? ver.out.split('\n')[0] : '',
       title: K('Claude Code 설치', 'Install Claude Code'), why: K('작업방은 이 서버의 Claude Code 로 일합니다', 'Sessions work through Claude Code on this server'),
@@ -7047,15 +7027,15 @@ async function setupRefresh() {
       cmds: [PERM_CMD], where: 'shell',
       steps: [S(K('긴 한 줄이지만 «복사» 로 통째로 — 서버 창에 붙여 넣고 Enter → «ok» 가 나오면 끝(원래 설정 파일은 날짜 붙여 백업, 이 두 값만 바뀜)', 'It is one long line — use «Copy», paste into the server window, press Enter → done when it prints «ok» (the old settings file is backed up; only these two values change)'), PERM_CMD)] });
     const cj = readJson(path.join(HOME, '.claude.json'));
-    const tp = cj && cj.projects ? cj.projects[path.join(HOME, 'dev-server')] : undefined;
+    const tp = cj && cj.projects ? cj.projects[WORK_DIR] : undefined;
     items.push({ key: 'trust', ok: cj ? !!(tp && tp.hasTrustDialogAccepted) : null, need: false, detail: '',
       title: K('설치 폴더 허락', 'Trust the install folder'), why: K('처음 여는 폴더는 «이 폴더를 믿겠습니까» 를 한 번 허락해야 방이 시작됩니다', 'A folder opened for the first time must be trusted once before sessions can start'),
       cmds: ['cd ~/dev-server && claude'], where: 'shell',
       steps: [S(K('서버 창에 붙여 넣고 Enter', 'Paste into the server window and press Enter'), 'cd ~/dev-server && claude'),
         S(K('«Yes, I trust this folder» 가 골라진 채로 Enter (다른 질문이 더 나오면 그대로 Enter)', 'With «Yes, I trust this folder» selected, press Enter (press Enter on any other first-run question too)')),
         S(K('입력칸이 나오면 이 글자를 치고 Enter 로 빠져나오기', 'When the input box appears, type this and press Enter to leave'), '/exit')] });
-    const bt = await execText('systemctl', ['is-enabled', 'pm2-' + (os.userInfo().username || '')], 8000);
-    const ct = await execText('bash', ['-c', 'crontab -l 2>/dev/null'], 8000);
+    const bt = await execText('self', 'systemctl', ['is-enabled', 'pm2-' + (os.userInfo().username || '')], 8000);
+    const ct = await execText('crontab', 'crontab', ['-l'], 8000);
     const cronOk = /^\s*@reboot\b.*pm2 resurrect/m.test(ct.out);   // sudo 없이 crontab 으로 한 경우도 됨
     const btOk = bt.out === 'enabled' || cronOk ? true : /^(disabled|not-found|masked)/.test(bt.out) || /not-found|No such file/.test(bt.errOut) || (bt.err && bt.err.code === 'ENOENT') ? false : null;
     const noSystemd = bt.err && bt.err.code === 'ENOENT';
@@ -7140,7 +7120,7 @@ function setupTask() {
   ].join('\n');
 }
 function setupVerify() {
-  return new Promise((resolve) => execFile('bash', [path.join(HOME, 'dev-server', 'kit', 'verify.sh')], { timeout: 300000, maxBuffer: 1024 * 1024, env: { ...process.env, PATH: path.dirname(claudeBin()) + ':' + (process.env.PATH || '') } }, (err, out, er) => {
+  return new Promise((resolve) => execFileAs('check', 'bash', [path.join(WORK_DIR, 'kit', 'verify.sh')], { timeout: 300000, maxBuffer: 1024 * 1024, env: { ...process.env, PATH: path.dirname(claudeBin()) + ':' + (process.env.PATH || '') } }, (err, out, er) => {
     const v = { at: new Date().toISOString(), fails: err ? (typeof err.code === 'number' ? err.code : -1) : 0, out: (String(out || '') + (er ? '\n' + String(er) : '')).trim().slice(-6000) };
     const st = loadState(); st.setup = st.setup || {}; st.setup.verify = v; saveState(st); cache.at = 0;
     writeLog({ action: 'setup-verify', fails: v.fails });
@@ -7423,7 +7403,7 @@ function fbtOn(p) { return !!(p && p.feedbackTriage && p.prodSsh && p.prodDir); 
 function fbtTarget(p) { return p.fbtLocal ? { local: true, dir: p.fbtLocal, nodeEnv: '' } : { host: p.prodSsh, dir: p.prodDir, nodeEnv: 'NODE_ENV=production ' }; }
 function fbtShell(t, script, maxBuffer) {
   return new Promise((resolve) => {
-    const c = t.local ? spawn('bash', ['-s']) : spawn('ssh', FBT_SSH.concat([t.host, 'bash -s']));
+    const c = t.local ? acct.spawn('check', 'bash', ['-s']) : acct.spawn('ssh', 'ssh', FBT_SSH.concat([t.host, 'bash -s']));
     let out = '', err = '', size = 0, over = false;
     const kill = setTimeout(() => { try { c.kill('SIGKILL'); } catch (_) {} }, 90000);
     c.stdout.on('data', (d) => { size += d.length; if (size > (maxBuffer || 1024 * 1024)) { over = true; try { c.kill('SIGKILL'); } catch (_) {} } else out += d; });
@@ -7435,7 +7415,7 @@ function fbtShell(t, script, maxBuffer) {
 }
 function fbtCopy(t, src, dst) {
   if (t.local) { try { fs.copyFileSync(src, dst); return Promise.resolve({ ok: true }); } catch (e) { return Promise.resolve({ ok: false, err: e.message }); } }
-  return new Promise((resolve) => execFile('scp', FBT_SSH.concat(['-q', src, t.host + ':' + dst]), { timeout: 60000 }, (e, _o, se) => resolve({ ok: !e, err: e ? String(se || e.message).trim().slice(-300) : null })));
+  return new Promise((resolve) => execFileAs('ssh', 'scp', FBT_SSH.concat(['-q', src, t.host + ':' + dst]), { timeout: 60000 }, (e, _o, se) => resolve({ ok: !e, err: e ? String(se || e.message).trim().slice(-300) : null })));
 }
 // 그 폴더 .env 의 DB 값으로 mysql (1-B 와 같은 방식 — 읽기만). 결과는 한 줄에 JSON 하나(--raw · JSON_OBJECT 가 줄바꿈을 \n 으로 감쌈)
 function fbtSqlScript(t, sql) {
@@ -7829,7 +7809,7 @@ function runFableProbe(why) {
   if (fableProbeBusy) return Promise.resolve({ ok: null, busy: true });
   fableProbeBusy = true;
   return new Promise((resolve) => {
-    execFile(claudeBin(), ['-p', '--no-session-persistence', '--model', 'fable', '--tools', '', '--strict-mcp-config', '--system-prompt', 'Reply with OK only.', 'ping'],
+    execFileAs('claude', claudeBin(), ['-p', '--no-session-persistence', '--model', 'fable', '--tools', '', '--strict-mcp-config', '--system-prompt', 'Reply with OK only.', 'ping'],
       { cwd: os.tmpdir(), timeout: 90000, maxBuffer: 256 * 1024 }, (err, stdout, stderr) => {
         const out = String(stdout || '').trim();
         const limited = PROBE_LIMIT_RE.test(out) || PROBE_LIMIT_RE.test(String(stderr || '').split('\n').filter((x) => !/^Permission allow rule/.test(x)).join('\n'));
@@ -8021,7 +8001,7 @@ function runCheck(key, steps, at) {
   let viaRunner = false;   // 정기 점검이 건 일시정지가 있을 때만 — 없으면 점검 방이 «준비만» 하고 아무도 안 누르는 일이 생김 (Fable 완료 검증 ⑤)
   if (rs && rs.approved && rs.scheduledReady && !rs.problems.length) { const s0 = loadState(); const pz = s0.paused[key]; if (pz && pz.gate === 'check') { pz.runnerCheck = true; saveState(s0); viaRunner = true; } }   // 방 번호가 잡힐 때 runnerPending 으로(그 전에 누르지 않게)
   return new Promise((resolve) => {
-    execFile(path.join(HOME, 'dev-server', 'morning-check.sh'), [], { env: Object.assign({}, process.env, { ONLY: key, GAP: '0', STEPS: steps.join(','), AT: schedHHMM(at), GUARD: deployGuard(key), RUNNER: viaRunner ? '1' : '', RUNNER_CMD: viaRunner ? rs.command : '' }), timeout: 300000 },
+    execFileAs('check', path.join(WORK_DIR, 'morning-check.sh'), [], { env: Object.assign({}, process.env, { ONLY: key, GAP: '0', STEPS: steps.join(','), AT: schedHHMM(at), GUARD: deployGuard(key), RUNNER: viaRunner ? '1' : '', RUNNER_CMD: viaRunner ? rs.command : '' }), timeout: 300000 },
       (err, out, se) => resolve({ ok: !err, out: String(out || ''), err: err ? String(se || err.message).slice(-300) : null }));
   });
 }
@@ -8031,8 +8011,8 @@ async function fireSchedule(s, proj, at) {
   const skipped = [];
   if (steps.includes('devdone')) {   // 지난 개발완료 뒤 바뀐 게 없으면 개발완료는 뺀다 — 개발완료만 체크했으면 방도 안 연다
     const last = await lastDevDoneFromGit(proj.dir);
-    const dirty = await new Promise((res) => execFile('git', ['-C', proj.dir, 'status', '--porcelain'], { timeout: 10000 }, (e, o) => res(e ? true : !!String(o).trim())));
-    const newer = await new Promise((res) => execFile('git', ['-C', proj.dir, 'log', '-1', '--format=%cI'], { timeout: 5000 }, (e, o) => res(e || !last ? true : String(o).trim() > last.at)));
+    const dirty = await new Promise((res) => execFileAs('git', 'git', ['-C', proj.dir, 'status', '--porcelain'], { timeout: 10000 }, (e, o) => res(e ? true : !!String(o).trim())));
+    const newer = await new Promise((res) => execFileAs('git', 'git', ['-C', proj.dir, 'log', '-1', '--format=%cI'], { timeout: 5000 }, (e, o) => res(e || !last ? true : String(o).trim() > last.at)));
     if (!dirty && !newer) { steps = steps.filter((k) => k !== 'devdone'); skipped.push(K('개발완료(바뀐 것 없음)', 'dev done (nothing changed)')); }
   }
   const sk = skipped.length ? K(' · 뺌: ', ' · left out: ') + skipped.join(', ') : '';
@@ -8195,7 +8175,7 @@ function runProbe(why) {
   if (probe.busy) return Promise.resolve({ ok: null, busy: true });
   probe.busy = true;
   return new Promise((resolve) => {
-    execFile(claudeBin(), ['-p', '--no-session-persistence', '--tools', '', '--system-prompt', 'Reply with OK only.', 'ping'],
+    execFileAs('claude', claudeBin(), ['-p', '--no-session-persistence', '--tools', '', '--system-prompt', 'Reply with OK only.', 'ping'],
       { cwd: os.tmpdir(), timeout: 90000, maxBuffer: 256 * 1024 }, (err, stdout, stderr) => {
         const out = String(stdout || '').trim();
         const limited = PROBE_LIMIT_RE.test(out) || PROBE_LIMIT_RE.test(String(stderr || '').split('\n').filter((x) => !/^Permission allow rule/.test(x)).join('\n'));
@@ -8377,31 +8357,10 @@ const DOCTOR_ONLY = process.env.BOARD_DOCTOR_ONLY || null;
 const DOCTOR_TEST_MS = DOCTOR_ONLY && +process.env.BOARD_DOCTOR_TEST_MS > 0 ? +process.env.BOARD_DOCTOR_TEST_MS : null;
 const GATE_ROOM_RE = new RegExp(GATE_NAME_RE.source + '|^(정기 점검|아침 점검|Scheduled check|Morning check)');
 const cpuSeen = new Map();   // pid → { ticks, at } — 지난 점검 때 CPU 사용량(늘었으면 실제로 일하는 명령)
-/** 작업방이 띄운 명령(셸·그 아래 프로그램) — 환경 변수 CLAUDE_CODE_SESSION_ID 로 어느 방 것인지, CLAUDE_PID 로 지금 방 프로세스가 띄운 것인지 안다 */
 function sessionProcs() {
-  const out = new Map();
-  let pids = []; try { pids = fs.readdirSync('/proc').filter((x) => /^\d+$/.test(x)); } catch (_) { return out; }
-  const hz = 100, upSec = (() => { try { return parseFloat(fs.readFileSync('/proc/uptime', 'utf8')); } catch (_) { return 0; } })();
-  for (const p of pids) {
-    let env; try { env = fs.readFileSync('/proc/' + p + '/environ', 'latin1'); } catch (_) { continue; }
-    if (/(?:^|\0)(pm_id|PM2_HOME|PM2_USAGE)=/.test(env)) continue;   // PM2 가 돌리는 서버(솔루션 백엔드) — 방이 pm2 restart 하면 방 번호가 묻어 온다. 절대 건드리지 않음
-    const m = env.match(/(?:^|\0)CLAUDE_CODE_SESSION_ID=([0-9a-f-]{36})(?:\0|$)/); if (!m) continue;
-    let f; try { const t = fs.readFileSync('/proc/' + p + '/stat', 'utf8'); f = t.slice(t.lastIndexOf(')') + 2).split(' '); } catch (_) { continue; }
-    let cmd = ''; try { cmd = fs.readFileSync('/proc/' + p + '/cmdline', 'utf8').replace(/\0/g, ' ').trim(); } catch (_) { /* 없어짐 */ }
-    if (/\/claude(\s|$)|\/versions\/[\d.]+(\s|$)/.test(cmd.split(' ')[0] || '')) continue;   // Claude 자신(방 프로세스·하위 claude)은 명령이 아님
-    const ev = cmd.match(/eval '([\s\S]*)'(?: < \/dev\/null)? && pwd -P/);   // Bash 도구가 감싼 셸 → 실제 명령만
-    const x = { pid: +p, ppid: +f[1], owner: +((env.match(/(?:^|\0)CLAUDE_PID=(\d+)/) || [])[1] || 0), ticks: (+f[11]) + (+f[12]),
-      ageMs: upSec ? Math.max(0, (upSec - (+f[19]) / hz) * 1000) : null, cmd: (ev ? ev[1] : cmd).replace(/\s+/g, ' ').slice(0, 300), wrap: !!ev };
-    if (!out.has(m[1])) out.set(m[1], []);
-    out.get(m[1]).push(x);
-  }
-  for (const [sid, list] of out) {
-    const by = new Map(list.map((x) => [x.pid, x]));
-    const under = (x) => { for (let y = x, n = 0; y && n < 50; y = by.get(y.ppid), n++) if (y.wrap) return true; return false; };
-    const keep = list.filter(under);
-    if (keep.length) out.set(sid, keep); else out.delete(sid);
-  }
-  return out;
+  if (!acct.SPLIT) return peek.sessionProcs();
+  try { return new Map(JSON.parse(String(acct.execFileSync('peer', 'proc-peek', ['procs'], { timeout: 8000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] })))); }
+  catch (_) { return new Map(); }
 }
 function cpuBusy(procs, now) {
   let unknown = false, used = 0;
@@ -8448,6 +8407,13 @@ function killIdleLeft(sessionId, idle) {
 }
 function killProcs(procs) {
   const done = [];
+  if (acct.SPLIT) {   // 계정이 갈림 — 주인 계정이 «지금도 방이 띄운 명령» 인지 다시 보고 끔
+    const ask = (sig, pids) => { try { return JSON.parse(String(acct.execFileSync('peer', 'proc-peek', ['kill', sig].concat(pids.map(String)), { timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }))); } catch (_) { return []; } };
+    const pids = procs.map((x) => x.pid);
+    done.push(...(pids.length ? ask('TERM', pids) : []));
+    if (done.length) setTimeout(() => { ask('KILL', done); }, 5000);
+    return done;
+  }
   for (const x of procs) { try { process.kill(x.pid, 'SIGTERM'); done.push(x.pid); } catch (_) { /* 이미 끝남 */ } }
   setTimeout(() => { for (const pid of done) { try { process.kill(pid, 0); process.kill(pid, 'SIGKILL'); } catch (_) { /* 끝남 */ } } }, 5000);
   return done;
@@ -9025,7 +8991,7 @@ function deployAutoWhyNot(st, proj, run, cz) {
   if (!run.scriptsHash || !run.commit || !run.markerBefore) return K('실패한 실행의 지문·커밋·운영 표식 기록이 없음', 'the failed run has no script hash / commit / marker');
   return null;
 }
-const gitP = (dir, args) => new Promise((res) => execFile('git', ['-C', dir].concat(args), { timeout: 15000 }, (e, o) => res(e ? null : String(o).trim())));
+const gitP = (dir, args) => new Promise((res) => execFileAs('git', 'git', ['-C', dir].concat(args), { timeout: 15000 }, (e, o) => res(e ? null : String(o).trim())));
 /** 누르기 직전 다시 보는 것 — 막히면 까닭 한 줄 */
 async function deployAutoBlock(proj, rr, pd, fixRoom, board, st) {
   const c = runner.conf(proj);
@@ -9197,9 +9163,9 @@ function tidyDeployFix() {
   }
   if (n) { saveState(st); writeLog({ action: 'deploy-fix-tidy', n }); }
 }
-backup.init({ home: HOME, loadState, peekState, saveState, writeLog, K, onChange: () => { cache.at = 0; } });
+backup.init({ home: HOME, boardDir: __dirname, loadState, peekState, saveState, writeLog, K, onChange: () => { cache.at = 0; } });
 try { backup.bootSweep(); } catch (_) {}
-runner.init({ home: HOME, loadState, saveState, writeLog, memAvailableMb, readProdMarker, K, onDone: runnerDone, approvedInLog, projOf: (k) => loadProjects().find((p) => p.key === k) });
+runner.init({ home: HOME, boardDir: __dirname, loadState, saveState, writeLog, memAvailableMb, readProdMarker, K, onDone: runnerDone, approvedInLog, projOf: (k) => loadProjects().find((p) => p.key === k) });
 
 if (require.main === module) {
   try { runner.recover(); } catch (e) { writeLog({ action: 'deploy-runner-recover-error', err: String(e.message || e).slice(0, 200) }); }
@@ -9260,4 +9226,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile: (f, a, o, cb) => execFileAs(isClaudeFile(f) ? 'claude' : 'self', f, a, o, cb), execFileAs, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

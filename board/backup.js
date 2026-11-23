@@ -12,7 +12,9 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execFile } = require('child_process');
+const acct = require('./account');
+const execFile = (file, args, opts, cb) => acct.execFile('backup', file, args, opts, cb);
+const spawn = (file, args, opts) => acct.spawn('backup', file, args, opts);
 
 let D = null;   // { home, loadState, peekState(읽기만 · 고치지 말 것), saveState, writeLog, K, onChange }
 function init(deps) { D = deps; }
@@ -23,7 +25,7 @@ const RUN_TIMEOUT_MS = 60 * 60 * 1000;
 const STATUS_MS = 5 * 60 * 1000;
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
 const expand = (p) => String(p || '').replace(/^~(?=\/|$)/, D.home);
-const logDir = () => path.join(D.home, 'dev-server', 'board', 'log', 'backup');
+const logDir = () => path.join(D.boardDir || path.join(D.home, 'dev-server', 'board'), 'log', 'backup');
 
 /** 경로 하나 검사 — 절대 경로(또는 ~/) · .. 없음 · 제어문자 없음 */
 function pathBad(p) {

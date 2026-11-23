@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.6.12]
+
+- **install.sh as root now stops and offers a dedicated account** — creates it with no password and no sudo (so the AI sessions cannot become root), copies root's SSH keys to it and continues the install as that account. Without a keyboard it refuses (exit 5) unless `SB_AS_ROOT=1`. INSTALL: the dedicated-account section is no longer hidden. Root's SSH keys are written by the account itself (never by root following links in the account's home); an existing account with uid 0 or sudo/wheel/admin membership is refused; `SB_LANG` is limited to en/ko.
+- **Groundwork for running the board under its own account** (no behaviour change on a normal install): every external program the board starts now goes through one gate (`board/account.js`) keyed by job — claude, git, deploy, backup, pm2, crontab, tailscale, ssh, check — and runs as the same account, as before. New optional `config.json` keys `ownerAccount` / `runAs` / `boardDir` / `workHome` let a later setup run the board as a separate system account that can only reach the owner account through a fixed list of commands. Telling an AI session from your SSH shell moved to `board/proc-peek.js` (same rules).
+
 ## [0.6.11]
 
 - README: Claude Code version the board is checked with is now 2.1.330 (was 2.1.326)

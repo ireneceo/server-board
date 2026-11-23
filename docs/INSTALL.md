@@ -70,21 +70,22 @@ type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh USER@SERVER_IP "mkdir -p ~/.ssh 
 
 Test: `ssh USER@SERVER_IP` should now log in **without** asking for the server password.
 
-<details>
-<summary><b>Recommended: don't run the board as root</b></summary>
+### A dedicated server account for the board (required if you can only log in as root)
 
-If you only have `root`, create a normal user once and use it from now on:
+Run the board and its AI sessions in a **dedicated account, not root**. As root, the AI could change anything on the server.
+
+- **If you run the step 4 install line as root**, the installer stops and asks «Create a dedicated account?» → press Enter twice (name `dev`, create: yes). It creates an account with no password and no sudo, copies root's SSH keys to it, and continues the install as that account. From then on: `ssh dev@SERVER_IP` (`USER` below = `dev`).
+- To create it by hand (as root):
 
 ```bash
-# on the server, as root
-adduser dev                      # choose a password, other questions can be blank
-usermod -aG sudo dev
-mkdir -p /home/dev/.ssh && cp ~/.ssh/authorized_keys /home/dev/.ssh/
-chown -R dev:dev /home/dev/.ssh && chmod 700 /home/dev/.ssh && chmod 600 /home/dev/.ssh/authorized_keys
+adduser --disabled-password --gecos "" dev      # no password → no sudo either (the AI cannot become root)
+install -d -m 700 -o dev -g dev /home/dev/.ssh
+cp ~/.ssh/authorized_keys /home/dev/.ssh/ && chown dev:dev /home/dev/.ssh/authorized_keys && chmod 600 /home/dev/.ssh/authorized_keys
 ```
 
-Then use `dev` as `USER` below. Claude Code and the board run as this user.
-</details>
+- Don't add this account to the sudo group. Do sudo jobs (start on reboot, nginx…) from a root session.
+- If you already log in as a normal account with sudo, that works too — but you'd type that sudo password in the same account the AI sessions run in, so with several people or production keys on the server, a dedicated account is recommended.
+- Undo: `deluser --remove-home dev`
 
 ## Step 3 · Save a shortcut with the board tunnel
 

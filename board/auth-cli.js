@@ -4,12 +4,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const auth = require('./auth');
+const acct = require('./account');
 
 const CONF = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')); } catch (_) { return {}; } })();
 const KO = CONF.lang === 'ko';
 const L = (ko, en) => (KO ? ko : en);
 const PORT = Number(CONF.port) || 8800;
-const OWNER_ID = os.userInfo().username.toLowerCase();
+const OWNER_ID = String(acct.OWNER_ACCOUNT).toLowerCase();   // 상황판이 board 계정으로 옮기면 sudo -u board 로 부르므로 «부른 계정» 이 아니라 주인 계정
 
 /** 이 명령이 작업방(claude) 아래에서 돌고 있나 */
 function underAi() {
@@ -32,9 +33,9 @@ function log(entry) {
 }
 function tsUrl() {
   try {
-    const st = JSON.parse(require('child_process').execFileSync('tailscale', ['status', '--json'], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString());
+    const st = JSON.parse(acct.execFileSync('tailscale', 'tailscale', ['status', '--json'], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString());
     const h = String(st.Self.DNSName || '').replace(/\.$/, '').toLowerCase();
-    const sv = JSON.parse(require('child_process').execFileSync('tailscale', ['serve', 'status', '--json'], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString() || '{}');
+    const sv = JSON.parse(acct.execFileSync('tailscale', 'tailscale', ['serve', 'status', '--json'], { timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).toString() || '{}');
     const k = Object.keys(sv.Web || {}).find((w) => w.toLowerCase().startsWith(h + ':') && JSON.stringify(sv.Web[w]).includes(':' + PORT + '"'));
     if (!k) return null;
     const port = k.slice(h.length + 1);

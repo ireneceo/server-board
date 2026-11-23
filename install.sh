@@ -9,7 +9,8 @@
 # Env (optional): SB_LANG=en|ko SB_PORT SB_NAME (server name) SB_OTHER_PORTS ("8800 8801": boards you already open from your computer)
 #   SB_TZ SB_OWNER SB_REPO SB_MENU=1 (add the terminal menu without asking)
 #   SB_YES=1 (accept defaults, install nothing, never touch settings.json or ~/.bashrc)
-# Exit: 0 ok · 2 a required tool missing (and not installed) · 3 ~/dev-server is something else · 4 the board did not start
+#   As root it stops and offers a dedicated account (no password, no sudo), then re-runs as that account. SB_AS_ROOT=1 forces root (not recommended).
+# Exit: 0 ok · 2 a required tool missing (and not installed) · 3 ~/dev-server is something else · 4 the board did not start · 5 run as root and no dedicated account
 set -u
 
 SB_REPO="${SB_REPO:-https://github.com/ireneceo/server-board}"
@@ -19,7 +20,7 @@ YES="${SB_YES:-}"
 if [ ! -t 0 ] && [ -r /dev/tty ] && { : </dev/tty; } 2>/dev/null; then exec </dev/tty; fi
 [ -t 0 ] || YES=1
 
-L="${SB_LANG:-}"; [ -z "$L" ] && case "${LANG:-}${LC_ALL:-}" in ko*|*ko_KR*) L=ko;; *) L=en;; esac
+L="${SB_LANG:-}"; [ -z "$L" ] && case "${LANG:-}${LC_ALL:-}" in ko*|*ko_KR*) L=ko;; *) L=en;; esac; case "$L" in ko|en) ;; *) L=en;; esac
 t() { [ "$L" = ko ] && printf '%s' "$1" || printf '%s' "$2"; }
 say()  { printf '%s\n' "$*"; }
 step() { printf '\n\033[1m%s\033[0m\n' "$*"; }
@@ -41,7 +42,36 @@ step "Server Board — $(t '설치' 'install')"
 # 1. hard gates (no changes)
 [ "$(uname -s)" = Linux ] && [ -r /proc/meminfo ] || die 2 "$(t '리눅스 서버에서만 됩니다(/proc 필요). 지원 범위: README «어디서 돌아가나»' 'Linux servers only (/proc needed). See README "Where it runs"')"
 touch "$HOME/.sb-install.$$" 2>/dev/null && rm -f "$HOME/.sb-install.$$" || die 2 "$(t '홈 폴더에 쓸 수 없습니다' 'cannot write to your home folder')"
-[ "$(id -u)" = 0 ] && say "△ $(t 'root 로 실행 중 — 일반 사용자를 권합니다(root 는 필요 없음)' 'running as root — a normal user is recommended (root is not needed)')"
+# root: the board and its AI sessions should never run as root — stop and offer a dedicated account (2026-11-23)
+#   The account gets NO password and is NOT in the sudo group, so the AI running in it cannot become root.
+#   Root's SSH keys are copied so you can log in as it right away. Then this installer runs again as that account.
+if [ "$(id -u)" = 0 ] && [ -z "${SB_AS_ROOT:-}" ] && [ "${1:-}" != "--as-root" ]; then
+  say "△ $(t 'root 로 실행 중 — 상황판과 AI 작업방은 root 가 아닌 전용 계정으로 돌려야 합니다(AI 가 서버 전체 권한을 갖지 않게).' 'running as root — the board and its AI sessions should run in a dedicated account, not root (so the AI does not get full control of the server).')"
+  [ -n "$YES" ] && die 5 "$(t '키보드 없이 root 로는 설치하지 않습니다 — 계정을 만들고(adduser dev) 그 계정으로 다시 실행하거나, 꼭 root 로 하려면 SB_AS_ROOT=1' 'not installing as root without a keyboard — create an account (adduser dev) and run again as it, or set SB_AS_ROOT=1 to force root')"
+  ACC=$(prompt "$(t '전용 계정 이름' 'Dedicated account name')" dev)
+  printf '%s' "$ACC" | grep -qxE '[a-z_][a-z0-9_-]{0,31}' || { die 5 "$(t '계정 이름은 영문 소문자·숫자·-_ 만' 'account name: lowercase letters, digits, - and _ only')"; }
+  [ "$ACC" = root ] && die 5 "$(t 'root 말고 다른 이름' 'pick a name other than root')"
+  if id "$ACC" >/dev/null 2>&1; then
+    { [ "$(id -u "$ACC")" = 0 ] || id -nG "$ACC" | grep -qwE 'sudo|wheel|admin'; } && die 5 "$(t "계정 $ACC 는 root 권한(sudo)이 있어 전용 계정으로 쓰지 않습니다 — 다른 이름을 고르세요" "account $ACC has root/sudo rights — not using it as the dedicated account; pick another name")"
+    say "✔ $(t "계정 $ACC 가 이미 있습니다 — 그대로 씁니다" "account $ACC already exists — using it")"
+  elif ask "$(t "계정 $ACC 를 만들까요? (비밀번호 없음·sudo 없음 · root 의 SSH 열쇠를 복사해 ssh $ACC@서버 로 바로 접속)" "Create account $ACC? (no password, no sudo · root's SSH keys are copied so ssh $ACC@server works right away)")" y; then
+    adduser --disabled-password --gecos "" "$ACC" >/dev/null || die 5 "$(t '계정 만들기 실패' 'could not create the account')"
+    say "✔ $(t "계정 $ACC 만듦 (되돌리기: deluser --remove-home $ACC)" "created account $ACC (undo: deluser --remove-home $ACC)")"
+  else
+    die 5 "$(t '설치하지 않았습니다 — 일반 계정으로 접속해 다시 실행하세요(꼭 root 로: SB_AS_ROOT=1)' 'nothing installed — log in as a normal account and run again (to force root: SB_AS_ROOT=1)')"
+  fi
+  AH=$(getent passwd "$ACC" | cut -d: -f6)
+  if [ -s /root/.ssh/authorized_keys ] && [ -n "$AH" ]; then
+    # written AS the account, never as root: root must not follow links inside a folder the account controls
+    su - "$ACC" -s /bin/sh -c 'umask 077; mkdir -p "$HOME/.ssh" && touch "$HOME/.ssh/authorized_keys" || exit 1
+      while IFS= read -r k; do [ -n "$k" ] && ! grep -qxF "$k" "$HOME/.ssh/authorized_keys" && printf "%s\n" "$k" >> "$HOME/.ssh/authorized_keys"; done
+      chmod 700 "$HOME/.ssh"; chmod 600 "$HOME/.ssh/authorized_keys"' < /root/.ssh/authorized_keys || die 5 "$(t 'SSH 열쇠 복사 실패' 'could not copy the SSH keys')"
+    say "✔ $(t "root 의 SSH 열쇠를 $ACC 에 넣음 — 다음부터 ssh $ACC@서버" "copied root's SSH keys to $ACC — from now on: ssh $ACC@server")"
+  fi
+  step "$(t "이어서 $ACC 계정으로 설치합니다" "Continuing the install as $ACC")"
+  exec su - "$ACC" -c "curl -fsSL '${SB_RAW:-https://raw.githubusercontent.com/ireneceo/server-board/main}/install.sh' | SB_LANG='$L' bash"
+fi
+[ "$(id -u)" = 0 ] && say "△ $(t 'root 로 설치 중(SB_AS_ROOT) — AI 작업방도 root 권한으로 돕니다. 권하지 않습니다.' 'installing as root (SB_AS_ROOT) — AI sessions will also run as root. Not recommended.')"
 command -v git >/dev/null || die 2 "$(t 'git 이 없습니다 — 설치: sudo apt-get install -y git (또는 업체에 요청)' 'git is missing — install: sudo apt-get install -y git (or ask your provider)')"
 command -v curl >/dev/null || die 2 "$(t 'curl 이 없습니다 — 설치: sudo apt-get install -y curl' 'curl is missing — install: sudo apt-get install -y curl')"
 
@@ -257,6 +287,6 @@ say "$(t '3) 마지막에 «AI 로 설치 마무리 ▶» — 프로젝트·규�
 [ "$LOGIN" = yes ] || say "   △ $(t 'Claude 로그인 아직 — 상황판 안내대로 (claude auth login)' 'Claude not logged in yet — follow the board (claude auth login)')"
 [ "$cur" = "auto|none" ] || say "   △ $(t "방 설정 아직(권한 모드 ${CUR_MODE:-없음} · 원본 폴더 작업 ${CUR_ISO:-없음}) — auto·none 권고 · 다시 묻기: bash $DIR/install.sh" "session settings not done (mode ${CUR_MODE:-unset} · bgIsolation ${CUR_ISO:-unset}) — auto and none recommended · ask again: bash $DIR/install.sh")"
 [ "$MENU" = yes ] || say "   △ $(t "터미널 메뉴 없음 — 넣기: SB_MENU=1 bash $DIR/install.sh (또는 mkdir -p ~/bin && cp $DIR/kit/bin/dev ~/bin/dev && cat $DIR/kit/templates/bashrc-block.sh >> ~/.bashrc)" "no terminal menu — add it: SB_MENU=1 bash $DIR/install.sh (or mkdir -p ~/bin && cp $DIR/kit/bin/dev ~/bin/dev && cat $DIR/kit/templates/bashrc-block.sh >> ~/.bashrc)")"
-say "$(t '재부팅 뒤에도 켜지게: pm2 startup → 나오는 sudo 한 줄 붙여 넣기(선택)' 'To start after a reboot: pm2 startup → paste the sudo line it prints (optional)')"
+say "$(t '재부팅 뒤에도 켜지게: pm2 startup → 나오는 sudo 한 줄 붙여 넣기(선택 · sudo 가 없는 전용 계정이면 그 줄을 root 로 접속한 창에서)' 'To start after a reboot: pm2 startup → paste the sudo line it prints (optional · in a dedicated account without sudo, paste it in a root session)')"
 say "$(t '다시 실행해도 됩니다 — 설정은 그대로 둡니다.' 'You can run this again any time — it keeps your settings.')"
 exit 0

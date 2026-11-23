@@ -15,7 +15,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const DIR = arg('dir'), MODE = arg('mode', 'apply'), TAG = arg('tag'), PREV_ARG = arg('prev'), PORT = +arg('port', 8800);
@@ -43,7 +43,6 @@ function run(cmd, args, opts = {}) {
 /** 시험 — 따로 프로세스 묶음으로 돌려 시간이 넘으면 묶음째 끝냄(sh 만 죽고 node --test 가 남지 않게) */
 function runGroup(line, timeout, env) {
   return new Promise((resolve) => {
-    const { spawn } = require('child_process');
     const ch = spawn('/bin/sh', ['-c', line], { cwd: DIR, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '', err = '', done = false;
     ch.stdout.on('data', (d) => { out += d; if (out.length > 16e6) out = out.slice(-8e6); });

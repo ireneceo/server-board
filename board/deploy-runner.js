@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execFile } = require('child_process');
+const acct = require('./account');
 
 const ALLOWED_ARGS = ['--auto', '--routine'];
 const DRY_ARGS = ['--dry-run'];
@@ -28,9 +28,10 @@ let D = null;   // server.js 가 넘기는 것: { home, loadState, saveState, wr
 function init(deps) { D = deps; }
 
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
-const git = (dir, args) => new Promise((res) => execFile('git', ['-C', dir].concat(args), { timeout: 15000 }, (e, o) => res(e ? null : String(o).trim())));
-const lockPath = () => path.join(D.home, 'dev-server', 'board', 'deploy.lock');
-const logDir = () => path.join(D.home, 'dev-server', 'board', 'log', 'deploy');
+const git = (dir, args) => new Promise((res) => acct.execFile('git', 'git', ['-C', dir].concat(args), { timeout: 15000 }, (e, o) => res(e ? null : String(o).trim())));
+const boardDir = () => D.boardDir || path.join(D.home, 'dev-server', 'board');   // 상황판 실행 사본(계정이 갈리면 home 과 다름)
+const lockPath = () => path.join(boardDir(), 'deploy.lock');
+const logDir = () => path.join(boardDir(), 'log', 'deploy');
 const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 /** /proc/<pid>/stat 22번째 칸(부팅 뒤 시작 시각) — pid 가 다른 프로세스에 다시 쓰였는지 가린다 (Fable 완료 검증 ②) */
 function procStart(pid) { try { const t = fs.readFileSync('/proc/' + pid + '/stat', 'utf8'); return t.slice(t.lastIndexOf(')') + 2).split(' ')[19] || null; } catch (_) { return null; } }
@@ -155,7 +156,7 @@ async function start(proj, opts) {
   let child;
   const exitFile = logFile.replace(/\.log$/, '') + '.exit';
   //   sh 는 스크립트의 종료 코드를 그대로 돌려준다(exit $rc — 지켜보는 finish() 도 같은 값) · 파일 경로는 인자로(스크립트 환경에 안 샘) · tmp→mv 로 반쯤 쓴 파일 없음 (Fable 설계 판정 ①)
-  try { child = spawn('/bin/sh', ['-c', 'f=$1; shift; "$0" "$@"; rc=$?; echo "$rc" > "$f.tmp" && mv "$f.tmp" "$f"; exit $rc', c.script, exitFile].concat(args), { cwd: c.dir, env, detached: true, stdio: ['ignore', fd, fd] }); }
+  try { child = acct.spawn('deploy', '/bin/sh', ['-c', 'f=$1; shift; "$0" "$@"; rc=$?; echo "$rc" > "$f.tmp" && mv "$f.tmp" "$f"; exit $rc', c.script, exitFile].concat(args), { cwd: c.dir, env, detached: true, stdio: ['ignore', fd, fd] }); }
   catch (e) { fs.closeSync(fd); release(); return { ok: false, err: String(e.message || e) }; }
   if (!child.pid) { fs.closeSync(fd); release(); return { ok: false, err: D.K('배포 스크립트를 띄우지 못함', 'Could not start the deploy script') }; }
   fs.closeSync(fd);

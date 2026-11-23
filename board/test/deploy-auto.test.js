@@ -49,7 +49,7 @@ function press(extra) { const st = board.loadState(); st.deployAuto = { demo: Ob
 
 test('종료 코드 — 감싼 실행이 스크립트 종료 코드를 그대로 돌려주고 파일에도 남김 (0·3)', async () => {
   const p2 = { key: 'wrap', name: 'Wrap', dir, deploy: { command: './deploy.sh --routine', minMemMb: 1 } };
-  try { fs.unlinkSync(path.join(sb.home, 'dev-server', 'board', 'deploy.lock')); } catch (_) {}   // 사본에 딸려 온 실제 잠금
+  try { fs.unlinkSync(path.join(sb.dir, 'deploy.lock')); } catch (_) {}   // 사본에 딸려 온 실제 잠금
   for (const code of [0, 3]) {
     fs.writeFileSync(path.join(dir, 'code.txt'), String(code));   // 실행기는 환경을 정리하므로 파일로 넘김
     const r = await runner.start(p2, { via: 'button', by: 't' });
@@ -59,13 +59,13 @@ test('종료 코드 — 감싼 실행이 스크립트 종료 코드를 그대로
     assert.equal(run.code, code, '지켜본 종료 코드');
     assert.equal(run.result, code === 0 ? 'ok' : 'fail');
     assert.equal(fs.readFileSync(run.exitFile, 'utf8').trim(), String(code), '종료 코드 파일');
-    assert.ok(!fs.existsSync(path.join(sb.home, 'dev-server', 'board', 'deploy.lock')), '잠금 풀림');
+    assert.ok(!fs.existsSync(path.join(sb.dir, 'deploy.lock')), '잠금 풀림');
   }
   fs.unlinkSync(path.join(dir, 'code.txt'));
 });
 
 test('recover — 못 지켜본 실행: 종료 코드 파일 0 → ok · 1 → fail · 파일 없음 → 모름 · runId 다름 → 모름', async () => {
-  const lockP = path.join(sb.home, 'dev-server', 'board', 'deploy.lock');
+  const lockP = path.join(sb.dir, 'deploy.lock')
   const p2 = { key: 'wrap', name: 'Wrap', dir, deploy: { command: './deploy.sh --routine' } };
   const orig = runner._running;
   const cases = [['0', 'ok'], ['1', 'fail'], [null, 'unknown'], ['0', 'unknown', true]];

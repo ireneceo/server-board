@@ -35,6 +35,7 @@ Server Board is a page that **starts AI agents on your server**. Treat access to
 ## install.sh
 
 - No sudo, no root. It installs only after you answer **yes** (Node via nvm, PM2 and Claude Code via npm, from their official sources, shown before you answer).
+- Run as `root`, it stops and offers to create a dedicated account (no password, not in the sudo group, root's SSH keys copied) and continues as that account. Without a keyboard it refuses (exit 5) unless `SB_AS_ROOT=1`.
 - It changes `~/.claude/settings.json` (`permissions.defaultMode=auto`, `worktree.bgIsolation=none`) **only on an explicit yes**, after copying it to `settings.json.bak-YYYYMMDD`, and never in `SB_YES=1` / non-interactive mode. Read Claude Code's permission documentation before saying yes.
 - It never overwrites `~/dev-server` if that folder holds something else, keeps your settings on a re-run, and sends nothing anywhere (no telemetry).
 - Prefer to read it first: `curl -fsSLo install.sh … && less install.sh && bash install.sh`.

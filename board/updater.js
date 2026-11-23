@@ -8,7 +8,9 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { execFile, spawn } = require('child_process');
+const acct = require('./account');
+const execFile = (file, args, opts, cb) => acct.execFile('self', file, args, opts, cb);
+const spawn = (file, args, opts) => acct.spawn('self', file, args, opts);
 
 const VER_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
 const parseVer = (s) => { const m = String(s || '').trim().match(VER_RE); return m ? [+m[1], +m[2], +m[3]] : null; };

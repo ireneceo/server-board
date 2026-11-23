@@ -70,21 +70,22 @@ type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh USER@SERVER_IP "mkdir -p ~/.ssh 
 
 확인: `ssh USER@SERVER_IP` 가 이제 서버 비밀번호를 **묻지 않고** 접속되면 성공.
 
-<details>
-<summary><b>권장: 상황판을 root 로 돌리지 않기</b></summary>
+### 상황판 전용 서버 계정 (root 로만 접속되는 서버라면 꼭)
 
-`root` 밖에 없으면 일반 사용자를 한 번 만들고 앞으로 그걸 씁니다:
+상황판과 AI 작업방은 **root 가 아닌 전용 계정**으로 돌립니다. root 로 돌리면 AI 가 서버 전체를 바꿀 수 있습니다.
+
+- **root 로 4단계 설치 줄을 치면** 설치가 멈추고 «전용 계정을 만들까요?» 를 묻습니다 → Enter 두 번(이름 `dev`, 만들기 예)이면 비밀번호·sudo 없는 계정을 만들고, root 의 SSH 열쇠를 넣고, 그 계정으로 설치를 이어 갑니다. 다음부터는 `ssh dev@SERVER_IP`(아래 `USER` = `dev`).
+- 손으로 만들려면(root 로):
 
 ```bash
-# 서버에서 root 로
-adduser dev                      # 비밀번호 정하기, 나머지 질문은 비워도 됨
-usermod -aG sudo dev
-mkdir -p /home/dev/.ssh && cp ~/.ssh/authorized_keys /home/dev/.ssh/
-chown -R dev:dev /home/dev/.ssh && chmod 700 /home/dev/.ssh && chmod 600 /home/dev/.ssh/authorized_keys
+adduser --disabled-password --gecos "" dev      # 비밀번호 없음 → sudo 도 못 씀(AI 가 root 가 못 됨)
+install -d -m 700 -o dev -g dev /home/dev/.ssh
+cp ~/.ssh/authorized_keys /home/dev/.ssh/ && chown dev:dev /home/dev/.ssh/authorized_keys && chmod 600 /home/dev/.ssh/authorized_keys
 ```
 
-아래 `USER` 는 `dev`. Claude Code 와 상황판이 이 사용자로 돕니다.
-</details>
+- 이 계정을 sudo 그룹에 넣지 마세요. sudo 가 필요한 일(재부팅 자동 시작·nginx 등)은 root 로 접속한 창에서 합니다.
+- 이미 일반 계정(sudo 가능)으로 접속한다면 그대로 써도 동작합니다 — 다만 그 계정의 sudo 비밀번호를 AI 작업방이 있는 계정에서 치게 되므로, 서버를 여럿이 쓰거나 운영 열쇠가 있으면 전용 계정을 권합니다.
+- 되돌리기: `deluser --remove-home dev`
 
 ## 3단계 · 접속 별명과 상황판 통로 저장
 
