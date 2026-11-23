@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.11]
+
+- README: Claude Code version the board is checked with is now 2.1.330 (was 2.1.326)
+
 ## [0.6.10]
 
 **⚙ Team — access, job and title are separate**

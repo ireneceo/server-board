@@ -115,7 +115,7 @@ Node.js 파일 하나, HTML 파일 하나입니다. **설치할 라이브러리 
 - 서버의 Claude Code 로그인: **Claude 구독**(Pro · Max · Team) 또는 **Anthropic API 키** — [설치 안내 4b단계](docs/INSTALL.ko.md#4b단계--ai-연결구독-또는-api-키). 연결 상태는 상황판에 보입니다.
 
 - 리눅스(Ubuntu 22.04/24.04 확인) · Node 18+(20 확인) · PM2 5+ · python3 · git
-- 백그라운드 방을 쓰는 Claude Code(`claude --bg`, `claude agents --json`) — **2.1.326** 로 확인. 상황판은 Claude Code 내부 형식 일부에 기대므로 스스로 점검합니다: Claude Code 버전이 바뀔 때마다 그 서버에서 형식을 다시 확인하고 자동 시험을 돌려, 바뀐 게 있으면 상황판 맨 위에 빨간 칸(휴대폰 알림 포함)으로 무엇이 깨졌는지 보여 줍니다. `bash kit/verify.sh` 에도 같은 결과가 나옵니다.
+- 백그라운드 방을 쓰는 Claude Code(`claude --bg`, `claude agents --json`) — **2.1.330** 로 확인. 상황판은 Claude Code 내부 형식 일부에 기대므로 스스로 점검합니다: Claude Code 버전이 바뀔 때마다 그 서버에서 형식을 다시 확인하고 자동 시험을 돌려, 바뀐 게 있으면 상황판 맨 위에 빨간 칸(휴대폰 알림 포함)으로 무엇이 깨졌는지 보여 줍니다. `bash kit/verify.sh` 에도 같은 결과가 나옵니다.
 - 자동 시험: `cd board && node --test test/*.test.js` (추가 설치 없음 · 임시 복사본과 가짜 `claude` 로 돌아 실제 작업방은 건드리지 않음)
 - 상황판 자체 메모리 약 100~200MB(작업방이 많을수록 늘어남)
 
