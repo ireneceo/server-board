@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.17]
+
+- **Release counter ignores origin-only packaging files** — edits to `kit/export-public.sh` and `kit/RELEASE.md` (never shipped) no longer count as «unreleased board changes», so they cannot queue an empty release.
+
 ## [0.6.16]
 
 - **⚙ Team: board account first, server account after** — «+ Add account» now asks only name, ID, job, access and projects; the SSH public key moved into step ② (server account). The step-② line works without a key (creates the account only) and again once the key arrives; «✔ Ready» means account + key, tracked by a `board-<fingerprint>` marker the line writes into the account comment. Saving no longer needs an existing server account or key.

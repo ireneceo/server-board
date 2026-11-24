@@ -513,7 +513,7 @@ const PUB_DIST = path.join(UPD_DIR, 'dist', 'server-board');
 const PUB_QUIET_MS = 60 * 60 * 1000;          // 마지막 상황판 고침 커밋 뒤 1시간 조용하면
 const PUB_AUTO_GAP_MS = 20 * 3600 * 1000;     // 자동 내기는 하루 한 번쯤
 const PUB_PACK_MS = 30 * 60 * 1000;
-const PUB_PATHS = ['board/server.js', 'board/index.html', 'board/deploy-runner.js', 'board/auth.js', 'board/auth-cli.js', 'board/gate.js', 'board/cred-guard.js', 'board/key-window.js', 'board/updater.js', 'board/update-runner.js', 'board/config.example.json', 'board/test', 'public', 'kit', 'morning-check.sh', 'bin'];
+const PUB_PATHS = ['board/server.js', 'board/index.html', 'board/deploy-runner.js', 'board/auth.js', 'board/auth-cli.js', 'board/gate.js', 'board/cred-guard.js', 'board/key-window.js', 'board/updater.js', 'board/update-runner.js', 'board/config.example.json', 'board/test', 'public', 'kit', 'morning-check.sh', 'bin', ':(exclude)kit/export-public.sh', ':(exclude)kit/RELEASE.md'];   // 원본 서버만 쓰는 묶기 도구는 «안 낸 고침» 으로 세지 않음(공개판에 안 들어감)
 let pubCache = { at: 0, v: null, busy: false };
 function pubGit(dir, args) { return new Promise((r) => execFileAs('git', 'git', ['-C', dir].concat(args), { timeout: 20000, maxBuffer: 4 * 1024 * 1024 }, (e, o) => r(e ? null : String(o || '').trim()))); }
 /** [Unreleased] 절 — 굵은 제목(**…**)과 줄(- …) 수 */
