@@ -556,6 +556,7 @@ function publishTask(v, why) {
 /** 서버 방 대기열에 넣기 — 이미 있거나 도는 중이면 그대로. 돌려줌 { ok, qid?, why? } */
 function publishQueue(why) {
   const v = pubCache.v; if (!v || !v.last) return { ok: false, why: 'none' };
+  if (!(v.commits > 0 || v.items > 0)) return { ok: false, why: 'none' };
   const st = loadState(); st.queue = st.queue || []; const p = st.publish = st.publish || {};
   if (publishWorking(st)) return { ok: false, why: 'busy' };
   if (!loadProjects().find((x) => x.key === 'server')) return { ok: false, why: 'no-room' };

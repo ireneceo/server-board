@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.19]
+
+- **«Release new version» refuses an empty release** — with no board commits and no [Unreleased] lines since the last release, the button now answers «Nothing to release» instead of queuing a release that would send other boards an update notice with no changes (a stale screen could still show the button).
+
 ## [0.6.18]
 
 - **Existing backup found → one press, no typing** — when the «create backup» session finds a daily backup already running, it now proposes that copy folder and log to the board (`POST /api/backup-found`, needs the task's mark and a folder the board can read) instead of asking the owner to type paths. The card shows «backup found — register once» with «Register as found…» (and «Edit and register» pre-filled); the owner's save and approval work as before.

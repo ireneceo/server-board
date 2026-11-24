@@ -105,6 +105,18 @@ test('막 묶고 아직 안 올린 판: 30분 안은 «올리기 전 확인 중�
   assert.equal(board.publishView([]).packing, false, '30분 지나도 안 올라감 → 빨강');
 });
 
+test('마지막 공개판 뒤 고침 0 · [Unreleased] 0줄이면 버튼도 빈 판을 맡기지 않음 (2026-11-24)', async () => {
+  const root = sb.root, dist = path.join(root, 'dist', 'server-board');
+  let st = board.loadState(); st.queue = []; st.publish = {}; board.saveState(st);
+  commit(root, 'public/CHANGELOG.md', '# C\n\n## [Unreleased]\n\n## [0.6.5]\n- a\n', 2);
+  commit(dist, 'board/VERSION', '0.6.5\n', 0); G(dist, 'tag', 'v0.6.5');
+  const v = await board.publishScan();
+  assert.equal(v.last, '0.6.5'); assert.equal(v.commits, 0); assert.equal(v.items, 0);
+  const r = board.publishQueue('button');
+  assert.equal(r.ok, false); assert.equal(r.why, 'none');
+  assert.equal(board.loadState().queue.length, 0);
+});
+
 test('설치본(board/VERSION 있음)에선 꺼짐', async () => {
   fs.writeFileSync(path.join(sb.dir, 'VERSION'), '0.6.2\n');
   assert.equal(await board.publishScan(), null);
