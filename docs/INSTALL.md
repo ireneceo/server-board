@@ -117,15 +117,15 @@ To read it first: `curl -fsSLo install.sh https://raw.githubusercontent.com/iren
 
 What it does, in order (it **asks before every install or settings change**; nothing needs root):
 
-1. checks the server (Linux, home writable, git, curl) and runs the one-minute host check (`kit/check-host.sh`);
+1. checks the server (Linux, home writable, git, curl) and runs the one-minute host check (`kit/check-host.sh`) — if git is missing, as root or a sudo account it offers to install it on the spot (`apt-get install -y git`); in an account without sudo it shows the one line to run in a root session and stops. Run as root, it installs git **before** creating the dedicated account and keeps the keyboard when it continues in that account;
 2. if missing, offers to install **Node 20** (with nvm, in your account), **PM2** and **Claude Code**;
 3. downloads the board to `~/dev-server` (stops if that folder already holds something else);
-4. writes default settings: language, *your* timezone, your name, a free port;
+4. asks only language and a free port — your name, *your* timezone, the server name and your projects are set on the board after you log in («First setup» → «Basics» and «📂 Add projects»; the first login also asks the server name · `SB_NAME`, `SB_TZ`, `SB_OWNER` pre-fill them);
 5. starts the board with PM2;
 6. offers the **Claude login** right there (step 4b) and the **two session settings** ("The two settings only you can change" below — asked one by one, with what each value means); then offers the **terminal menu** (`~/bin/dev` + a few lines at the end of `~/.bashrc` — the session list when you SSH in; add it later with `SB_MENU=1 bash ~/dev-server/install.sh`);
 7. prints the tunnel line and what's left.
 
-Run it again any time: it keeps your settings and restarts the board. Exit codes: `2` a required tool is missing, `3` `~/dev-server` holds something else (nothing is deleted), `4` the board did not start (`pm2 logs dev-board --lines 30 --nostream`).
+Run it again any time: it keeps your settings and restarts the board. Exit codes: `2` a required tool is missing, `3` `~/dev-server` holds something else (nothing is deleted), `4` the board did not start (`pm2 logs dev-board --lines 30 --nostream`). Whenever it stops early it ends with **«⛔ Install NOT finished»** and the line to run again — only **«✅ Installed»** means the board is running. Run without a keyboard (by an AI or automation) it says up front that it will ask nothing and use defaults.
 
 <details>
 <summary>Install the prerequisites yourself instead (sudo)</summary>

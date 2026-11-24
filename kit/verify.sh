@@ -58,7 +58,12 @@ PORT=$(python3 -c 'import json,os;print(int(json.load(open(os.path.expanduser("~
 code=$(curl -s -m 8 -o /dev/null -w '%{http_code}' -H "Host: localhost:$PORT" "http://127.0.0.1:$PORT/api/board")
 [ "$code" = 200 ] && ok "상황판 /api/board 200" || bad "상황판 응답 $code — pm2 logs dev-board 확인"
 SNAME=$(PYTHONIOENCODING=utf-8 python3 -c 'import json,os,re;n=str(json.load(open(os.path.expanduser("~/dev-server/board/config.json"))).get("serverName") or "");print(re.sub(r"\s+"," ",re.sub(r"[:\x00-\x1f]"," ",n)).strip()[:40])' 2>/dev/null)   # 상황판이 보이는 모양(serverLabel)과 같게
-if [ -z "$SNAME" ]; then bad "serverName 이 비어 있음 — board/config.json 에 이 서버 이름(다른 서버와 다르게) · 그다음 pm2 restart dev-board (docs/OPERATIONS 11절)"
+if [ -z "$SNAME" ]; then
+  OREADY=$(curl -s -m 8 -H "Host: localhost:$PORT" "http://127.0.0.1:$PORT/api/auth/state" | python3 -c 'import json,sys
+try: print("1" if json.load(sys.stdin).get("ownerReady") else "0")
+except Exception: print("?")' 2>/dev/null)
+  if [ "$OREADY" = 0 ]; then warn "serverName 이 아직 비어 있음 — 상황판 첫 로그인 화면(인증 앱 등록 전)에서 정함"
+  else bad "serverName 이 비어 있음 — 상황판 «⚙ 설정·언어» 에서 서버 이름(다른 서버와 다르게)"; fi
 else
   PN=$(curl -s -m 8 -H "Host: localhost:$PORT" "http://127.0.0.1:$PORT/api/ping" | python3 -c 'import json,sys
 try: d=json.load(sys.stdin); print(str(d.get("serverName") or "")+"|"+str(d.get("port") or ""))

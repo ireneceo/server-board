@@ -96,3 +96,64 @@ test('저장 — 서버 계정 꼭 · 시스템·관리자 계정 거절 · 아�
     assert.ok(t.j.accounts.every((a) => a.shell === 'login' || a.shell === 'tunnel'), '통로 전용 계정도 목록에(셸 표시)');
   } finally { board.server.closeAllConnections(); await new Promise((r) => board.server.close(r)); }
 });
+
+// 상황판이 열쇠 만들기 — 통로 전용만 · 개인 열쇠는 메모리에만 · 초대 때 «준비됨» 이어야 한 번
+test('열쇠 만들기 — 개발자 거절 · 통로 전용은 공개 열쇠 저장·keyGen · 개인 열쇠는 /api/team·config 에 없음 · 준비 전 초대 거절', async () => {
+  await new Promise((r) => board.server.listen(0, '127.0.0.1', r));
+  port = board.server.address().port;
+  try {
+    const save = (members) => call('POST', '/api/team', 'terminal', { team: { members } });
+    let r = await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'planner', projects: [] }, { user: 'zz-dev', name: '개발', role: 'member', job: 'developer', projects: [] }]);
+    assert.equal(r.code, 200, JSON.stringify(r.j));
+    r = await call('POST', '/api/team/keygen', 'terminal', { user: 'zz-dev' });
+    assert.equal(r.code, 400, '개발자(셸)는 상황판이 만든 열쇠 안 됨');
+    r = await call('POST', '/api/team/keygen', 'terminal', { user: 'zz-gen' });
+    assert.equal(r.code, 200, JSON.stringify(r.j));
+    const t = await call('GET', '/api/team', 'terminal');
+    const m = t.j.team.members.find((x) => x.user === 'zz-gen');
+    assert.match(m.pubkey, /^ssh-ed25519 [A-Za-z0-9+/=]+$/); assert.equal(m.keyGen, true);
+    const su = t.j.setup['zz-gen'];
+    assert.deepEqual([su.keyGen, su.keyPending, su.canGen, su.ready], [true, true, true, false]);
+    assert.match(su.cmd, /restrict,port-forwarding/);
+    assert.doesNotMatch(JSON.stringify(t.j), new RegExp('PRIVATE ' + 'KEY'), '/api/team 에 개인 열쇠 없음');
+    assert.doesNotMatch(require('fs').readFileSync(require('path').join(sb.dir, 'config.json'), 'utf8'), new RegExp('PRIVATE ' + 'KEY'), 'config 에 개인 열쇠 없음');
+    assert.ok(board.genKeys.get('zz-gen').priv.startsWith('-----BEGIN OPENSSH ' + 'PRIVATE KEY-----'));
+    // 서버 계정이 아직 «준비됨» 이 아니면 안내문(열쇠 포함) 거절 — 열쇠는 그대로 남음
+    r = await call('POST', '/api/auth/invite', 'terminal', { id: 'zz-gen' });
+    assert.equal(r.code, 409, JSON.stringify(r.j)); assert.ok(board.genKeys.has('zz-gen'));
+    // 같은 열쇠로 다시 저장해도 keyGen 유지 · 직무를 개발자로 바꾸면 열쇠 버림
+    r = await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'planner', pubkey: m.pubkey, keyGen: false, projects: [] }]);
+    let t2 = await call('GET', '/api/team', 'terminal');
+    assert.equal(t2.j.team.members[0].keyGen, true, '화면이 보낸 keyGen 값이 아니라 서버가 가름');
+    r = await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'developer', pubkey: m.pubkey, projects: [] }]);
+    t2 = await call('GET', '/api/team', 'terminal');
+    assert.deepEqual([t2.j.team.members[0].pubkey, t2.j.team.members[0].keyGen, board.genKeys.has('zz-gen')], ['', false, false]);
+    // 화면이 keyGen:true 를 꾸며 보내도 안 됨
+    r = await save([{ user: 'zz-x', name: 'x', role: 'member', job: 'planner', pubkey: KEY, keyGen: true, projects: [] }]);
+    t2 = await call('GET', '/api/team', 'terminal');
+    assert.equal(t2.j.team.members[0].keyGen, false);
+  } finally { board.server.closeAllConnections(); await new Promise((r) => board.server.close(r)); }
+});
+
+test('만든 열쇠 — 그 공개 열쇠일 때만 남은 것으로 · 24시간 지나면 버림', async () => {
+  const kp = await board.makeKeyPair('zz-once');
+  board.setTeamForTest({ members: [{ user: 'zz-once', name: 'o', role: 'member', job: 'planner', pubkey: kp.pub, keyGen: true, projects: [] }] });
+  board.genKeys.set('zz-once', { priv: kp.priv, pub: kp.pub, at: Date.now() });
+  assert.equal(board.genKeyPending({ user: 'zz-once', keyGen: true, pubkey: kp.pub }), true);
+  board.genKeys.get('zz-once').at = Date.now() - 25 * 3600e3;
+  assert.equal(board.genKeyPending({ user: 'zz-once', keyGen: true, pubkey: kp.pub }), false, '24시간 지나면 버림');
+  assert.equal(board.genKeys.has('zz-once'), false);
+});
+
+test('만든 열쇠 + 표지 없는 있는 계정 — 붙여 넣기 전엔 준비 안 됨 · authorized_keys 교체 경고', () => {
+  const pub = KEY;
+  for (const note of ['', 'Kim']) {
+    const r = board.accountSetup({ user: 'kim', job: 'planner', pubkey: pub, keyGen: true }, [{ user: 'kim', shell: 'tunnel', admin: false, note }]);
+    assert.deepEqual([r.ready, r.hadKeys], [false, true], note);
+    assert.match(r.cmd, /restrict,port-forwarding/);
+  }
+  const ok = board.accountSetup({ user: 'kim', job: 'planner', pubkey: pub, keyGen: true }, [{ user: 'kim', shell: 'tunnel', admin: false, note: board.accountSetup({ user: 'kim', job: 'planner', pubkey: pub }, []).cmd.match(/usermod -c (board-[0-9a-f]+)/)[1] }]);
+  assert.deepEqual([ok.ready, ok.hadKeys], [true, false]);
+  // 표지 없는 예전 계정에 그 사람이 보낸 열쇠(keyGen 아님)는 예전처럼
+  assert.equal(board.accountSetup({ user: 'kim', job: 'planner', pubkey: pub }, [{ user: 'kim', shell: 'tunnel', admin: false, note: '' }]).ready, true);
+});

@@ -249,6 +249,8 @@ function recovering() { return !!users().recovering; }
 function setRecovering(on) { const u = users(); if (on) u.recovering = new Date().toISOString(); else delete u.recovering; saveUsers(); }
 /** 사용자 지우기(팀에서 뺐을 때) — 비밀번호·인증 앱·세션 모두 */
 function removeUser(id) { const u = users(); delete u.users[id]; for (const [k, r] of Object.entries(u.resets)) if (r.id === id) delete u.resets[k]; saveUsers(); return dropUserSessions(id); }
+/** 그 사람의 안 쓴 로그인 링크 모두 무효 — 상황판이 열쇠를 새로 만들었을 때 */
+function dropResets(id) { const u = users(); let n = 0; for (const [k, r] of Object.entries(u.resets)) if (r.id === id) { delete u.resets[k]; n++; } if (n) saveUsers(); return n; }
 /** 인증 앱 빼기(팀원 인증 앱을 끈 서버에서 링크로 다시 설정할 때) — 옛 키·예비 코드가 남아 로그인을 막지 않게 */
 function clearTotp(id) { const u = users(); const r = u.users[id]; if (r && (r.totp || r.backup)) { delete r.totp; delete r.backup; delete r.lastStep; saveUsers(); } }
 function resetOwnerFactors(id) { const u = users(); const r = u.users[id]; if (r) { delete r.hash; delete r.salt; delete r.totp; delete r.backup; saveUsers(); } }
@@ -257,6 +259,6 @@ module.exports = {
   DIR, USERS, SESS, IDLE_MS, ABS_MS, FRESH_MS, LOCK_FAILS, LOCK_MS,
   pwProblem, setPassword, checkLogin, reverify, newTotpSecret, otpauthUri, totpCheck, totpNow, setTotp, renewBackup,
   createSession, getSession, dropSession, dropSessionKey, dropUserSessions, listSessions, isFresh,
-  makeReset, peekReset, useReset, inviteExp, hasUser, hasTotp, clearTotp, userInfo, recovering, setRecovering, removeUser, resetOwnerFactors,
+  makeReset, peekReset, useReset, dropResets, inviteExp, hasUser, hasTotp, clearTotp, userInfo, recovering, setRecovering, removeUser, resetOwnerFactors,
   b32enc, b32dec, hotp, sha,
 };

@@ -10,7 +10,7 @@
 - Lost your phone? A backup code (each works once) gets you in. To register a new phone, ask the final approver for a **new sign-in link** (you set the password again too).
 - If the final approver turned off «Members also use an authenticator» on a server, its link has no app step — password only.
 - **Route in** (the board is not open to the internet — the final approver creates your server account):
-  - SSH tunnel: send the final approver your public key (one line of `~/.ssh/id_ed25519.pub` · none yet? `ssh-keygen -t ed25519`), they create your server account; then keep `ssh -N -L <port>:127.0.0.1:<port> <your id>@<server>` running and open `http://localhost:<port>`. The tunnel must be opened **with your own account**
+  - SSH tunnel: if the invitation has «Put in your access key», paste those lines once into a terminal on your computer (Mac Terminal · Linux · Windows Git Bash; ends with OK — then delete the message). Developers (server shell accounts) send the final approver their public key (one line of `~/.ssh/id_ed25519.pub` · none yet? `ssh-keygen -t ed25519`); then keep `ssh -N -L <port>:127.0.0.1:<port> <your id>@<server>` running and open `http://localhost:<port>`. The tunnel must be opened **with your own account**
   - Only job «Developer» gets a server shell — other accounts get the board tunnel only (no shell or commands)
   - Tailscale (optional, if the final approver added it): accept the invite, turn on the Tailscale app and open `https://<server>.ts.net`
   - Any route gives the same ID and role. Open the sign-in link on the address that matches your route (localhost or ts.net).

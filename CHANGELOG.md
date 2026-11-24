@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.6.21]
+
+- **Trust a project folder from the board** — «📂 Projects» cards get a «① Trust folder» button: the board records the folder as trusted in `~/.claude.json` (same lock Claude Code uses, other fields kept), so sessions no longer fail with «This folder is not trusted yet» until someone runs `claude` in a server shell. Same folder checks as adding; owner only with the authenticator re-check. A queued task that failed for this reason shows «📂 Go trust the folder» and restarts once the folder is trusted. Servers with a separate working account still get the paste-in line.
+
+- **Projects and basics on screen, a shorter installer** — new owner-only «📂 Projects» panel: add a project by name and folder (the folder is what its AI sessions may edit), picking from folders found on the server or creating a new one; edit name/URL/note, remove from the board (files untouched), then ① trust the folder → ② «Prepare with AI» (queues rules, commands and a session log in that folder). Folder checks refuse system, hidden, whole-home, other users' and overlapping folders, store the resolved path and refuse to start a session if it later changes; a folder owned by another account needs one confirmation. The installer now asks only language and port — your name, timezone and server name move to «⚙ Settings» (and the «First setup» box gets «Basics» and «Add projects» steps); the first login still asks the server name. `kit/verify.sh` shows an empty server name as △ until the owner has logged in.
+
+- **Team: pick the server account, and the board makes the SSH key** — the account field is now a list (existing accounts, or «+ create new»). For tunnel-only members the board makes the key pair: the public half goes into the line you paste in a server shell, the private half goes once into the invitation with paste-in lines for the member's own terminal (kept in memory only, gone after 24 h or a restart; a new key cancels the old sign-in link). Developer (shell) accounts still send their own public key — «Copy request» gives the message to send them. Choosing an existing account warns that its authorized_keys will be replaced.
+
+- **Installer: no more dead end on «git is missing», no more «finished» when it is not** — missing git (or curl) is offered for install on the spot as root or a sudo account (apt-get/dnf/yum/apk/zypper); without sudo it shows the exact line for a root session. Run as root, git is handled **before** the dedicated account (which has no sudo) is created, and the hand-over to that account keeps the keyboard (`su --pty`; before, `su -c` silently answered nothing and used defaults). Every early stop now ends with «⛔ Install NOT finished» plus the line to run again, the root session prints its own result after the account's run, and a keyboard-less run says up front that it asks nothing.
+
 ## [0.6.20]
 
 - **«Backup creation did not finish» now says why** — when the «create backup» task ends with no script, the card and backup window show the session's last report line (owner only) and keep «Register an existing backup» next to «Create again». The usual cause: the session found an existing daily backup and only reported its path (boards before 0.6.18 had no way to propose it) — register that copy folder instead of creating a new backup.

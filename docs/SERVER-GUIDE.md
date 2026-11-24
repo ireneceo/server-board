@@ -150,6 +150,10 @@ Every write needs the header `Origin: http://localhost:<port>`. Buttons a sessio
 
 ## 6. Adding a project (server session)
 
+**First: the owner, on screen** — board «📂 Projects» → «+ Add a project» (click a folder found on the server, or a new folder) → ① the «Trust folder» button (the board records the folder as trusted in `~/.claude.json`; only on a server with a separate working account: `cd <folder> && claude` → Yes → `/exit`) → ② «Prepare with AI ▶» (queues a task in that project doing steps 1 and 3 below). Sessions do not add projects to projects.json themselves unless the owner asks — they point to this panel. Entries added on screen carry `addedBy:"board"`, `dirReal` (the resolved real path — re-checked when a session starts; if it differs the session does not start), `addedAt` and `note`, and no `noDevDone` (the dev-done button turns on by itself once its command file exists). Folder checks: system, hidden, whole-home, other users' homes, the board's own folder and overlap with another project are refused; a folder not owned by the working account needs one confirmation. When a queued task cannot start because its folder is not trusted, it gets «📂 Go trust the folder»; trusting it restarts that task right away (projects added by file show on the same cards).
+
+Below: doing it by hand (or by a session):
+
 1. In the project folder: `CLAUDE.md` (template `kit/templates/<lang>/solution-CLAUDE.md`) · `.claude/commands/` (only missing ones) · session notes (template `kit/templates/<lang>/solution-session-state.md` — fill `{{NAME}}`, `{{DATE}}`, `{{OWNER}}` and save it at the stateFile path). Never overwrite existing files.
    - A Docker project (no PM2): use the Docker example under «Runtime» in «Dev command settings» — container names, the sudo wrapper command, the test command. projects.json is the same (the board does not look at PM2 for projects).
    - Check that sessions work in the project folder itself: `worktree.bgIsolation` in `~/.claude/settings.json` must be `none` for sessions to see uncommitted changes (`kit/verify.sh` shows it · unset = each session works on its own branch).

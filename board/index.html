@@ -703,6 +703,20 @@
   .consultbox .cs-note { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
   .langbox { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: -6px 0 16px; font-size: 14px; }
   .langbox label { display: block; margin: 0 0 10px; }
+  #l-sname-w[hidden], #l-tz-me[hidden], #l-basics[hidden] { display: none; }
+  .solbox .sol-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; }
+  .solbox .sol-h { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+  .solbox .sol-dir { font: 12.5px ui-monospace, Menlo, monospace; color: var(--muted); overflow-wrap: anywhere; }
+  .solbox .sol-steps { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0; font-size: 13px; }
+  .solbox .sol-steps .ok { color: var(--green); } .solbox .sol-steps .todo { color: var(--amber); } .solbox .sol-steps .wait { color: var(--muted); }
+  .solbox .sol-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+  .solbox .sol-cand { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 10px; }
+  .solbox .sol-cand button { text-align: left; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; overflow-wrap: anywhere; }
+  .solbox .sol-cand button[disabled] { opacity: .55; cursor: default; }
+  .solbox .sol-form { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+  .solbox .sol-form input[type=text] { max-width: 100%; }
+  .solbox small { display: block; color: var(--muted); margin-top: 2px; }
+  .solbox .sol-err { color: var(--red); font-size: 13px; margin: 6px 0; }
   .langbox label span { display: block; font-weight: 600; margin-bottom: 4px; }
   .langbox select { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); max-width: 100%; }
   .langbox h3 { font-size: 14px; margin: 0 0 6px; }
@@ -730,7 +744,7 @@
   .tools button.t-me { color: var(--text, inherit); font-weight: 600; }
   .teambox .tm-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
   .teambox .tm-row select, .teambox .tm-row input[type=text] { width: auto; max-width: 100%; }
-  .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-title { width: 8em; } .teambox .tm-row .tm-ts { width: 14em; } .teambox .tm-row .tm-user { width: 10em; } .teambox .tm-row .tm-key { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; } .teambox .tm-keyhelp { flex-basis: 100%; color: var(--muted); }
+  .teambox .tm-row .tm-name { width: 9em; } .teambox .tm-row .tm-title { width: 8em; } .teambox .tm-row .tm-ts { width: 14em; } .teambox .tm-row .tm-user { width: 10em; } .teambox .tm-row .tm-user[hidden] { display: none; } .teambox .tm-row .tm-acc { max-width: 100%; } .teambox .tm-row .tm-key { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; } .teambox .tm-keyhelp { flex-basis: 100%; color: var(--muted); } .teambox .tm-warn { color: var(--warn, #b45309); display: block; }
   .teambox .tm-pj { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
   .teambox .tm-pj label, .teambox .tm-chk { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 6px; cursor: pointer; }
   .teambox .tm-chk { display: block; } .teambox .tm-chk input { vertical-align: middle; margin-right: 4px; }
@@ -782,7 +796,8 @@
     <button type="button" id="t-me" class="t-me" hidden title=""></button>
     <button type="button" id="t-consult" class="t-consult" aria-expanded="false" aria-controls="consultbox">💬 <!--ko-->AI 와 상의<!--/ko--><!--en-->Chat with AI<!--/en--></button>
     <button type="button" id="t-team" aria-expanded="false" aria-controls="teambox" hidden>⚙ <!--ko-->팀·권한<!--/ko--><!--en-->Team & roles<!--/en--></button>
-    <button type="button" id="t-lang" aria-expanded="false" aria-controls="langbox">🌐 <!--ko-->언어<!--/ko--><!--en-->Language<!--/en--></button>
+    <button type="button" id="t-sol" aria-expanded="false" aria-controls="solbox" hidden>📂 <!--ko-->솔루션<!--/ko--><!--en-->Projects<!--/en--></button>
+    <button type="button" id="t-lang" aria-expanded="false" aria-controls="langbox">⚙ <!--ko-->설정·언어<!--/ko--><!--en-->Settings<!--/en--></button>
     <button type="button" id="t-notify" aria-expanded="false" aria-controls="notifybox">🔔 <!--ko-->알림<!--/ko--><!--en-->Alerts<!--/en--> <span id="t-notify-st"></span></button>
     <button type="button" id="t-connect" aria-expanded="false" aria-controls="connect">📱 <span class="lbl-long"><!--ko-->다른 기기에서 열기 · 설치 안내<!--/ko--><!--en-->Open on other devices · Install guide<!--/en--></span><span class="lbl-short"><!--ko-->접속 · 설치 안내<!--/ko--><!--en-->Devices · Install<!--/en--></span></button>
     <button type="button" id="t-help" aria-expanded="false" aria-controls="help"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> <!--ko-->쓰는 법<!--/ko--><!--en-->How to use<!--/en--></button>
@@ -807,8 +822,8 @@
   <div class="langbox teambox" id="teambox" hidden>
     <p class="tm-intro"><!--ko-->상황판을 쓰는 사람마다 계정을 넣고 권한·직무·직책을 정합니다. 이 칸은 최종 컨펌자(<b id="tm-owner"></b>)에게만 보입니다 — 작업방(AI)은 계정을 넣지 못하고 순서만 안내합니다.<!--/ko--><!--en-->Add an account with access, job and title for each person who uses the board. Only the final approver (<b id="tm-owner-en"></b>) sees this panel — AI sessions cannot add accounts, only explain the steps.<!--/en--></p>
     <ol class="tm-steps">
-      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·아이디·직무·권한·맡을 솔루션만 넣으면 <b>상황판 계정</b>이 생겨요. 서버 계정·SSH 열쇠는 그다음.<!--/ko--><!--en--><b>+ Add account → Save</b> — just name, ID, job, access and projects creates the <b>board account</b>. Server account and SSH key come next.<!--/en--></li>
-      <li><!--ko--><b>서버 계정 — 터미널에 붙여 넣기</b> — 나온 한 줄을 서버 창에 그대로 → 계정이 생겨요. 그 사람 <b>SSH 공개 열쇠</b>를 받으면 넣고 저장 → 다시 한 줄 → <b>«✔ 준비됨»</b>(열쇠를 먼저 받았으면 한 번에). 직무 «개발자» 만 터미널이 열리고, 나머지는 상황판 통로만.<!--/ko--><!--en--><b>Server account — paste in a terminal</b> — run the line in a server shell → the account exists. When their <b>SSH public key</b> arrives, add it, save and run the new line → <b>«✔ Ready»</b> (one go if you already have the key). Only «Developer» gets a shell; everyone else gets the board tunnel only.<!--/en--></li>
+      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·<b>서버 계정</b>(있는 것 고르기 또는 «새로 만들기»)·직무·권한·맡을 솔루션을 넣으면 <b>상황판 계정</b>이 생겨요.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, <b>server account</b> (pick an existing one or «create new»), job, access and projects creates the <b>board account</b>.<!--/en--></li>
+      <li><!--ko--><b>열쇠 → 터미널에 붙여 넣기</b> — <b>«상황판이 열쇠 만들기»</b> 를 누르면 서버 창에 붙여 넣을 한 줄이 나와요 → 붙여 넣으면 <b>«✔ 준비됨»</b>. 그 사람 몫 열쇠는 ③ 안내문에 들어가 그 사람이 자기 터미널에 붙여 넣어요. 직무 «개발자»(터미널 열림)만 열쇠를 그 사람이 직접 만들어 보내요 — «부탁 글 복사» 로.<!--/ko--><!--en--><b>Key → paste in a terminal</b> — press <b>«Let the board make the key»</b> and paste the line it shows in a server shell → <b>«✔ Ready»</b>. Their half of the key goes into the ③ invitation and they paste it in their own terminal. Only «Developer» (shell) accounts make their own key — use «Copy request».<!--/en--></li>
       <li><!--ko--><b>«안내문 복사»</b> → 메신저·메일로 그 사람에게 보내기 — 로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 다 들어 있어요.<!--/ko--><!--en--><b>«Copy invitation»</b> → send it by chat or email — it holds the sign-in link (24 h, single use), how to connect and how to sign in.<!--/en--></li>
       <li><!--ko-->그 사람이 링크를 열어 비밀번호를 정하고 <b>자기 휴대폰 인증 앱</b>을 등록 → 그 줄에 <b>«✔ 등록 끝»</b> 이 보이면 끝.<!--/ko--><!--en-->They open the link, set a password and register <b>their own authenticator app</b> → the row shows <b>«✔ Registered»</b> and you are done.<!--/en--></li>
     </ol>
@@ -846,7 +861,17 @@
     <div class="nsec" id="tm-risk" hidden></div>
     <div class="nrow"><button type="button" class="btn primary" id="tm-save"><!--ko-->저장<!--/ko--><!--en-->Save<!--/en--></button><span class="nstate" id="tm-st"></span></div>
   </div>
+  <!-- 📂 솔루션 — 이름·폴더(AI 가 고칠 범위) 넣기·고치기·빼기 · 폴더 허락 · AI 로 준비 -->
+  <div class="langbox solbox" id="solbox" hidden><div id="sol-body"></div></div>
   <div class="langbox" id="langbox" hidden>
+    <!-- 기본 정보 — 설치 터미널은 언어·포트만 묻고 이름·시간대·서버 이름은 여기서 (주인만) -->
+    <div id="l-basics" hidden>
+      <label><span><!--ko-->상황판에 보일 내 이름<!--/ko--><!--en-->Your name on the board<!--/en--></span><input type="text" id="l-owner" maxlength="40" autocomplete="off"></label>
+      <label><span><!--ko-->내 시간대 — 서버가 아니라 내가 사는 곳(정기 점검 시각 기준)<!--/ko--><!--en-->Your timezone — where you live, not the server (sets routine times)<!--/en--></span><input type="text" id="l-tz" maxlength="64" autocomplete="off" placeholder="Asia/Seoul">
+        <button type="button" class="btn small" id="l-tz-me" hidden></button></label>
+      <label><span><!--ko-->서버 이름 — 머리·탭 제목·인증 앱 항목에 보임(다른 서버와 다르게)<!--/ko--><!--en-->Server name — header, tab title and authenticator entry (different from your other servers)<!--/en--></span><input type="text" id="l-sname" maxlength="40" autocomplete="off">
+        <small id="l-sname-w" hidden><!--ko-->이름을 바꿔도 이미 등록한 인증 앱 항목은 옛 이름 그대로 보여요(숫자는 그대로 맞음).<!--/ko--><!--en-->Changing it keeps the old name on the authenticator entry you already added (the codes still work).<!--/en--></small></label>
+    </div>
     <label><span><!--ko-->화면 언어<!--/ko--><!--en-->Board language<!--/en--></span>
       <select id="l-lang"><option value="ko">한국어</option><option value="en">English</option></select></label>
     <label><span><!--ko-->작업방 보고·질문 언어<!--/ko--><!--en-->Language for session reports and questions<!--/en--></span>
@@ -4610,6 +4635,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var body = el('span', 'rmeta', x.gate ? K('지금 일하는 방이 끝나면 다른 대기 일보다 먼저 시작합니다', 'Starts before other queued work when the working session finishes') + (x.gate === 'deploy' ? K(' — 배포 방에서 안전 검사·확인 질문을 거칩니다', ' — the deploy session runs safety checks and asks for confirmation') : '') : x.fromPark ? K('일시정지·배포 전에 «저장하고 멈춘» 방 — 작업기록의 이어갈 지점부터 이어서 합니다', 'Session «saved and stopped» before a pause/deploy — continues from its resume point in the session log') : x.task.replace(/\s+/g, ' ').slice(0, 220) + (x.task.length > 220 ? '…' : ''));
       top.appendChild(body);
       if (x.error) top.appendChild(el('span', 'rhint', K('시작 못 함: ', 'Could not start: ') + x.error));
+      if (x.needTrust && OWN_NOW && window.boardOpenSolutions) { var tb = el('button', 'btn small primary', K('📂 폴더 허락하러 가기', '📂 Go trust the folder')); tb.type = 'button'; tb.style.alignSelf = 'flex-start'; tb.onclick = function () { window.boardOpenSolutions(); }; top.appendChild(tb); }
       var ck = x.check;
       if (ck && (ck.verdict || ck.err)) {
         var VT = { needed: K('필요함', 'still needed'), done: K('이미 한 것 같음', 'looks already done'), superseded: K('이제 필요 없는 것 같음', 'looks no longer needed'), unclear: K('판단 어려움', 'unclear') };
@@ -5319,8 +5345,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       wrap.appendChild(el('div', '', s.done ? K('처음 설정 — 끝남', 'First setup — finished') : (EN ? 'First setup — ' + nOk + ' of ' + req.length + ' required steps done' : '처음 설정 — 꼭 필요한 ' + req.length + '개 중 ' + nOk + '개 됨')));
       var todoItems = (s.items || []).filter(function (x) { return x.ok !== true; });
       wrap.appendChild(el('div', 'mine-sub', (s.installer && s.installer.at ? K('install.sh 로 설치 ', 'Installed by install.sh ') + fmt(Date.parse(s.installer.at)) + ' · ' : '') +
-        (todoItems.length ? K('할 일: 아래 번호 순서대로 «복사» → 서버 창에 붙여 넣기(맥 ⌘V · 윈도우 우클릭) → Enter. 다 했으면 맨 아래 «↻ 다시 확인».', 'What to do: in the numbered order below, «Copy» → paste into the server window (Mac ⌘V · Windows right-click) → Enter. When done, press «↻ Recheck» at the bottom.')
-          : K('다 됐어요.', 'All done.'))));
+        (todoItems.some(function (x) { return !x.open; }) ? K('할 일: 아래 번호 순서대로 «복사» → 서버 창에 붙여 넣기(맥 ⌘V · 윈도우 우클릭) → Enter. 다 했으면 맨 아래 «↻ 다시 확인».', 'What to do: in the numbered order below, «Copy» → paste into the server window (Mac ⌘V · Windows right-click) → Enter. When done, press «↻ Recheck» at the bottom.')
+          : todoItems.length ? K('터미널 일은 끝 — 남은 것은 화면에서 해요(아래 버튼).', 'Terminal steps are done — the rest happens on screen (buttons below).') : K('다 됐어요.', 'All done.'))));
       if (s.checking) wrap.appendChild(el('div', 'mine-sub', K('확인 중…', 'Checking…')));
       // 붙여 넣을 줄 하나 — 글자는 한 줄 그대로(가로로 밀어 봄), 복사는 통째로
       var cmdLine = function (c) {
@@ -5410,6 +5436,11 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             lb.appendChild(lg); lb.appendChild(lh); row.appendChild(lb);
             row.appendChild(el('div', 'setup-why', K('버튼 → 열린 화면에서 로그인 → 나온 코드를 맨 위 «AI 로그인» 칸에 붙여 넣기. 버튼이 안 되면 아래 서버 창 방법:', 'Button → sign in on the page that opens → paste the code into the «AI login» box at the top. If the button does not work, use the server window:')));
           } else if (x.key === 'login' && data.ai && data.ai.login) row.appendChild(el('div', 'setup-why', K('▲ 로그인 진행 중 — 맨 위 «AI 로그인» 칸에 코드를 붙여 넣으세요', '▲ Login in progress — paste the code into the «AI login» box at the top')));
+          if (x.open) {   // 화면에서 하는 칸 — 터미널 없이 그 칸을 연다
+            var ob = el('button', 'btn primary', x.open === 'solutions' ? K('📂 솔루션 넣기 ▶', '📂 Add projects ▶') : K('⚙ 기본 정보 보기 ▶', '⚙ Open basics ▶'));
+            ob.type = 'button'; ob.onclick = function () { if (x.open === 'solutions' && window.boardOpenSolutions) window.boardOpenSolutions(); else if (window.boardOpenBasics) window.boardOpenBasics(); };
+            var obr = el('div', 'row'); obr.style.marginTop = '6px'; obr.appendChild(ob); row.appendChild(obr);
+          }
           if ((x.steps || []).length) x.steps.forEach(function (st) { stepRow(row, st.t, st.cmd, st.or); });
           else (x.cmds || []).forEach(function (c) { row.appendChild(cmdLine(c)); });   // 옛 서버 자료(steps 없음)
         }
@@ -5517,6 +5548,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     var ownerTodos = asks.filter(function (a) { return !a.deferred; });
     var me = data.me || { role: 'owner' }, OWN = me.role === 'owner' || me.role === 'system'; OWN_NOW = OWN; ME = me;
     var tTeam = document.getElementById('t-team'); if (tTeam) tTeam.hidden = !OWN;
+    var tSol = document.getElementById('t-sol'); if (tSol) tSol.hidden = !OWN;
+    var lB = document.getElementById('l-basics'); if (lB) lB.hidden = !OWN;
     var tMe = document.getElementById('t-me');
     if (tMe && me.name && me.via !== 'terminal' && me.role !== 'agent') {
       var lab = '👤 ' + me.name + ' · ' + [JOBN[me.job || (me.role === 'designer' ? 'designer' : '')], me.title, PERMN[me.role] || me.role].filter(Boolean).join(' · ');
@@ -6545,7 +6578,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   })();
   // 맨 위 도구 칸 — 버튼 바로 아래에서 열리고 닫힘 · 한 번에 하나만
   //   옛: «쓰는 법·다른 기기에서 열기» 는 맨 아래 칸이라 누르면 화면이 아래로 내려갔음
-  var PANELS = { 't-consult': 'consultbox', 't-team': 'teambox', 't-lang': 'langbox', 't-notify': 'notifybox', 't-connect': 'connect', 't-help': 'help' };
+  var PANELS = { 't-consult': 'consultbox', 't-team': 'teambox', 't-sol': 'solbox', 't-lang': 'langbox', 't-notify': 'notifybox', 't-connect': 'connect', 't-help': 'help' };
   function togglePanel(bid, on) {
     var p = document.getElementById(PANELS[bid]), b = document.getElementById(bid); if (!p || !b) return;
     if (on == null) on = p.hidden;
@@ -6620,11 +6653,30 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var o = document.createElement('option'); o.value = v; o.textContent = v || K('화면 언어와 같게', 'Same as board language'); ai.appendChild(o);
     });
     sel.value = LANG; ai.value = AI_LANG;
-    tl.onclick = function () { box.hidden = !box.hidden; tl.setAttribute('aria-expanded', String(!box.hidden)); };
+    // 기본 정보(주인만) — 열 때 지금 값을 읽어 채움 · 브라우저 시간대를 한 번에 넣는 단추
+    var bOwner = document.getElementById('l-owner'), bTz = document.getElementById('l-tz'), bSn = document.getElementById('l-sname'), bTzMe = document.getElementById('l-tz-me');
+    var basicsLoaded = null;
+    var browserTz = ''; try { browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (_) {}
+    function loadBasics() {
+      if (document.getElementById('l-basics').hidden) return;
+      fetch('/api/solutions', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j || !j.basics) return; basicsLoaded = j.basics;
+        bOwner.value = j.basics.owner || ''; bTz.value = j.basics.timezone || ''; bSn.value = j.basics.serverName || '';
+        if (browserTz && browserTz !== bTz.value) { bTzMe.hidden = false; bTzMe.textContent = K('이 기기 시간대로: ', 'Use this device\'s: ') + browserTz; }
+        if (!j.basics.serverName) bSn.placeholder = K('예: 개발서버 · 고객사A', 'e.g. dev-server · client-a');
+      }).catch(function () {});
+    }
+    bTzMe.onclick = function () { bTz.value = browserTz; bTzMe.hidden = true; };
+    bSn.oninput = function () { document.getElementById('l-sname-w').hidden = !(basicsLoaded && basicsLoaded.serverName && bSn.value.trim() !== basicsLoaded.serverName); };
+    window.boardOpenBasics = function () { togglePanel('t-lang', true); loadBasics(); };
+    tl.onclick = function () { box.hidden = !box.hidden; tl.setAttribute('aria-expanded', String(!box.hidden)); if (!box.hidden) loadBasics(); };
     document.getElementById('l-save').onclick = function () {
       var b = this; b.disabled = true;
-      post('/api/settings', { lang: sel.value, aiLang: ai.value }).then(function (j) {
+      var body = { lang: sel.value, aiLang: ai.value };
+      if (!document.getElementById('l-basics').hidden && basicsLoaded) { body.owner = bOwner.value; body.timezone = bTz.value; body.serverName = bSn.value; body.basics = true; }
+      post('/api/settings', body).then(function (j) {
         toast(j.message || (j.ok ? 'OK' : 'error'));
+        if (j.ok && !j.restart) load();
         if (!j.restart) { b.disabled = false; return; }
         var tries = 0;   // 다시 켜질 때까지 기다렸다가 새 언어로 다시 읽기
         (function wait() {
@@ -6638,6 +6690,169 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     document.getElementById('t-connect').onclick = function () { togglePanel('t-connect'); };
     document.getElementById('t-help').onclick = function () { togglePanel('t-help'); };
     document.getElementById('t-consult').onclick = function () { togglePanel('t-consult'); if (!document.getElementById('consultbox').hidden) consultShow(); };
+  })();
+  (function () {
+    var btn = document.getElementById('t-sol'), box = document.getElementById('solbox'), body = document.getElementById('sol-body');
+    if (!btn || !box) return;
+    var st = { j: null, cand: undefined, form: { name: '', key: '', dir: '', devUrl: '', note: '' }, err: '', need: null, keyTouched: false, editing: null };
+    function slug(x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '').slice(0, 24); }
+    function sload(cand) {
+      return fetch('/api/solutions' + (cand ? '?cand=1' : ''), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+        st.j = j; if (cand) st.cand = j.candidates === undefined ? null : j.candidates; paint();
+      }).catch(function () { st.err = K('불러오지 못했어요', 'Could not load'); paint(); });
+    }
+    function open() { togglePanel('t-sol', true); st.cand = undefined; paint(); sload(false).then(function () { sload(true); }); }
+    window.boardOpenSolutions = open;
+    btn.onclick = function () { togglePanel('t-sol'); if (!box.hidden) open(); };
+    function input(label, k, ph, help) {
+      var l = el('label'); l.appendChild(el('span', null, label));
+      var i = document.createElement('input'); i.type = 'text'; i.value = st.form[k] || ''; i.placeholder = ph || ''; i.autocomplete = 'off';
+      i.oninput = function () {
+        st.form[k] = i.value;
+        if (k === 'key') st.keyTouched = true;
+        if ((k === 'name' || k === 'dir') && !st.keyTouched) { var kk = slug(st.form.name) || slug((st.form.dir || '').split('/').filter(Boolean).pop()); st.form.key = kk; var ki = box.querySelector('[data-k=key]'); if (ki) ki.value = kk; }
+      };
+      i.setAttribute('data-k', k); l.appendChild(i); if (help) l.appendChild(el('small', null, help)); return l;
+    }
+    function step(ok, t, wait) { return el('span', ok ? 'ok' : wait ? 'wait' : 'todo', (ok ? '✔ ' : wait ? '· ' : '▶ ') + t); }
+    function card(s) {
+      var c = el('div', 'sol-card');
+      var h = el('div', 'sol-h'); h.appendChild(el('b', null, s.name)); h.appendChild(el('span', 'sol-dir', s.key + ' · ' + s.dir));
+      h.appendChild(el('small', null, s.viaBoard ? K('화면에서 넣음', 'added on the board') : K('파일로 넣음', 'added by file')));
+      c.appendChild(h);
+      if (s.devUrl) { var a = el('a', null, s.devUrl); a.href = s.devUrl; a.target = '_blank'; a.rel = 'noopener'; c.appendChild(a); }
+      if (s.note) c.appendChild(el('small', null, s.note));
+      var prepared = s.claudeMd && s.cmds > 0;
+      var sp = el('div', 'sol-steps');
+      sp.appendChild(step(true, K('넣음', 'Added')));
+      sp.appendChild(step(s.trusted, K('폴더 허락', 'Folder trusted')));
+      sp.appendChild(step(prepared, prepared ? K('준비됨(명령 ' + s.cmds + '개)', 'Prepared (' + s.cmds + ' commands)') : s.prepQueued ? K('AI 준비 대기열', 'AI prep queued') : K('AI 로 준비', 'Prepare with AI'), s.prepQueued || !s.trusted));
+      sp.appendChild(step(false, K('탭에서 일 맡기기', 'Give tasks in its tab'), !prepared));
+      c.appendChild(sp);
+      if (!s.exists) c.appendChild(el('div', 'sol-err', K('폴더가 없어요 — 지워졌거나 옮겨졌어요', 'The folder is missing — deleted or moved')));
+      if (s.drift) c.appendChild(el('div', 'sol-err', K('폴더가 등록 때와 달라졌어요(링크) — 방을 시작하지 않아요. 빼고 다시 넣으세요', 'The folder changed since it was added (symlink) — sessions will not start. Remove and add it again')));
+      if (s.ownerOk === false) c.appendChild(el('div', 'sol-err', K('폴더 주인이 일하는 계정이 아니에요 — AI 가 고치지 못할 수 있어요', 'The folder is not owned by the working account — AI may not be able to edit it')));
+      if (s.exists && !s.trusted) {
+        // 터미널 없이 단추 하나 — 일하는 계정이 따로인 서버만 붙여 넣는 줄
+        var tw = el('div', 'sol-row');
+        var tbn = el('button', 'btn primary', K('① 폴더 허락', '① Trust folder')); tbn.type = 'button';
+        tbn.title = K('AI 방이 이 폴더에서 일을 시작할 수 있게 합니다(터미널의 «Yes, I trust this folder» 와 같음) — 이 폴더 안 설정·명령을 AI 가 따르게 돼요', 'Lets AI sessions start in this folder (same as «Yes, I trust this folder» in the terminal) — AI will follow settings and commands inside it');
+        var showCmd = function (cmd, msg) {
+          c.appendChild(el('div', null, (msg ? msg + ' — ' : '') + K('서버 창에 붙여 넣고 Enter → «Yes, I trust this folder» 에서 Enter → 입력칸이 나오면 /exit', 'paste in a server shell → Enter on «Yes, I trust this folder» → type /exit at the prompt')));
+          var ln = el('div', 'todo-cmd setup-cmd'); ln.appendChild(el('code', null, cmd)); var cb = copyBtn(K('복사', 'Copy'), cmd); cb.style.flex = 'none'; ln.appendChild(cb); c.appendChild(ln);
+        };
+        tbn.onclick = function () {
+          if (!window.confirm(K('«' + s.name + '» 폴더(' + s.dir + ')를 허락할까요?\nAI 방이 이 폴더에서 시작하고, 이 폴더 안의 Claude 설정·명령을 따르게 돼요. 내 솔루션 폴더가 맞을 때만.', 'Trust the «' + s.name + '» folder (' + s.dir + ')?\nAI sessions will start here and follow the Claude settings and commands inside it. Only if this is your project folder.'))) return;
+          tbn.disabled = true;
+          post('/api/solutions/trust', { key: s.key }).then(function (j) {
+            toast(j.message || ''); tbn.disabled = false;
+            if (j.ok) { lastSig = ''; load(); sload(false); } else if (j.cmd) { tbn.remove(); showCmd(j.cmd, j.message); }
+          });
+        };
+        tw.appendChild(tbn); c.appendChild(tw);
+        if (st.j && st.j.split) showCmd('cd ' + s.dir + ' && claude', K('일하는 계정이 따로인 서버', 'Separate working account'));
+      }
+      var row = el('div', 'sol-row');
+      if (s.exists && !prepared && !s.prepQueued) {
+        var pb = el('button', 'btn' + (s.trusted ? ' primary' : ''), K('AI 로 준비 ▶', 'Prepare with AI ▶')); pb.type = 'button'; pb.disabled = !s.trusted;
+        pb.title = s.trusted ? K('그 폴더에 규칙(CLAUDE.md)·명령·작업기록을 갖추는 일을 대기열에 넣어요 — 있는 파일은 덮지 않아요', 'Queues a task that adds rules (CLAUDE.md), commands and a session log in that folder — existing files are kept') : K('먼저 ① 폴더 허락', 'Trust the folder first (①)');
+        pb.onclick = function () { pb.disabled = true; post('/api/solutions/prep', { key: s.key }).then(function (j) { toast(j.message || ''); pb.disabled = false; if (j.ok) { lastSig = ''; load(); } sload(false); }); };
+        row.appendChild(pb);
+      }
+      var eb = el('button', 'btn small', K('이름·주소 고치기', 'Edit name/URL')); eb.type = 'button'; eb.onclick = function () { st.editing = st.editing === s.key ? null : s.key; paint(); }; row.appendChild(eb);
+      var rb = el('button', 'btn small', K('상황판에서 빼기', 'Remove from board')); rb.type = 'button';
+      rb.onclick = function () {
+        var t = window.prompt(K('«' + s.name + '» 를 상황판에서 뺄까요? 폴더·파일은 그대로예요. 맞으면 키 «' + s.key + '» 를 쳐 주세요', 'Remove «' + s.name + '» from the board? The folder and files stay. Type the key «' + s.key + '» to confirm'));
+        if (!t) return;
+        var go = function (force) { return post('/api/solutions/remove', { key: s.key, typed: t.trim(), force: !!force }).then(function (j) {
+          if (j._status === 409 && j.code === 'TIES') { if (window.confirm(j.message + K(' — 그래도 뺄까요?', ' — remove anyway?'))) return go(true); return; }
+          toast(j.message || ''); if (j.ok) { lastSig = ''; load(); } sload(false);
+        }); };
+        go(false);
+      };
+      row.appendChild(rb); c.appendChild(row);
+      if (st.editing === s.key) {
+        var f = el('div', 'sol-form'); var v = { name: s.name, devUrl: s.devUrl, note: s.note };
+        [['name', K('이름', 'Name')], ['devUrl', K('개발 주소', 'Dev URL')], ['note', K('한 줄 설명', 'One-line note')]].forEach(function (x) {
+          var l = el('label'); l.appendChild(el('span', null, x[1])); var i = document.createElement('input'); i.type = 'text'; i.value = v[x[0]] || ''; i.oninput = function () { v[x[0]] = i.value; }; l.appendChild(i); f.appendChild(l);
+        });
+        var sb = el('button', 'btn primary', K('저장', 'Save')); sb.type = 'button';
+        sb.onclick = function () { sb.disabled = true; post('/api/solutions/edit', { key: s.key, name: v.name, devUrl: v.devUrl, note: v.note }).then(function (j) { toast(j.message || ''); sb.disabled = false; if (j.ok) { st.editing = null; lastSig = ''; load(); sload(false); } }); };
+        f.appendChild(sb); c.appendChild(f);
+      }
+      return c;
+    }
+    function add(create, ownerOk) {
+      st.err = ''; st.need = null;
+      var f = st.form;
+      return post('/api/solutions/add', { name: f.name, key: f.key, dir: f.dir, devUrl: f.devUrl, note: f.note, create: !!create, ownerOk: !!ownerOk }).then(function (j) {
+        if (j._status === 409 && j.code === 'MISSING') {
+          if (window.confirm(K('폴더 ' + j.real + ' 가 없어요 — 새로 만들까요?', 'Folder ' + j.real + ' does not exist — create it?'))) return add(true, ownerOk);
+          return;
+        }
+        if (j._status === 409 && j.code === 'OWNER') {
+          if (window.confirm(j.message + K('\n\n그래도 넣을까요?', '\n\nAdd anyway?'))) return add(create, true);
+          return;
+        }
+        if (j._status === 409 && j.code === 'NEED_SUDO') { st.need = j; paint(); return; }
+        if (!j.ok) { st.err = j.message || K('넣지 못했어요', 'Could not add'); paint(); return; }
+        toast(j.message || ''); load(); st.form = { name: '', key: '', dir: '', devUrl: '', note: '' }; st.keyTouched = false; lastSig = ''; solCandReset(); sload(false).then(function () { sload(true); });
+      });
+    }
+    function solCandReset() { st.cand = undefined; }
+    function paint() {
+      var b = document.createElement('div'), j = st.j;
+      b.appendChild(el('p', null, K('솔루션 = 폴더 하나. 넣은 폴더 안이 그 솔루션 방(AI)이 고칠 수 있는 범위예요 — 다른 솔루션·서버 설정은 못 건드려요. 넣은 뒤 ① 폴더 허락 → ② AI 로 준비 → 그 탭에서 일을 맡겨요.',
+        'A project = one folder. Its folder is what that project\'s AI sessions may edit — nothing else. After adding: ① trust the folder → ② prepare with AI → give tasks in its tab.')));
+      if (!j) { b.appendChild(el('p', null, st.err || K('불러오는 중…', 'Loading…'))); body.replaceChildren(b); return; }
+      if (j.broken) b.appendChild(el('div', 'sol-err', K('projects.json 을 읽을 수 없어요 — 넣기를 막았어요(서버 방에 «projects.json 고치기» 를 맡기세요)', 'Cannot read projects.json — adding is blocked (ask the server session to fix projects.json)')));
+      if (!(j.list || []).length) b.appendChild(el('p', null, K('아직 넣은 솔루션이 없어요.', 'No projects yet.')));
+      (j.list || []).forEach(function (s) { b.appendChild(card(s)); });
+      if (j.team) b.appendChild(el('small', null, K('팀원에게 새 솔루션을 보이게 하려면 ⚙ 팀·권한 에서 그 사람의 «맡을 솔루션» 에 더해 주세요(저절로 붙지 않아요).', 'To show a new project to team members, add it to their projects in ⚙ Team & roles (not automatic).')));
+      // 넣기 칸
+      var f = el('div', 'sol-form');
+      f.appendChild(el('h3', null, K('+ 솔루션 넣기', '+ Add a project')));
+      if (st.cand === undefined) f.appendChild(el('p', null, K('서버에서 솔루션 폴더를 찾는 중… (최대 1분 · 기다리지 않고 아래에 직접 넣어도 돼요)', 'Looking for project folders on this server… (up to a minute · you can type below meanwhile)')));
+      else if (st.cand === null) f.appendChild(el('p', null, K('폴더를 찾지 못했어요 — 아래에 직접 넣으세요.', 'Could not scan for folders — type it below.')));
+      else if (!st.cand.length) f.appendChild(el('p', null, K('찾은 솔루션 폴더가 없어요 — 새 솔루션이면 아래에 이름만 넣으면 새 폴더(' + (j.home || '~') + '/<키>)를 만들어요.', 'No project folders found — for a new project just enter a name and a new folder (' + (j.home || '~') + '/<key>) is created.')));
+      else {
+        f.appendChild(el('p', null, K('서버에서 찾은 폴더 — 누르면 아래 칸이 채워져요', 'Folders found on this server — click to fill the form')));
+        var cl = el('div', 'sol-cand');
+        st.cand.forEach(function (c) {
+          var bt = el('button', null, c.dir + (c.git ? ' · git' : '') + (c.claudeMd ? ' · CLAUDE.md' : '') + (c.urls.length ? ' · ' + c.urls[0] : '') + (c.pm2.length ? ' · PM2 ' + c.pm2.join(',') : '') + (c.why ? ' — ' + c.why : c.owner ? K(' — 폴더 주인 ', ' — owned by ') + c.owner + K('(넣을 때 한 번 확인)', ' (confirm once when adding)') : ''));
+          bt.type = 'button'; bt.disabled = !!c.why;
+          bt.onclick = function () { st.form = { name: st.form.name || (c.key.charAt(0).toUpperCase() + c.key.slice(1)), key: slug(c.key) || c.key, dir: c.dir, devUrl: (c.urls.filter(function (u) { return /^https:/.test(u); })[0] || c.urls[0] || ''), note: st.form.note }; st.keyTouched = true; st.err = ''; paint(); };
+          cl.appendChild(bt);
+        });
+        f.appendChild(cl);
+      }
+      f.appendChild(input(K('이름', 'Name'), 'name', K('예: 쇼핑몰', 'e.g. Shop')));
+      f.appendChild(input(K('키(영어 소문자 · 탭·명령에 쓰임)', 'Key (lowercase · used in tabs and commands)'), 'key', 'shop'));
+      f.appendChild(input(K('폴더 = AI 가 고칠 범위', 'Folder = what AI may edit'), 'dir', (j.home || '/home/you') + '/' + (st.form.key || 'shop'), K('비우면 ' + (j.home || '~') + '/<키> 새 폴더 · 다른 솔루션 폴더와 겹치거나 시스템·숨김 폴더는 안 돼요', 'Empty = new folder ' + (j.home || '~') + '/<key> · no overlap with other projects, no system or hidden folders')));
+      f.appendChild(input(K('개발 주소(선택)', 'Dev URL (optional)'), 'devUrl', 'https://dev.example.com', K('보고 «확인할 곳» 링크·탭 🔗 에 쓰여요', 'Used for «where to check» links and the tab 🔗')));
+      f.appendChild(input(K('한 줄 설명(선택)', 'One-line note (optional)'), 'note', ''));
+      if (st.err) f.appendChild(el('div', 'sol-err', st.err));
+      if (st.need) {
+        f.appendChild(el('div', null, st.need.message));
+        var ln = el('div', 'todo-cmd setup-cmd'); ln.appendChild(el('code', null, st.need.cmd)); var cb = copyBtn(K('복사', 'Copy'), st.need.cmd); cb.style.flex = 'none'; ln.appendChild(cb); f.appendChild(ln);
+        f.appendChild(el('small', null, K('sudo 줄이라 비밀번호를 물을 수 있어요(이 서버 계정 비밀번호 · 치는 동안 안 보이는 게 정상).', 'It is a sudo line, so it may ask for this server account\'s password (nothing shows while typing).')));
+      }
+      var ab = el('button', 'btn primary', st.need ? K('만들었어요 — 다시 넣기', 'Done — add again') : K('넣기', 'Add')); ab.type = 'button'; ab.disabled = !!(j && j.broken);
+      ab.onclick = function () {
+        if (!st.form.name.trim()) { st.err = K('이름을 넣어 주세요', 'Enter a name'); paint(); return; }
+        if (!st.form.key) st.form.key = slug(st.form.name);
+        if (!st.form.dir.trim()) st.form.dir = (j.home || '') + '/' + st.form.key;
+        ab.disabled = true; add(false).then(function () { ab.disabled = false; });
+      };
+      var row = el('div', 'sol-row'); row.appendChild(ab);
+      var rs = el('button', 'btn small', K('폴더 다시 찾기', 'Scan again')); rs.type = 'button'; rs.onclick = function () { st.cand = undefined; paint(); sload(true); }; row.appendChild(rs);
+      f.appendChild(row);
+      b.appendChild(f);
+      if (typing() && box.contains(document.activeElement)) { pend = true; return; }   // 쓰는 중엔 칸을 다시 만들지 않음(커서 유지) — 칸을 벗어나면 그림
+      pend = false; body.replaceChildren(b);
+    }
+    var pend = false;
+    box.addEventListener('focusout', function () { if (pend) setTimeout(paint, 0); });
   })();
   (function () {
     var b = document.getElementById('t-me'); if (!b) return;
@@ -6687,16 +6902,35 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       b.addEventListener('click', function () { copyText(cmd, function () { toast(K('복사됨', 'Copied')); }, function () { toast(K('복사하지 못했어요 — 글자를 직접 골라 복사하세요', 'Could not copy — select the text')); }); });
       w.appendChild(b); parent.appendChild(w); return w;
     }
+    // 상황판이 열쇠 만들기 — 통로 전용 계정만(서버가 다시 가름) · 개인 열쇠는 ③ 안내문에 한 번만
+    function keyGenBtn(parent, user, again) {
+      var b = el('button', 'btn' + (again ? '' : ' primary'), again ? K('새 열쇠 만들기', 'Make a new key') : K('상황판이 열쇠 만들기', 'Let the board make the key')); b.type = 'button';
+      b.addEventListener('click', function () {
+        if (again && !window.confirm(K('새 열쇠를 만들면 전에 보낸 로그인 링크는 안 열리고, 새 한 줄을 서버 창에 붙여 넣은 뒤 새 안내문을 보내야 해요. 붙여 넣기 전까지는 옛 열쇠도 살아 있어요. 만들까요?', 'A new key cancels the sign-in link already sent; paste the new line and send a new invitation. The old key works until you paste. Make it?'))) return;
+        b.disabled = true;
+        post('/api/team/keygen', { user: user }).then(function (j) { b.disabled = false; toast(j.message || (j.ok ? 'OK' : 'error')); if (j.ok) load(); }).catch(function () { b.disabled = false; toast(K('만들지 못했어요', 'Could not make it')); });
+      });
+      parent.appendChild(b); return b;
+    }
+    function keyFileName() { return String((info.route && info.route.serverName) || 'server').replace(/[^A-Za-z0-9_.-]/g, '-').slice(0, 40).toLowerCase() + '_board'; }
     function hhmm(t) { var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
     function row(m, fresh) {
       var R = (info && info.route) || {};
       var r = el('div', 'tm-row');
-      var u = document.createElement('input'); u.type = 'text'; u.className = 'tm-user'; u.placeholder = K('아이디 (예: kim)', 'ID (e.g. kim)'); u.setAttribute('aria-label', K('아이디 — 서버 계정도 이 이름으로 만들어요', 'ID — the server account gets the same name'));
+      var u = document.createElement('input'); u.type = 'text'; u.className = 'tm-user'; u.placeholder = K('새 아이디 (예: kim)', 'New ID (e.g. kim)'); u.setAttribute('aria-label', K('새 아이디 — 서버 계정도 이 이름으로 만들어요', 'New ID — the server account gets the same name'));
       u.autocapitalize = 'none'; u.spellcheck = false; u.maxLength = 32;
-      var dl = document.createElement('datalist'); dl.id = 'tm-acc-' + Math.random().toString(36).slice(2, 8); u.setAttribute('list', dl.id);
-      info.accounts.filter(function (a) { return !a.owner && !a.admin; }).forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = a.shell === 'tunnel' ? K('통로만', 'tunnel only') : K('터미널 됨', 'shell'); dl.appendChild(o); });
-      r.appendChild(dl);
       u.value = m.user || '';
+      // 서버 계정 = 있는 것 고르기 또는 «새로 만들기»
+      //   고를 수 있는 것: 사람 계정(uid≥1000) 중 주인·관리자·다른 팀원이 쓰는 것 빼고 · 새로 만들기면 아이디 칸이 열림
+      var used = (info.team && info.team.members || []).map(function (x) { return x.user; }).filter(function (x) { return x && x !== m.user; });
+      var acs = info.accounts.filter(function (a) { return !a.owner && !a.admin && used.indexOf(a.user) < 0; });
+      var ac = document.createElement('select'); ac.className = 'tm-acc'; ac.setAttribute('aria-label', K('서버 계정', 'Server account'));
+      var o0 = document.createElement('option'); o0.value = ''; o0.textContent = K('서버 계정: + 새로 만들기', 'Server account: + create new'); ac.appendChild(o0);
+      acs.forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = K('서버 계정: ', 'Server account: ') + a.user + ' (' + (a.shell === 'tunnel' ? K('통로만', 'tunnel only') : K('터미널 됨', 'shell')) + ')'; ac.appendChild(o); });
+      ac.value = acs.some(function (a) { return a.user === m.user; }) ? m.user : '';
+      function accPaint() { u.hidden = !!ac.value; if (ac.value) u.value = ac.value; else if (acs.some(function (a) { return a.user === u.value; })) u.value = ''; }
+      accPaint();
+      ac.addEventListener('change', function () { accPaint(); if (!ac.value) u.focus(); paint(); });
       var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'tm-name'; nm.placeholder = K('이름', 'Name'); nm.value = m.name || ''; nm.setAttribute('aria-label', K('이름', 'Name'));
       var rl = document.createElement('select'); rl.className = 'tm-role'; rl.setAttribute('aria-label', K('권한', 'Access'));
       ['member', 'reviewer', 'viewer', 'owner'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = K('권한: ', 'Access: ') + ROLE[k]; rl.appendChild(o); });
@@ -6710,7 +6944,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       on.appendChild(onc); on.appendChild(document.createTextNode(' ' + K('켬', 'On')));
       var del = el('button', 'btn', K('빼기', 'Remove')); del.type = 'button';
       del.addEventListener('click', function () { r.remove(); toast(K('«저장» 을 누르면 빠져요', 'Press «Save» to remove')); });
-      var top = el('div', 'tm-top'); [nm, u, jb, tt, rl, on, el('span', 'tm-sp'), del].forEach(function (x) { top.appendChild(x); }); r.appendChild(top);
+      var top = el('div', 'tm-top'); [nm, ac, u, jb, tt, rl, on, el('span', 'tm-sp'), del].forEach(function (x) { top.appendChild(x); }); r.appendChild(top);
       var pj = el('span', 'tm-pj');
       info.projects.forEach(function (p) {
         var l = document.createElement('label'); var c = document.createElement('input'); c.type = 'checkbox'; c.value = p.key;
@@ -6727,7 +6961,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       if (!R.tsHost && !m.tailscale) tsl.style.display = 'none';
       var todo = el('ol', 'tm-todo'); r.appendChild(todo);
       var saved = { user: m.user || '', pubkey: m.pubkey || '', tailscale: m.tailscale || '', role: mRole, job: mJob, title: m.title || '', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
-      var msgBox = null;
+      var msgBox = null, fullTxt = '';
       function step(cls, mark, build) { var li = el('li', 'tm-s-' + ({ ok: 'ok', todo: 'do', wait: 'wait' })[cls]); li.appendChild(el('span', 'tm-mk', mark)); var d = el('div'); build(d); li.appendChild(d); todo.appendChild(li); }
       function curProjects() { return Array.prototype.filter.call(pj.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; }); }
       function dirty() {
@@ -6768,25 +7002,41 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           if (su.block) { d.appendChild(el('b', '', su.block === 'downgrade' ? K('터미널 되는 계정은 통로 전용으로 못 바꿔요 — 새 아이디로 넣어 주세요', 'A shell account cannot be turned tunnel-only — use a new ID')
             : su.block === 'admin' ? K('관리자 계정이라 팀원 계정으로 쓰지 않아요 — 다른 아이디로', 'Admin account — not used for members; pick another ID') : K('시스템 계정이라 쓸 수 없어요 — 다른 아이디로', 'System account — pick another ID'))); return; }
           if (acctOk) {
-            d.appendChild(el('b', '', K('✔ 준비됨 — 서버 계정 ' + su.user + ' · ' + kind, '✔ Ready — account ' + su.user + ' · ' + kind)));
-            var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('열쇠 바꾸기 · 다시 붙여 넣기', 'Change key · paste again'))); dt.appendChild(kl); if (su.cmd) cmdLine(dt, su.cmd); d.appendChild(dt);
+            d.appendChild(el('b', '', K('✔ 준비됨 — 서버 계정 ' + su.user + ' · ' + kind + (su.keyGen ? ' · 상황판이 만든 열쇠' : ''), '✔ Ready — account ' + su.user + ' · ' + kind + (su.keyGen ? ' · board-made key' : ''))));
+            var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('열쇠 바꾸기 · 다시 붙여 넣기', 'Change key · paste again')));
+            if (su.canGen) { dt.appendChild(el('small', '', K('그 사람이 열쇠를 잃었거나 새로 받아야 하면:', 'If they lost the key or need a new one:'))); keyGenBtn(dt, su.user, true); }
+            if (!su.keyGen) { dt.appendChild(kl); if (su.cmd) cmdLine(dt, su.cmd); }
+            d.appendChild(dt);
             return;
           }
-          if (su.acctOk && su.needKey) {
-            // 서버 계정은 있음 — 그 사람 공개 열쇠만 남음
-            d.appendChild(el('b', '', K('✔ 서버 계정 ' + su.user + ' 있음(' + kind + ') · 남은 것: 그 사람 SSH 공개 열쇠', '✔ Account ' + su.user + ' exists (' + kind + ') · left: their SSH public key')));
-            d.appendChild(el('small', '', K('그 사람에게 열쇠 한 줄을 받아 아래에 넣고 저장하면, 열쇠 등록 한 줄이 나와요.', 'Get their key line, paste it below and save — the key line to paste appears.')));
-            d.appendChild(kl);
+          if (su.needKey || (su.keyGen && !su.keyPending)) {
+            // 열쇠가 없음(또는 상황판이 만든 열쇠가 다시 켜지며·24시간 지나 사라짐) — 통로 전용이면 상황판이 만들고, 개발자면 그 사람이 만든 공개 열쇠를 받음
+            var lost = !su.needKey;
+            d.appendChild(el('b', '', lost ? K('열쇠를 다시 만들어 주세요 — 만든 열쇠가 안내문에 들어가기 전에 사라졌어요(상황판을 다시 켰거나 24시간 지남)', 'Make the key again — it was lost before the invitation (board restarted or 24 h passed)')
+              : su.canGen ? K('서버 계정 ' + su.user + (su.acctOk ? ' 있음' : '') + ' · 남은 것: 열쇠', 'Server account ' + su.user + (su.acctOk ? ' exists' : '') + ' · left: the key') : K('남은 것: 그 사람 SSH 공개 열쇠 (개발자 — 터미널 계정)', 'Left: their SSH public key (developer — shell account)')));
+            if (su.canGen) {
+              d.appendChild(el('small', '', K('누르면 상황판이 열쇠 한 쌍을 만들고, 서버 창에 붙여 넣을 한 줄이 나와요. 그 사람 몫(개인 열쇠)은 ③ 안내문에 한 번만 들어가요 — 그 사람은 자기 컴퓨터 터미널에 붙여 넣기만 하면 돼요.', 'The board makes a key pair and shows the line to paste in a server shell. Their part (private key) goes into the ③ invitation once — they just paste it in their own terminal.')));
+              keyGenBtn(d, su.user, false);
+              if (!lost) { var dm = document.createElement('details'); dm.appendChild(el('summary', '', K('그 사람이 보낸 공개 열쇠가 이미 있으면', 'Already have their public key?'))); dm.appendChild(kl); d.appendChild(dm); }
+            } else {
+              d.appendChild(el('small', '', K('터미널이 열리는 계정이라 열쇠는 그 사람이 직접 만들어요. 아래 «부탁 글 복사» 를 그 사람에게 보내고, 돌아온 한 줄(ssh-ed25519 …)을 아래 칸에 넣어 저장하세요.', 'Shell accounts use a key they make themselves. Send them «Copy request», then paste the line they send back (ssh-ed25519 …) below and save.')));
+              var ask = K('서버 접속 열쇠가 필요해요. 쓰는 컴퓨터의 터미널(Windows 는 PowerShell)에서 아래 두 줄을 차례로 치고, 마지막에 나온 «ssh-ed25519 …» 한 줄을 그대로 보내 주세요(엔터만 눌러 넘어가도 돼요).\n\nssh-keygen -t ed25519\ncat ~/.ssh/id_ed25519.pub',
+                'I need your SSH key for the server. In a terminal on your computer (PowerShell on Windows) run the two lines below and send me the «ssh-ed25519 …» line it prints (pressing Enter at the prompts is fine).\n\nssh-keygen -t ed25519\ncat ~/.ssh/id_ed25519.pub');
+              var ab = el('button', 'btn', K('부탁 글 복사', 'Copy request')); ab.type = 'button';
+              ab.addEventListener('click', function () { copyText(ask, function () { toast(K('복사됨 — 메신저로 보내세요', 'Copied — send it by chat')); }, function () { toast(K('복사하지 못했어요', 'Could not copy')); }); });
+              d.appendChild(ab); d.appendChild(kl);
+            }
             return;
           }
           d.appendChild(el('b', '', su.acctOk ? K('열쇠 등록 — 터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Register the key — paste in a server terminal → done when it prints OK')
             : K('서버 계정 만들기 — 터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Create the server account — paste in a server terminal → done when it prints OK')));
           d.appendChild(el('small', '', (su.exists ? K('있는 계정 ' + su.user + ' 을 «' + kind + '» 로 맞추고' + (su.needKey ? '' : ' 열쇠를 이 열쇠 하나로 바꿉니다.'), 'Sets existing account ' + su.user + ' to «' + kind + '»' + (su.needKey ? '' : ' and replaces its keys with this one.'))
             : K('서버 계정 ' + su.user + ' 을 «' + kind + '» 로 만듭니다' + (su.needKey ? ' — 열쇠는 받은 뒤 넣어도 돼요.' : '(열쇠도 같이).'), 'Creates server account ' + su.user + ' as «' + kind + '»' + (su.needKey ? ' — the key can be added later.' : ' (with the key).'))) + K(' sudo 비밀번호를 물어요.', ' Asks for your sudo password.')));
+          if (su.exists && su.hadKeys) d.appendChild(el('small', 'tm-warn', K('⚠ 있는 계정 ' + su.user + ' 의 SSH 열쇠(authorized_keys)는 이 한 줄로 모두 바뀌어요 — 그 계정으로 들어오던 다른 열쇠는 막혀요.', '⚠ This replaces all SSH keys (authorized_keys) of existing account ' + su.user + ' — other keys for it stop working.')));
+          if (su.keyGen) d.appendChild(el('small', '', K('상황판이 만든 열쇠의 공개 쪽을 넣어요. 그 사람 몫은 ③ 안내문에 들어가요.', 'Installs the public half of the board-made key. Their half goes into the ③ invitation.')));
           cmdLine(d, su.cmd);
           var rb = el('button', 'btn', K('실행했어요 — 다시 보기', 'Done — check again')); rb.type = 'button';
           rb.addEventListener('click', function () { load(); }); d.appendChild(rb);
-          if (su.needKey) d.appendChild(kl);
         });
         // ③ 안내문 보내기 (로그인 링크 포함)
         var regDone = !!(ui && ui.pwAt) && (!needT || ui.totp);
@@ -6795,6 +7045,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           d.appendChild(el('b', '', regDone ? K('안내문 보냄 · 등록 끝', 'Invitation used · registered') : inv ? K('안내문(로그인 링크) 만듦 · ' + hhmm(inv) + ' 까지 열림', 'Invitation link made · open until ' + hhmm(inv)) : K('안내문 복사해서 그 사람에게 보내기', 'Copy the invitation and send it')));
           if (isDirty || !lid || !acctOk) { d.appendChild(el('small', '', K('② 서버 계정이 «준비됨»(계정 + 열쇠) 이면 여기서 만들어요.', 'Available once ② is «Ready» (account + key).'))); return; }
           if (!onc.checked) { d.appendChild(el('small', '', K('«켬» 이 꺼져 있어 링크를 못 만들어요.', '«On» is off — no link can be made.'))); return; }
+          if (su && su.keyPending) d.appendChild(el('small', 'tm-warn', K('🔑 이번 안내문에 그 사람 열쇠가 들어가요 — 한 번만 나오니 바로 1:1 대화로 보내세요(단체방 ✕).', '🔑 This invitation carries their key — it appears once, so send it 1:1 right away (no group chats).')));
+          else if (su && su.keyGen) d.appendChild(el('small', '', K('열쇠는 처음 안내문에만 들어가요. 그 사람이 열쇠를 못 받았거나 잃었으면 ② «열쇠 바꾸기» 에서 새 열쇠를 만드세요.', 'The key is only in the first invitation. If they never got it or lost it, make a new key in ②.')));
           d.appendChild(el('small', '', regDone ? K('휴대폰을 바꿨거나 비밀번호를 잊었으면 새 안내문을 보내요(비밀번호·인증 앱을 다시 정함).', 'Lost phone or password? Send a new invitation (they set password and app again).')
             : K('로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 들어 있어요. 메신저·메일로 그 사람에게만 보내세요. 다시 만들면 전에 보낸 링크는 안 열려요.', 'Holds the sign-in link (24 h, single use), how to connect and how to sign in. Send it to that person only. A new one cancels the previous link.')));
           var b = el('button', 'btn' + (regDone || inv ? '' : ' primary'), inv && !regDone ? K('새 안내문 만들기·복사', 'Make new invitation & copy') : K('안내문 만들기·복사', 'Make invitation & copy')); b.type = 'button';
@@ -6803,10 +7055,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             post('/api/auth/invite', { id: lid }).then(function (j) {
               b.disabled = false;
               if (!j.ok) { toast(j.message || 'error'); return; }
-              var txt = inviteText({ name: nm.value.trim() || lid, id: lid, user: user, mail: mail, shell: su && su.shell === 'login', role: rl.value, job: jb.value, title: tt.value.trim(), projects: curProjects(), needT: needT }, j);
+              var pp = { name: nm.value.trim() || lid, id: lid, user: user, mail: mail, shell: su && su.shell === 'login', role: rl.value, job: jb.value, title: tt.value.trim(), projects: curProjects(), needT: needT, keyGen: !!(su && su.keyGen) };
+              var txt = inviteText(pp, j);
               if (!msgBox) { msgBox = document.createElement('textarea'); msgBox.className = 'tm-msg'; msgBox.readOnly = true; msgBox.setAttribute('aria-label', K('안내문', 'Invitation')); }
-              msgBox.value = txt;
-              copyText(txt, function () { toast(K('안내문을 복사했어요 — 메신저·메일에 붙여 넣어 보내세요', 'Invitation copied — paste it into chat or email')); }, function () { toast(K('아래 안내문을 골라 복사하세요', 'Select the text below and copy it')); });
+              // 개인 열쇠는 화면 글상자에 두지 않음 — 복사본에만(Fable 조건 2) · 복사가 안 되는 브라우저면 어쩔 수 없이 글상자에
+              fullTxt = txt;
+              msgBox.value = j.privKey ? inviteText(pp, Object.assign({}, j, { privKey: K('(개인 열쇠 — 복사본에만 들어 있어요)', '(private key — only in the copied text)') })) : txt;
+              copyText(txt, function () { toast(j.privKey ? K('열쇠가 든 안내문을 복사했어요 — 그 사람과 1:1 대화로만 보내세요(상황판엔 열쇠가 더 남지 않아요)', 'Invitation with the key copied — send it 1:1 only (the board keeps no copy)') : K('안내문을 복사했어요 — 메신저·메일에 붙여 넣어 보내세요', 'Invitation copied — paste it into chat or email')); },
+                function () { msgBox.value = txt; toast(K('아래 안내문을 골라 복사하세요', 'Select the text below and copy it')); });
               var ex = j.hours ? Date.now() + j.hours * 3600e3 : null; if (ui) ui.inviteExp = ex; else authInfo.users.push({ id: lid, pwAt: null, inviteExp: ex });
               paint();
             }).catch(function () { b.disabled = false; toast(K('만들지 못했어요', 'Could not make it')); });
@@ -6815,7 +7071,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           if (msgBox && msgBox.value) {
             d.appendChild(msgBox);
             var cb = el('button', 'btn', K('다시 복사', 'Copy again')); cb.type = 'button';
-            cb.addEventListener('click', function () { copyText(msgBox.value, function () { toast(K('복사됨', 'Copied')); }, function () { msgBox.select(); }); }); d.appendChild(cb);
+            cb.addEventListener('click', function () { copyText(fullTxt || msgBox.value, function () { toast(K('복사됨', 'Copied')); }, function () { msgBox.value = fullTxt || msgBox.value; msgBox.select(); }); }); d.appendChild(cb);
           }
         });
         // ④ 그 사람 등록
@@ -6842,18 +7098,30 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var R = info.route || {}, srv = R.serverName || 'server', port = R.port || 8800;
       var links = j.links || [], lLocal = links.filter(function (x) { return /^http:\/\/localhost/.test(x); })[0], lTs = links.filter(function (x) { return /\.ts\.net/.test(x) || /^https:/.test(x); })[0];
       var viaSsh = !!p.user, viaTs = !!p.mail && !!lTs;
-      var ssh = 'ssh -N -L ' + port + ':127.0.0.1:' + port + ' ' + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'));
+      var kf = j.keyName || keyFileName(), useKf = !!(p.keyGen || j.privKey);
+      var ssh = 'ssh -N -L ' + port + ':127.0.0.1:' + port + ' ' + (useKf ? '-o IdentitiesOnly=yes -i ~/.ssh/' + kf + ' ' : '') + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'));
       var pjNames = p.role === 'owner' ? K('모든 솔루션', 'all projects') : info.projects.filter(function (x) { return p.projects.indexOf(x.key) >= 0; }).map(function (x) { return x.name; }).join(', ') || K('(아직 없음)', '(none yet)');
       var L = [], n = 0;
       L.push(K('[' + srv + ' 상황판 초대]', '[' + srv + ' board invitation]'));
       var jt = [JOBN[p.job], p.title].filter(Boolean).join(' · ');
       L.push(K(p.name + ' 님, ' + srv + ' 상황판에 넣었어요. ' + (jt ? jt + ' · ' : '') + '권한: ' + ROLE[p.role] + ' · 맡은 솔루션: ' + pjNames + '.', p.name + ', you have been added to the ' + srv + ' board' + (jt ? ' (' + jt + ')' : '') + ' with access «' + ROLE[p.role] + '». Projects: ' + pjNames + '.'));
       L.push(K('아이디: ' + p.id, 'ID: ' + p.id));
+      if (j.privKey) L.push(K('⚠ 이 글에는 접속 열쇠가 들어 있어 비밀번호와 같아요 — 1:1 로만 주고받고, 아래 1) 을 붙여 넣은 뒤에는 이 메시지를 지워 주세요.', '⚠ This message holds your access key — treat it like a password: 1:1 only, and delete it after pasting step 1).'));
       L.push('');
+      if (j.privKey) {
+        n++; L.push(K(n + ') 접속 열쇠 넣기 — 처음 한 번만. 쓸 컴퓨터의 터미널(Mac «터미널» · Linux · Windows 는 «Git Bash»)에 아래 줄들을 통째로 붙여 넣고 엔터', n + ') Put in your access key — once. Paste all the lines below into a terminal on your computer (Mac «Terminal» · Linux · Windows «Git Bash») and press Enter'));
+        L.push("mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat > ~/.ssh/" + kf + " <<'BOARD_KEY_END'");
+        L.push(String(j.privKey).replace(/\n+$/, ''));
+        L.push('BOARD_KEY_END');
+        L.push('chmod 600 ~/.ssh/' + kf + ' && echo OK');
+        L.push(K('  끝에 OK 가 나오면 돼요.', '  Done when it prints OK.'));
+        L.push('');
+      }
       if (p.needT) { n++; L.push(K(n + ') 휴대폰에 인증 앱 설치 — Google Authenticator 등 아무거나. 본인 휴대폰·본인 앱으로(다른 사람 것 빌리지 않기).', n + ') Install an authenticator app on your phone — Google Authenticator or any. Your own phone and app.')); L.push(''); }
       n++; L.push(K(n + ') 들어오는 길 켜기 (상황판은 인터넷에 열려 있지 않아요)', n + ') Turn on your route in (the board is not on the internet)'));
       if (viaSsh) {
-        L.push(K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 보내 주신 공개 열쇠가 있는 그 컴퓨터에서, 쓸 때마다 터미널에 아래 명령을 켜 두기(창을 닫으면 끊겨요)', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — on the computer whose public key you sent, keep this running in a terminal each time (closing the window disconnects)'));
+        L.push(useKf ? K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 열쇠를 넣은 그 컴퓨터에서, 쓸 때마다 터미널에 아래 명령을 켜 두기(창을 닫으면 끊겨요 · 처음 한 번 «yes» 를 물으면 yes)', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — on the computer with the key, keep this running in a terminal each time (closing the window disconnects · type yes if asked the first time)')
+          : K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 보내 주신 공개 열쇠가 있는 그 컴퓨터에서, 쓸 때마다 터미널에 아래 명령을 켜 두기(창을 닫으면 끊겨요)', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — on the computer whose public key you sent, keep this running in a terminal each time (closing the window disconnects)'));
         L.push('      ' + ssh);
         L.push(K('      상황판 주소: http://localhost:' + port, '      Board address: http://localhost:' + port));
         L.push(p.shell ? K('      서버 터미널: ', '      Server shell: ') + 'ssh ' + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'))
