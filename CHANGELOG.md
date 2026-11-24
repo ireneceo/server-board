@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.18]
+
+- **Existing backup found → one press, no typing** — when the «create backup» session finds a daily backup already running, it now proposes that copy folder and log to the board (`POST /api/backup-found`, needs the task's mark and a folder the board can read) instead of asking the owner to type paths. The card shows «backup found — register once» with «Register as found…» (and «Edit and register» pre-filled); the owner's save and approval work as before.
+
 ## [0.6.17]
 
 - **Release counter ignores origin-only packaging files** — edits to `kit/export-public.sh` and `kit/RELEASE.md` (never shipped) no longer count as «unreleased board changes», so they cannot queue an empty release.

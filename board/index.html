@@ -1877,6 +1877,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       'Commits are already made; dev done pushes them. To avoid overlapping, it starts right after the working session, before other queued tasks. To skip the wait, press «Dev done» again and choose to stop the working session now.');
   }
   // 자동 백업 만들기·PC 로 받기
+  // 방이 찾은 기존 백업 — 주인은 «이대로 등록» 한 번(칠 것 없음 · 기존 저장·승인 그대로)
+  function bkFoundText(f) { var b = (f && f.backup) || {}; return K('방이 찾은 기존 백업: ', 'Existing backup found by the session: ') + (b.local || []).map(function (x) { return x.path; }).join(', ') + K(' · ' + (b.every || 24) + '시간마다', ' · every ' + (b.every || 24) + 'h') + (b.log ? K(' · 기록 ', ' · log ') + b.log : '') + (f && f.note ? ' — ' + f.note : ''); }
+  function registerFound(p, f, btn) {
+    var b = f.backup, body = { log: b.log || '', every: b.every || 24, local: b.local, restore: b.restore || '' };
+    if (window.confirm(K('방이 찾은 이 백업을 등록하고 승인할까요?\n(지금 실행하지 않아요 — 사본 폴더를 읽어 현황만 봐요)\n\n', 'Register and approve this backup found by the session?\n(Nothing runs now — the board only reads the copy folder)\n\n') + JSON.stringify(body, null, 2)))
+      return act('/api/projects/' + p.key + '/backup-setup', body, btn);
+    return Promise.resolve(null);
+  }
   function bkMakingText(mk) { return K('백업 만드는 중 — ', 'creating backup — ') + (mk && mk.where === 'room' ? K('방이 만드는 중', 'a session is building it') + (mk.roomName ? ' «' + mk.roomName + '»' : '') : K('대기열에서 차례 기다림', 'waiting in the queue')); }
   var BK_PULL_DAYS = 8;
   function bkOffsite(b) {   // [cls, 짧은 글, 긴 글] — 서버 밖 사본이 없을 때만
@@ -1890,6 +1898,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     if (!b || b.level === 'none') return b && b.making ? [['n', bkMakingText(b.making)]] : [['b', K('백업 없음', 'no backup'), K('이 솔루션은 백업이 하나도 등록되지 않았어요 — «자세히» 에서 «자동 백업 만들기» 또는 «이미 있는 백업 등록»', 'No backup is registered for this project — use «Create automatic backup» or «Register an existing backup» under «More»')]];
     if (b.level === 'loading') return [K('재는 중…', 'checking…')];
     if (b.pending === 'making') return [['n', bkMakingText(b.making)]];
+    if (b.pending === 'found') return [['w', K('찾은 백업 — 등록 한 번', 'backup found — register once'), bkFoundText(b.found) + K(' — «자세히» 에서 «이대로 등록»', ' — use «Register as found» under «More»')]];
     if (b.pending === 'stalled') return [['b', K('백업 만들기가 끝나지 않음', 'backup creation did not finish'), K('맡긴 일이 끝났는데 백업 스크립트가 없어요 — «자세히» 에서 «다시 만들기»', 'The task ended but there is no backup script — use «Create again» under «More»')]];
     if (b.level === 'unapproved') return [['w', K('설정 바뀜 — 최종 컨펌자 확인 전', 'settings changed — awaiting the final approver')]];
     var out = [], bad = (b.rows || []).filter(function (r) { return r.state !== 'ok'; });
@@ -1942,6 +1951,15 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     function line(t, cls) { var d = el('div', cls || null, t); row.appendChild(d); return d; }
     function bkBtn(t, fn) { var x0 = el('button', 'btn', t); x0.type = 'button'; x0.style.cssText = 'font-size:11px;padding:3px 8px;'; x0.addEventListener('click', function () { fn(x0); }); btns.appendChild(x0); return x0; }
     if (!b || b.level === 'none' || b.pending) {
+      if (b && b.pending === 'found') {
+        line('◐ ' + bkFoundText(b.found) + K(' — 새로 만들지 않고 이 백업을 쓰면 돼요', ' — no new backup needed, use this one'), 'cc-w');
+        if (OWN_NOW) {
+          bkBtn(K('이대로 등록…', 'Register as found…'), function (x0) { registerFound(p, b.found, x0); });
+          bkBtn(K('고쳐서 등록', 'Edit and register'), function () { openBackup(p, true); });
+        }
+        row.appendChild(btns);
+        return row;
+      }
       if (b && b.making) line(bkMakingText(b.making) + K(' — 끝나면 방이 보고하고, 카드에 «백업 설정 승인» 이 떠요', ' — the session reports when done, then «Approve backup settings» appears'), 'cc-n');
       else if (b && b.pending === 'stalled') line(K('✗ 맡긴 «백업 만들기» 일이 끝났는데 백업 스크립트가 없어요', '✗ The «create backup» task ended but there is no backup script'), 'cc-b');
       else line(K('✗ 백업 없음 — 이 서버가 망가지거나 실수로 지우면 되돌릴 사본이 없어요', '✗ No backup — nothing to restore from if this server fails or data is deleted by mistake'), 'cc-b');
@@ -2008,6 +2026,12 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var lv = { ok: K('● 모두 새것', '● All fresh'), warn: K('◐ 이 서버 안 사본만 있음 — 서버 밖 사본 없음(디스크가 망가지면 같이 잃음)', '◐ Copies only on this server — nothing off-server (lost with the disk)'), bad: K('● 빠진 것 있음', '● Something is missing') };
         m.appendChild(el('div', 'dsu-st ' + (j.level === 'bad' ? 'off' : 'on'), (lv[j.level] || j.level) + K(' · 기준: ', ' · rule: ') + j.every + K('시간 + 2시간 안에 새 사본', 'h + 2h for a new copy')));
         if (j.pending === 'making') m.appendChild(el('div', 'mmsg', bkMakingText(j.making) + K(' — 스크립트가 생기기 전이라 아래 빨강은 정상이에요', ' — the script is not there yet, so red below is expected')));
+        if (j.pending === 'found' && j.found && OWN_NOW) {
+          var fr = el('div', 'dsu-act'); fr.appendChild(el('span', 'svc-w', bkFoundText(j.found)));
+          var fb = el('button', 'btn', K('이대로 등록…', 'Register as found…')); fb.type = 'button';
+          fb.addEventListener('click', function () { registerFound(p, j.found, fb).then(function (r) { if (r && r.ok) { done(); setTimeout(function () { openBackup(p); }, 600); } }); });
+          fr.appendChild(fb); m.appendChild(fr);
+        }
         if (j.pending === 'stalled' && OWN_NOW) {
           var sr = el('div', 'dsu-act'); sr.appendChild(el('span', 'svc-n warn', K('✗ 맡긴 «백업 만들기» 일이 끝났는데 스크립트가 없어요(방 보고를 보세요)', '✗ The «create backup» task ended without a script (see the session report)')));
           var sb0 = el('button', 'btn', K('다시 만들기…', 'Create again…')); sb0.type = 'button'; sb0.addEventListener('click', function () { done(); createBackup(p, null); }); sr.appendChild(sb0); m.appendChild(sr);
@@ -2158,7 +2182,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         }).catch(function () { toast(K('연결 정보를 못 읽었습니다', 'Could not load connection info')); });
       }
       function setupForm() {
-        var raw = j.raw || {};
+        var raw = (j.pending === 'found' && j.found && j.found.backup) || j.raw || {};   // 방이 찾은 값을 미리 채움
         m.appendChild(el('div', 'mmsg', K('이미 매일 도는 백업의 경로를 등록해요(백업이 없으면 창을 닫고 «자동 백업 만들기»). 상황판은 다른 서버에 접속하지 않고, 파일 이름·크기·시각만 봐요(내용은 안 읽음). «보냄»·«받은 사본» 은 다른 서버와 사본을 주고받을 때만 — 한 서버면 비우고, 서버 밖 사본은 «PC 로 받기» 로.', 'Register the paths of a backup that already runs daily (no backup yet? close this and use «Create automatic backup»). The board never connects to other servers and reads only names, sizes and times. «Sent»/«received» are only for copies exchanged with another server — on a single server leave them empty and use «Download to PC» for the off-server copy.')));
         function field(label, hint, val, ph, area) {
           var w = el('label', 'dsu-f'); w.appendChild(el('b', null, label)); if (hint) w.appendChild(el('span', null, hint));
