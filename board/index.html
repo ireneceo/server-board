@@ -807,8 +807,8 @@
   <div class="langbox teambox" id="teambox" hidden>
     <p class="tm-intro"><!--ko-->상황판을 쓰는 사람마다 계정을 넣고 권한·직무·직책을 정합니다. 이 칸은 최종 컨펌자(<b id="tm-owner"></b>)에게만 보입니다 — 작업방(AI)은 계정을 넣지 못하고 순서만 안내합니다.<!--/ko--><!--en-->Add an account with access, job and title for each person who uses the board. Only the final approver (<b id="tm-owner-en"></b>) sees this panel — AI sessions cannot add accounts, only explain the steps.<!--/en--></p>
     <ol class="tm-steps">
-      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·서버 계정·직무·권한·맡을 솔루션 + 그 사람이 보낸 <b>SSH 공개 열쇠</b> 한 줄.<!--/ko--><!--en--><b>+ Add account → Save</b> — name, server account, job, access, projects + the <b>SSH public key</b> line they sent.<!--/en--></li>
-      <li><!--ko--><b>터미널에 붙여 넣기</b> — 나온 한 줄을 서버 창에 그대로 → 그 줄에 <b>«✔ 준비됨»</b>. 직무 «개발자» 만 터미널이 열리고, 나머지는 상황판 통로만.<!--/ko--><!--en--><b>Paste in a terminal</b> — run the line in a server shell → the row shows <b>«✔ Ready»</b>. Only «Developer» gets a shell; everyone else gets the board tunnel only.<!--/en--></li>
+      <li><!--ko--><b>+ 계정 넣기 → 저장</b> — 이름·아이디·직무·권한·맡을 솔루션만 넣으면 <b>상황판 계정</b>이 생겨요. 서버 계정·SSH 열쇠는 그다음.<!--/ko--><!--en--><b>+ Add account → Save</b> — just name, ID, job, access and projects creates the <b>board account</b>. Server account and SSH key come next.<!--/en--></li>
+      <li><!--ko--><b>서버 계정 — 터미널에 붙여 넣기</b> — 나온 한 줄을 서버 창에 그대로 → 계정이 생겨요. 그 사람 <b>SSH 공개 열쇠</b>를 받으면 넣고 저장 → 다시 한 줄 → <b>«✔ 준비됨»</b>(열쇠를 먼저 받았으면 한 번에). 직무 «개발자» 만 터미널이 열리고, 나머지는 상황판 통로만.<!--/ko--><!--en--><b>Server account — paste in a terminal</b> — run the line in a server shell → the account exists. When their <b>SSH public key</b> arrives, add it, save and run the new line → <b>«✔ Ready»</b> (one go if you already have the key). Only «Developer» gets a shell; everyone else gets the board tunnel only.<!--/en--></li>
       <li><!--ko--><b>«안내문 복사»</b> → 메신저·메일로 그 사람에게 보내기 — 로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 다 들어 있어요.<!--/ko--><!--en--><b>«Copy invitation»</b> → send it by chat or email — it holds the sign-in link (24 h, single use), how to connect and how to sign in.<!--/en--></li>
       <li><!--ko-->그 사람이 링크를 열어 비밀번호를 정하고 <b>자기 휴대폰 인증 앱</b>을 등록 → 그 줄에 <b>«✔ 등록 끝»</b> 이 보이면 끝.<!--/ko--><!--en-->They open the link, set a password and register <b>their own authenticator app</b> → the row shows <b>«✔ Registered»</b> and you are done.<!--/en--></li>
     </ol>
@@ -6662,7 +6662,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     function row(m, fresh) {
       var R = (info && info.route) || {};
       var r = el('div', 'tm-row');
-      var u = document.createElement('input'); u.type = 'text'; u.className = 'tm-user'; u.placeholder = K('서버 계정 (예: kim)', 'Server account (e.g. kim)'); u.setAttribute('aria-label', K('서버 계정 = 아이디', 'Server account = ID'));
+      var u = document.createElement('input'); u.type = 'text'; u.className = 'tm-user'; u.placeholder = K('아이디 (예: kim)', 'ID (e.g. kim)'); u.setAttribute('aria-label', K('아이디 — 서버 계정도 이 이름으로 만들어요', 'ID — the server account gets the same name'));
       u.autocapitalize = 'none'; u.spellcheck = false; u.maxLength = 32;
       var dl = document.createElement('datalist'); dl.id = 'tm-acc-' + Math.random().toString(36).slice(2, 8); u.setAttribute('list', dl.id);
       info.accounts.filter(function (a) { return !a.owner && !a.admin; }).forEach(function (a) { var o = document.createElement('option'); o.value = a.user; o.textContent = a.shell === 'tunnel' ? K('통로만', 'tunnel only') : K('터미널 됨', 'shell'); dl.appendChild(o); });
@@ -6689,8 +6689,10 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       });
       var pjl = el('div', 'tm-line'); pjl.appendChild(el('span', '', K('맡을 솔루션', 'Projects'))); pjl.appendChild(pj); r.appendChild(pjl);
       var kk = document.createElement('input'); kk.type = 'text'; kk.className = 'tm-key'; kk.placeholder = 'ssh-ed25519 AAAA…'; kk.value = m.pubkey || ''; kk.spellcheck = false; kk.setAttribute('aria-label', K('SSH 공개 열쇠', 'SSH public key'));
-      var kl = el('div', 'tm-line'); kl.appendChild(el('span', '', K('그 사람 SSH 공개 열쇠', 'Their SSH public key'))); kl.appendChild(kk); r.appendChild(kl);
+      // 공개 열쇠는 계정 칸이 아니라 ② 서버 계정 단계 안에 — 상황판 계정부터 저장하고 열쇠는 받으면 넣음
+      var kl = el('div', 'tm-line'); kl.appendChild(el('span', '', K('그 사람 SSH 공개 열쇠', 'Their SSH public key'))); kl.appendChild(kk);
       kl.appendChild(el('small', 'tm-keyhelp', K('받는 법: 그 사람 컴퓨터 터미널에서 ssh-keygen -t ed25519 → cat ~/.ssh/id_ed25519.pub 한 줄', 'How: on their computer run ssh-keygen -t ed25519 → the one line of cat ~/.ssh/id_ed25519.pub')));
+      var keyHome = el('div'); keyHome.hidden = true; keyHome.appendChild(kl); r.appendChild(keyHome);
       var ts = document.createElement('input'); ts.type = 'text'; ts.className = 'tm-ts'; ts.placeholder = 'name@gmail.com'; ts.value = m.tailscale || '';
       var tsl = el('div', 'tm-line'); tsl.appendChild(el('span', '', K('Tailscale 로도 (선택) 로그인 이메일', 'Also via Tailscale (optional) login email'))); tsl.appendChild(ts); r.appendChild(tsl);
       if (!R.tsHost && !m.tailscale) tsl.style.display = 'none';
@@ -6714,37 +6716,55 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         var isDirty = dirty();
         step(isDirty ? 'todo' : 'ok', isDirty ? '1' : '✔', function (d) {
           if (!isDirty) { d.appendChild(el('b', '', K('저장됨', 'Saved'))); return; }
-          d.appendChild(el('b', '', fresh ? K('이름·서버 계정·직무·공개 열쇠 넣고 저장', 'Fill in name, account, job, public key and save') : K('바뀐 것 저장 안 함', 'Unsaved changes')));
-          d.appendChild(el('small', '', shellOk ? K('개발자 — 터미널(셸) 접속까지 열려요.', 'Developer — shell access too.') : K('개발자가 아니면 상황판 통로만 열려요(터미널·명령 안 됨).', 'Not a developer — board tunnel only (no shell or commands).')));
+          d.appendChild(el('b', '', fresh ? K('이름·아이디·직무 넣고 저장 — 상황판 계정이 생겨요', 'Fill in name, ID and job, then save — creates the board account') : K('바뀐 것 저장 안 함', 'Unsaved changes')));
+          d.appendChild(el('small', '', (fresh ? K('서버 계정·SSH 열쇠는 저장한 뒤 ② 에서 — 지금 없어도 돼요. ', 'Server account and SSH key come next in ② — not needed yet. ') : '') + (shellOk ? K('개발자 — 터미널(셸) 접속까지 열려요.', 'Developer — shell access too.') : K('개발자가 아니면 상황판 통로만 열려요(터미널·명령 안 됨).', 'Not a developer — board tunnel only (no shell or commands).'))));
           var sb = el('button', 'btn primary', K('저장', 'Save')); sb.type = 'button'; sb.disabled = !user;
           sb.addEventListener('click', function () { document.getElementById('tm-save').click(); }); d.appendChild(sb);
         });
-        // ② 서버 계정 — 터미널에 붙여 넣기 한 줄 (만들기 + 공개 열쇠 + 셸/통로만) → 실행하면 «준비됨»
-        var su = !isDirty && info.setup ? info.setup[saved.user] : null;
-        var acctOk = !!(su && su.ready && !su.needKey);
-        step(isDirty || !su ? 'wait' : acctOk ? 'ok' : 'todo', acctOk ? '✔' : '2', function (d) {
-          if (isDirty || !su) { d.appendChild(el('b', '', K('서버 계정 만들기 — 저장하면 붙여 넣을 한 줄이 나와요', 'Server account — save to get the line to paste'))); return; }
+        // ② 서버 계정 — 상황판 계정 저장 뒤 · 터미널에 붙여 넣기 한 줄(계정 만들기 + 셸/통로만 + 열쇠가 있으면 열쇠) → 실행하면 «준비됨»
+        //   열쇠가 아직 없으면 계정부터 만들고, 받으면 넣어 저장 → 다시 한 줄
+        var su = !fresh && info.setup ? info.setup[saved.user] : null;
+        var acctOk = !!(su && su.ready);
+        keyHome.appendChild(kl);
+        step(fresh || !su ? 'wait' : acctOk && !isDirty ? 'ok' : 'todo', acctOk && !isDirty ? '✔' : '2', function (d) {
+          if (fresh || !su) { d.appendChild(el('b', '', K('서버 계정 만들기 — 상황판 계정을 저장하면 붙여 넣을 한 줄이 나와요', 'Server account — save the board account to get the line to paste'))); return; }
           var kind = su.shell === 'login' ? K('터미널 됨', 'shell') : K('상황판 통로만', 'board tunnel only');
-          if (su.block) { d.appendChild(el('b', '', su.block === 'downgrade' ? K('터미널 되는 계정은 통로 전용으로 못 바꿔요 — 새 계정 이름으로 넣어 주세요', 'A shell account cannot be turned tunnel-only — use a new account name')
-            : su.block === 'admin' ? K('관리자 계정이라 팀원 계정으로 쓰지 않아요 — 다른 이름으로', 'Admin account — not used for members; pick another name') : K('시스템 계정이라 쓸 수 없어요 — 다른 이름으로', 'System account — pick another name'))); return; }
-          if (su.needKey) { d.appendChild(el('b', '', K('공개 열쇠를 넣고 저장하면 한 줄이 나와요', 'Add the public key and save to get the line'))); return; }
-          if (acctOk) {
-            d.appendChild(el('b', '', K('✔ 준비됨 — 서버 계정 ' + su.user + ' · ' + kind, '✔ Ready — account ' + su.user + ' · ' + kind)));
-            var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('열쇠를 바꿨으면 다시 붙여 넣기', 'Key changed? Paste again'))); cmdLine(dt, su.cmd); d.appendChild(dt);
+          if (isDirty) {
+            d.appendChild(el('b', '', K('바뀐 것을 저장하면 붙여 넣을 한 줄이 나와요', 'Save the changes to get the line to paste')));
+            d.appendChild(kl);
+            var sb2 = el('button', 'btn primary', K('저장', 'Save')); sb2.type = 'button'; sb2.disabled = !user;
+            sb2.addEventListener('click', function () { document.getElementById('tm-save').click(); }); d.appendChild(sb2);
             return;
           }
-          d.appendChild(el('b', '', K('터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Paste in a server terminal → done when it prints OK')));
-          d.appendChild(el('small', '', (su.exists ? K('있는 계정 ' + su.user + ' 을 «' + kind + '» 로 맞추고 열쇠를 이 열쇠 하나로 바꿉니다.', 'Sets existing account ' + su.user + ' to «' + kind + '» and replaces its keys with this one.') : K('계정 ' + su.user + ' 을 «' + kind + '» 로 만듭니다.', 'Creates account ' + su.user + ' as «' + kind + '».')) + K(' sudo 비밀번호를 물어요.', ' Asks for your sudo password.')));
+          if (su.block) { d.appendChild(el('b', '', su.block === 'downgrade' ? K('터미널 되는 계정은 통로 전용으로 못 바꿔요 — 새 아이디로 넣어 주세요', 'A shell account cannot be turned tunnel-only — use a new ID')
+            : su.block === 'admin' ? K('관리자 계정이라 팀원 계정으로 쓰지 않아요 — 다른 아이디로', 'Admin account — not used for members; pick another ID') : K('시스템 계정이라 쓸 수 없어요 — 다른 아이디로', 'System account — pick another ID'))); return; }
+          if (acctOk) {
+            d.appendChild(el('b', '', K('✔ 준비됨 — 서버 계정 ' + su.user + ' · ' + kind, '✔ Ready — account ' + su.user + ' · ' + kind)));
+            var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('열쇠 바꾸기 · 다시 붙여 넣기', 'Change key · paste again'))); dt.appendChild(kl); if (su.cmd) cmdLine(dt, su.cmd); d.appendChild(dt);
+            return;
+          }
+          if (su.acctOk && su.needKey) {
+            // 서버 계정은 있음 — 그 사람 공개 열쇠만 남음
+            d.appendChild(el('b', '', K('✔ 서버 계정 ' + su.user + ' 있음(' + kind + ') · 남은 것: 그 사람 SSH 공개 열쇠', '✔ Account ' + su.user + ' exists (' + kind + ') · left: their SSH public key')));
+            d.appendChild(el('small', '', K('그 사람에게 열쇠 한 줄을 받아 아래에 넣고 저장하면, 열쇠 등록 한 줄이 나와요.', 'Get their key line, paste it below and save — the key line to paste appears.')));
+            d.appendChild(kl);
+            return;
+          }
+          d.appendChild(el('b', '', su.acctOk ? K('열쇠 등록 — 터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Register the key — paste in a server terminal → done when it prints OK')
+            : K('서버 계정 만들기 — 터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Create the server account — paste in a server terminal → done when it prints OK')));
+          d.appendChild(el('small', '', (su.exists ? K('있는 계정 ' + su.user + ' 을 «' + kind + '» 로 맞추고' + (su.needKey ? '' : ' 열쇠를 이 열쇠 하나로 바꿉니다.'), 'Sets existing account ' + su.user + ' to «' + kind + '»' + (su.needKey ? '' : ' and replaces its keys with this one.'))
+            : K('서버 계정 ' + su.user + ' 을 «' + kind + '» 로 만듭니다' + (su.needKey ? ' — 열쇠는 받은 뒤 넣어도 돼요.' : '(열쇠도 같이).'), 'Creates server account ' + su.user + ' as «' + kind + '»' + (su.needKey ? ' — the key can be added later.' : ' (with the key).'))) + K(' sudo 비밀번호를 물어요.', ' Asks for your sudo password.')));
           cmdLine(d, su.cmd);
           var rb = el('button', 'btn', K('실행했어요 — 다시 보기', 'Done — check again')); rb.type = 'button';
           rb.addEventListener('click', function () { load(); }); d.appendChild(rb);
+          if (su.needKey) d.appendChild(kl);
         });
         // ③ 안내문 보내기 (로그인 링크 포함)
         var regDone = !!(ui && ui.pwAt) && (!needT || ui.totp);
         var inv = ui && ui.inviteExp;
         step(isDirty || !lid || !acctOk ? 'wait' : regDone ? 'ok' : inv ? 'ok' : 'todo', isDirty || !lid || !acctOk ? '3' : regDone || inv ? '✔' : '3', function (d) {
           d.appendChild(el('b', '', regDone ? K('안내문 보냄 · 등록 끝', 'Invitation used · registered') : inv ? K('안내문(로그인 링크) 만듦 · ' + hhmm(inv) + ' 까지 열림', 'Invitation link made · open until ' + hhmm(inv)) : K('안내문 복사해서 그 사람에게 보내기', 'Copy the invitation and send it')));
-          if (isDirty || !lid || !acctOk) { d.appendChild(el('small', '', K('서버 계정이 «준비됨» 이면 여기서 만들어요.', 'Available once the account is «Ready».'))); return; }
+          if (isDirty || !lid || !acctOk) { d.appendChild(el('small', '', K('② 서버 계정이 «준비됨»(계정 + 열쇠) 이면 여기서 만들어요.', 'Available once ② is «Ready» (account + key).'))); return; }
           if (!onc.checked) { d.appendChild(el('small', '', K('«켬» 이 꺼져 있어 링크를 못 만들어요.', '«On» is off — no link can be made.'))); return; }
           d.appendChild(el('small', '', regDone ? K('휴대폰을 바꿨거나 비밀번호를 잊었으면 새 안내문을 보내요(비밀번호·인증 앱을 다시 정함).', 'Lost phone or password? Send a new invitation (they set password and app again).')
             : K('로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 들어 있어요. 메신저·메일로 그 사람에게만 보내세요. 다시 만들면 전에 보낸 링크는 안 열려요.', 'Holds the sign-in link (24 h, single use), how to connect and how to sign in. Send it to that person only. A new one cancels the previous link.')));
@@ -6883,7 +6903,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     window.addEventListener('focus', function () {
       if (box.hidden || !info || !info.setup) return;
       var rows = rowsEl.querySelectorAll('.tm-row'); for (var i = 0; i < rows.length; i++) if (rows[i]._dirty && rows[i]._dirty()) return;
-      var wait = Object.keys(info.setup).some(function (k) { var x = info.setup[k]; return x && !x.ready && !x.needKey; });
+      var wait = Object.keys(info.setup).some(function (k) { var x = info.setup[k]; return x && !x.ready && !!x.cmd; });
       if (wait) load();
     });
     document.getElementById('tm-add').addEventListener('click', function () { if (!info) return; var p = rowsEl.querySelector('p'); if (p) p.remove(); row({ role: 'member', projects: [] }, true); });

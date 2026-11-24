@@ -32,12 +32,12 @@ test('한 줄 — 개발자는 셸·제한 없음 · 나머지는 nologin + 통�
   const accts = [{ user: 'kim', shell: 'tunnel', admin: false }, { user: 'lee', shell: 'login', admin: false }];
   const dev = board.accountSetup({ user: 'lee', job: 'developer', pubkey: KEY }, accts);
   assert.equal(dev.shell, 'login'); assert.equal(dev.ready, true);
-  assert.match(dev.cmd, /useradd -m -s \/bin\/bash lee/); assert.match(dev.cmd, /usermod -s \/bin\/bash lee && echo OK$/);
+  assert.match(dev.cmd, /useradd -m -s \/bin\/bash lee/); assert.match(dev.cmd, /usermod -c board-[0-9a-f]{10} -s \/bin\/bash lee && echo OK$/);
   assert.doesNotMatch(dev.cmd, /restrict|permitopen/);
   const des = board.accountSetup({ user: 'kim', job: 'designer', pubkey: KEY }, accts);
   assert.equal(des.shell, 'tunnel'); assert.equal(des.ready, true, '이미 통로 전용이면 준비됨');
   assert.match(des.cmd, /restrict,port-forwarding,permitopen="127\.0\.0\.1:\d+",permitlisten="127\.0\.0\.1:\d+",command="\/usr\/sbin\/nologin" ssh-ed25519 /);
-  assert.match(des.cmd, /usermod -s \/usr\/sbin\/nologin kim/);
+  assert.match(des.cmd, /usermod -c board-[0-9a-f]{10} -s \/usr\/sbin\/nologin kim/);
   assert.match(des.cmd, /sudo -H -u kim sh -c/, '열쇠 파일은 그 계정으로 씀');
   assert.doesNotMatch(des.cmd, /localhost/, 'localhost 는 ::1 로 풀릴 수 있어 안 씀');
   // 개발자 → 디자이너: 셸 계정을 통로 전용으로 낮추지 않음(cron 등 남음) — 줄 없음
@@ -48,8 +48,24 @@ test('한 줄 — 개발자는 셸·제한 없음 · 나머지는 nologin + 통�
   assert.equal(board.accountSetup({ user: 'root', job: 'developer', pubkey: KEY }, accts, new Set(['root'])).block, 'system');
   assert.equal(board.accountSetup({ user: 'adm', job: 'developer', pubkey: KEY }, [{ user: 'adm', shell: 'login', admin: true }]).cmd, '');
   assert.equal(board.accountSetup({ user: 'me', job: 'developer', pubkey: KEY }, [{ user: 'me', shell: 'login', owner: true }]).block, 'admin');
+  // 상황판 계정 먼저 · 서버 계정은 열쇠 없이도 만듦
   const nw = board.accountSetup({ user: 'park', job: '', pubkey: '' }, accts);
-  assert.deepEqual([nw.exists, nw.needKey, nw.cmd, nw.ready], [false, true, '', false], '열쇠 없으면 줄 없음');
+  assert.deepEqual([nw.exists, nw.needKey, nw.ready], [false, true, false]);
+  assert.equal(nw.cmd, '(id -u park >/dev/null 2>&1 || sudo useradd -m -s /usr/sbin/nologin park) && sudo usermod -c board -s /usr/sbin/nologin park && echo OK', '열쇠 없이 계정만 — 열쇠 파일은 안 건드림');
+  // 계정 만들어짐(표지 board) · 열쇠 아직 → 줄 없음, 열쇠 받으면 넣기
+  const made = [{ user: 'park', shell: 'tunnel', admin: false, note: 'board' }];
+  const k0 = board.accountSetup({ user: 'park', job: '', pubkey: '' }, made);
+  assert.deepEqual([k0.acctOk, k0.keyOk, k0.ready, k0.cmd], [true, false, false, '']);
+  // 열쇠 넣고 저장 → 열쇠 등록 줄 · 표지가 그 열쇠 지문이 될 때까지 준비 안 됨
+  const k1 = board.accountSetup({ user: 'park', job: '', pubkey: KEY }, made);
+  assert.deepEqual([k1.acctOk, k1.keyOk, k1.ready], [true, false, false]);
+  const tag = k1.cmd.match(/usermod -c (board-[0-9a-f]{10}) /)[1];
+  assert.match(k1.cmd, /authorized_keys/);
+  const k2 = board.accountSetup({ user: 'park', job: '', pubkey: KEY }, [{ user: 'park', shell: 'tunnel', admin: false, note: tag }]);
+  assert.equal(k2.ready, true, '줄을 실행하면(표지 = 이 열쇠) 준비됨');
+  // 열쇠를 바꾸면 다시 준비 안 됨
+  const KEY2 = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBBqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
+  assert.equal(board.accountSetup({ user: 'park', job: '', pubkey: KEY2 }, [{ user: 'park', shell: 'tunnel', admin: false, note: tag }]).ready, false);
   // 줄 안의 작은따옴표는 printf 와 sh -c 두 쌍뿐 — 열쇠에서 따옴표가 새로 들어오지 않음
   assert.equal((des.cmd.match(/'/g) || []).length, 6);
 });
@@ -60,7 +76,7 @@ test('저장 — 서버 계정 꼭 · 시스템·관리자 계정 거절 · 아�
   try {
     const save = (members) => call('POST', '/api/team', 'terminal', { team: { members } });
     let r = await save([{ name: '메일만', tailscale: 'a@b.c', role: 'member', projects: [] }]);
-    assert.equal(r.code, 400); assert.match(r.j.message, /서버 계정/);
+    assert.equal(r.code, 400); assert.match(r.j.message, /아이디/);
     r = await save([{ user: 'root', name: 'r', role: 'viewer', projects: [] }]);
     assert.equal(r.code, 400, '시스템 계정');
     r = await save([{ user: 'Bad Name', name: 'x', role: 'viewer', projects: [] }]);
@@ -72,6 +88,11 @@ test('저장 — 서버 계정 꼭 · 시스템·관리자 계정 거절 · 아�
     const su = t.j.setup['zz-new-test'];
     assert.deepEqual([su.exists, su.shell, su.ready], [false, 'tunnel', false]);
     assert.match(su.cmd, /useradd -m -s \/usr\/sbin\/nologin zz-new-test/);
+    // 열쇠 없이 저장 — 상황판 계정 먼저, 서버 계정 줄은 그대로 나옴
+    r = await save([{ user: 'zz-nokey', name: '열쇠없음', role: 'viewer', job: '', projects: [] }]);
+    assert.equal(r.code, 200, JSON.stringify(r.j));
+    const t2 = await call('GET', '/api/team', 'terminal');
+    assert.match(t2.j.setup['zz-nokey'].cmd, /useradd -m -s \/usr\/sbin\/nologin zz-nokey\) && sudo usermod -c board /);
     assert.ok(t.j.accounts.every((a) => a.shell === 'login' || a.shell === 'tunnel'), '통로 전용 계정도 목록에(셸 표시)');
   } finally { board.server.closeAllConnections(); await new Promise((r) => board.server.close(r)); }
 });

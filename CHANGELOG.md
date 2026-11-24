@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.16]
+
+- **⚙ Team: board account first, server account after** — «+ Add account» now asks only name, ID, job, access and projects; the SSH public key moved into step ② (server account). The step-② line works without a key (creates the account only) and again once the key arrives; «✔ Ready» means account + key, tracked by a `board-<fingerprint>` marker the line writes into the account comment. Saving no longer needs an existing server account or key.
+
 ## [0.6.15]
 
 - **«Final check needed» can be ticked at once** — the deploy dialog has «Tick all N «needed»» (rows stay visible; deploy still needs every box) and the check list has «Mark all N «needed» as checked» (with a confirm). Each task is still recorded separately with who and when. Risk words in a report (permissions, payment, login, delete…) now make a task «needed» only when the session also changed code in the project, ran a DB-structure or opaque write command, or ran data-changing SQL — reports that merely say «did not touch money or permissions», answer an inquiry or explain research stay «normal». Grades are recomputed once.

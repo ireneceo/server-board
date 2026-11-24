@@ -3738,7 +3738,7 @@ function humanAccounts() {
   try {
     for (const l of fs.readFileSync('/etc/passwd', 'utf8').split('\n')) {
       const f = l.split(':'); const uid = Number(f[2]);
-      if (f.length > 6 && uid >= 1000 && uid < 60000) out.push({ user: f[0], uid, home: f[5], owner: uid === OWNER_UID, shell: /(nologin|false)$/.test(f[6]) ? 'tunnel' : 'login', admin: admins.has(f[0]) || adminGids.has(Number(f[3])) });
+      if (f.length > 6 && uid >= 1000 && uid < 60000) out.push({ user: f[0], uid, home: f[5], owner: uid === OWNER_UID, shell: /(nologin|false)$/.test(f[6]) ? 'tunnel' : 'login', admin: admins.has(f[0]) || adminGids.has(Number(f[3])), note: f[4] || '' });
     }
   } catch (_) {}
   return out;
@@ -3750,25 +3750,36 @@ function cleanPubkey(x) { const m = String(x || '').trim().replace(/\s+/g, ' ').
 const wantsShell = (m) => !!m && m.job === 'developer';
 /** /etc/passwd 에 있는 모든 이름 */
 function allAccountNames() { const s = new Set(); try { for (const l of fs.readFileSync('/etc/passwd', 'utf8').split('\n')) { const f = l.split(':'); if (f[0]) s.add(f[0]); } } catch (_) {} return s; }
+// 상황판 계정 먼저 · 서버 계정은 그 뒤 —
+//   열쇠 없이도 줄이 나와 계정부터 만들고, 열쇠는 받으면 넣어 같은 줄을 다시 붙임
+//   «열쇠 등록됨» 은 남의 집 파일을 못 읽으니 줄 끝 usermod -c 가 남기는 표지(/etc/passwd 설명 칸 board-<열쇠 지문>)로 가름
+const keyTag = (k) => k ? 'board-' + crypto.createHash('sha256').update(k).digest('hex').slice(0, 10) : 'board';
 function accountSetup(m, accts, allNames) {
   if (!m || !ACCT_RE.test(m.user || '')) return null;
   accts = accts || humanAccounts();
   const a = accts.find((x) => x.user === m.user);
   const shell = wantsShell(m) ? 'login' : 'tunnel';
-  const r = { user: m.user, exists: !!a, shell, now: a ? a.shell : '', admin: !!(a && a.admin), ready: !!a && a.shell === shell, cmd: '', needKey: !m.pubkey, block: '' };
+  const acctOk = !!a && a.shell === shell;
+  // 표지 없는 계정 = 이 줄 전에 있던 계정(예전 줄·직접 만든 계정) → 예전처럼 계정만 맞으면 열쇠도 된 것으로
+  const keyOk = !!m.pubkey && !!a && (/^board/.test(a.note || '') ? a.note === keyTag(m.pubkey) : true);
+  const r = { user: m.user, exists: !!a, shell, now: a ? a.shell : '', admin: !!(a && a.admin), acctOk, keyOk, ready: acctOk && keyOk, cmd: '', needKey: !m.pubkey, block: '' };
   // 줄을 만들 때마다 다시 가름 — 저장 뒤 시스템·관리자 계정이 됐거나 config 를 다른 서버로 옮긴 경우도 (Fable 완료 검증 ③)
   if (!a && (allNames || allAccountNames()).has(m.user)) r.block = 'system';
   else if (a && (a.owner || a.admin)) r.block = 'admin';
   // 터미널 되는 계정을 통로 전용으로 낮추지 않음 — cron·켜 둔 프로세스·열쇠 파일로 명령 실행이 남음 → 새 계정 이름으로 (Fable 완료 검증 ②)
   else if (a && a.shell === 'login' && shell === 'tunnel') r.block = 'downgrade';
-  if (r.block) { r.ready = false; return r; }
-  if (!m.pubkey) return r;
+  if (r.block) { r.ready = r.acctOk = r.keyOk = false; return r; }
+  if (!m.pubkey && acctOk) return r;   // 계정은 됨 · 열쇠를 받아 넣으면 줄이 나옴
   const bin = shell === 'login' ? '/bin/bash' : '/usr/sbin/nologin';
-  const opts = shell === 'login' ? '' : 'restrict,port-forwarding,permitopen="127.0.0.1:' + PORT + '",permitlisten="127.0.0.1:' + PORT + '",command="/usr/sbin/nologin" ';   // permitlisten: -R 로 다른 포트를 가로채지 못하게(Fable 실측) · localhost 는 ::1 로 풀릴 수 있어 뺌
-  const line = opts + m.pubkey + ' ' + m.user + '@board';
-  // 열쇠 파일은 그 계정 자신으로 씀(root 로 남의 집에 쓰면 링크 걸어 둔 곳을 덮을 수 있음 — 0.6.12 Fable 공개 판정) · 셸 바꾸기를 끝에 둬서 «준비됨» = 앞 단계도 다 됨
-  r.cmd = '(id -u ' + m.user + ' >/dev/null 2>&1 || sudo useradd -m -s ' + bin + ' ' + m.user + ") && printf '%s\\n' '" + line + "' | sudo -H -u " + m.user
-    + " sh -c 'umask 077 && mkdir -p \"$HOME/.ssh\" && cat > \"$HOME/.ssh/authorized_keys\"' && sudo usermod -s " + bin + ' ' + m.user + ' && echo OK';
+  let keyPart = '';
+  if (m.pubkey) {
+    const opts = shell === 'login' ? '' : 'restrict,port-forwarding,permitopen="127.0.0.1:' + PORT + '",permitlisten="127.0.0.1:' + PORT + '",command="/usr/sbin/nologin" ';   // permitlisten: -R 로 다른 포트를 가로채지 못하게(Fable 실측) · localhost 는 ::1 로 풀릴 수 있어 뺌
+    const line = opts + m.pubkey + ' ' + m.user + '@board';
+    // 열쇠 파일은 그 계정 자신으로 씀(root 로 남의 집에 쓰면 링크 걸어 둔 곳을 덮을 수 있음 — 0.6.12 Fable 공개 판정)
+    keyPart = " && printf '%s\\n' '" + line + "' | sudo -H -u " + m.user + " sh -c 'umask 077 && mkdir -p \"$HOME/.ssh\" && cat > \"$HOME/.ssh/authorized_keys\"'";
+  }
+  // 셸 바꾸기·표지를 끝에 둬서 «준비됨» = 앞 단계도 다 됨
+  r.cmd = '(id -u ' + m.user + ' >/dev/null 2>&1 || sudo useradd -m -s ' + bin + ' ' + m.user + ')' + keyPart + ' && sudo usermod -c ' + keyTag(m.pubkey) + ' -s ' + bin + ' ' + m.user + ' && echo OK';
   return r;
 }
 function teamRisks() {
@@ -4781,12 +4792,11 @@ async function handleAction(req, res, url, who) {
     const accts = new Set(humanAccounts().map((a) => a.user));
     const keys = new Set(loadProjects().map((p) => p.key));
     const n = normTeam(t);
-    // 서버 계정은 꼭 있어야 함(«서버 계정 없음» 선택지 없앰 — Tailscale 은 계정 있는 사람의 덧붙이는 길) · 아직 없는 이름이면 저장 뒤 «붙여 넣기 한 줄» 로 만듦
     const rawBad = (Array.isArray(t.members) ? t.members : []).find((m) => m && String(m.user || '').trim() && !ACCT_RE.test(String(m.user).trim()));
     if (rawBad) return send(res, 400, { ok: false, message: K('계정 이름은 영어 소문자·숫자·_ - 만(32자까지): ', 'Account name: lowercase letters, digits, _ - (max 32): ') + String(rawBad.user).slice(0, 40) });
     const noUser = (Array.isArray(t.members) ? t.members : []).find((m) => m && !String(m.user || '').trim());
 
-    if (noUser) return send(res, 400, { ok: false, message: K('서버 계정 이름을 적어 주세요: ', 'Enter a server account name: ') + String(noUser.name || noUser.tailscale || '').slice(0, 40) });
+    if (noUser) return send(res, 400, { ok: false, message: K('아이디를 적어 주세요(서버 계정도 이 이름으로 만들어요): ', 'Enter an ID (the server account gets the same name): ') + String(noUser.name || noUser.tailscale || '').slice(0, 40) });
     const badName = n.members.find((m) => !ACCT_RE.test(m.user));
     if (badName) return send(res, 400, { ok: false, message: K('계정 이름은 영어 소문자·숫자·_ - 만(32자까지): ', 'Account name: lowercase letters, digits, _ - (max 32): ') + badName.user });
     const sysAcct = new Set(); try { for (const l of fs.readFileSync('/etc/passwd', 'utf8').split('\n')) { const f = l.split(':'); if (f.length > 2 && f[0] && !accts.has(f[0])) sysAcct.add(f[0]); } } catch (_) {}
