@@ -3213,6 +3213,16 @@ function backupMaking(key, st, rooms) {
   if (qs && Date.now() - Date.parse(qs.at) < 3 * 60e3) return { at: m.at, by: m.by, where: 'room' };
   return null;
 }
+/**
+ *  방이 기존 백업을 찾고 경로만 보고했거나(0.6.18 앞 판 · 제안을 못 올림) 다른 자리에 만든 경우 — 카드가 «다시 만들기» 만 보여 이유를 알 수 없었다) */
+function backupEnded(key, st, rooms) {
+  const m = ((st || peekState()).backupMade || {})[key];
+  if (!m) return null;
+  const qs = m.qid && ((st || peekState()).qStarted || {})[m.qid];
+  const r = (rooms || []).find((x) => x.project === key && ((qs && qs.id && x.id === qs.id) || (m.mark && (x.firstPrompt || '').includes(m.mark))));
+  if (!r) return null;
+  return { room: r.id, roomName: r.name, code: (r.status && r.status.code) || (r.alive ? null : 'off'), head: firstLine(r.lastReport).slice(0, 200) || null };
+}
 function backupView(p, st, rooms) {
   if (!backup.conf(p)) { const mk = backupMaking(p.key, st, rooms); return { level: 'none', making: mk || undefined, made: !!((st || peekState()).backupMade || {})[p.key] || undefined }; }
   const m = backupMem[p.key];
@@ -3222,7 +3232,7 @@ function backupView(p, st, rooms) {
   // 자동 백업 만들기로 등록했는데 스크립트가 아직 없음 — 일이 살아 있으면 «만드는 중», 아니면 «다시 만들기» (Fable 꼭 ②)
   const found = made && ((st || peekState()).backupFound || {})[p.key];   // 방이 찾은 기존 백업 — 주인이 «이대로 등록» 을 누를 때까지 제안만 (14절 «방이 찾은 기존 백업»)
   const pending = made && c.script && !fs.existsSync(c.script) ? (found ? 'found' : mk ? 'making' : 'stalled') : undefined;
-  return Object.assign({}, v, { approved: backup.isApproved(p), approvalWhy: backup.approvalWhy(p) || undefined, making: pending === 'making' ? mk : undefined, pending, found: pending === 'found' ? found : undefined, pulled: ((st || peekState()).backupPulled || {})[p.key] || undefined });
+  return Object.assign({}, v, { approved: backup.isApproved(p), approvalWhy: backup.approvalWhy(p) || undefined, making: pending === 'making' ? mk : undefined, pending, ended: pending === 'stalled' ? (backupEnded(p.key, st, rooms) || undefined) : undefined, found: pending === 'found' ? found : undefined, pulled: ((st || peekState()).backupPulled || {})[p.key] || undefined });
 }
 function backupRefresh(p, force) {
   const m = backupMem[p.key] || (backupMem[p.key] = { at: 0, v: null });
@@ -3235,7 +3245,7 @@ function gitForViewer(g) { return g ? Object.assign({}, g, { where: undefined, u
 /** 주인 아닌 사람에게 — 승인 안 된(또는 승인 뒤 바뀐) 설정이면 경로·이름을 감춘다 (Fable ②) */
 function backupForViewer(b) {
   if (b && b.level === 'none') return { level: 'none', making: b.making ? { where: b.making.where } : undefined };
-  if (b) b = Object.assign({}, b, { pulled: undefined, found: undefined, making: b.making ? { where: b.making.where } : undefined });
+  if (b) b = Object.assign({}, b, { pulled: undefined, found: undefined, ended: undefined, making: b.making ? { where: b.making.where } : undefined });
   if (!b || b.approved) return b && Object.assign({}, b, { log: undefined, command: undefined, git: gitForViewer(b.git), problems: (b.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')) });
   return { level: 'unapproved', approved: false };
 }
@@ -7007,7 +7017,7 @@ async function serveReq(req, res, who) {
       if (!own && !(on && backup.isApproved(proj))) return send(res, 200, { ok: true, key: proj.key, name: proj.name, on, level: on ? 'unapproved' : 'none' });
       if (on) await backupRefresh(proj, q.get('fresh') === '1');
       const v = on ? Object.assign({}, (backupMem[proj.key] || {}).v || {}, { approved: backup.isApproved(proj), approvalWhy: backup.approvalWhy(proj) || undefined }) : { level: 'none' };
-      { const x = backupView(proj, loadState(), cache.data && cache.data.rooms); v.pending = x.pending; v.making = own ? x.making : (x.making ? { where: x.making.where } : undefined); if (own) { v.made = x.made; v.pulled = x.pulled; v.found = x.found; v.via = who.via; v.totp = auth.hasTotp(who.user); } }   // 팀원에게는 누가·어느 방·받은 기록을 안 보냄 (Fable 완료 ⑤)
+      { const x = backupView(proj, loadState(), cache.data && cache.data.rooms); v.pending = x.pending; v.making = own ? x.making : (x.making ? { where: x.making.where } : undefined); if (own) { v.made = x.made; v.pulled = x.pulled; v.found = x.found; v.ended = x.ended; v.via = who.via; v.totp = auth.hasTotp(who.user); } }   // 팀원에게는 누가·어느 방·받은 기록을 안 보냄 (Fable 완료 ⑤)
       if (!own) { delete v.log; delete v.command; v.git = gitForViewer(v.git); v.problems = (v.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')); return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, on }, v)); }
       return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, dir: proj.dir, on, raw: proj.backup || null, approvedBy: backup.approvedOf(proj.key), tail: await backup.runTail(proj.key) }, v));
     }

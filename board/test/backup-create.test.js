@@ -67,6 +67,12 @@ test('백업 없음 → 만들기 일 · 겹침 409 · 일이 사라지면 «다
   assert.equal(board.backupView(P(), board.loadState(), [Object.assign({}, room, { alive: false })]).pending, 'stalled');
   room.status.code = 'done';
   assert.equal(board.backupView(P(), board.loadState(), [room]).pending, 'stalled');
+  // 끝난 방의 마지막 보고 첫 줄을 주인에게 — 기존 백업을 찾고 경로만 보고한 경우 «왜 스크립트가 없나» 가 보이게 · 팀원에게는 안 감
+  room.lastReport = '✅ 완료 — 기존 백업(/WORK/backup)이 이미 매일 돌아 새로 만들지 않음\n자세한 내용';
+  const ev = board.backupView(P(), board.loadState(), [room]);
+  assert.equal(ev.ended && ev.ended.head, '✅ 완료 — 기존 백업(/WORK/backup)이 이미 매일 돌아 새로 만들지 않음');
+  assert.equal(ev.ended.roomName, '백업 만들기');
+  assert.equal((board.backupForViewer(ev) || {}).ended, undefined, '팀원 화면에는 방 보고 없음');
   await call('GET', '/api/board', 'terminal');
   r = await call('POST', '/api/projects/demo/backup-create', 'terminal', {});
   assert.equal(r.code, 200, '일이 사라지면 다시 누를 수 있음 (Fable 꼭 2) ' + JSON.stringify(r.j));

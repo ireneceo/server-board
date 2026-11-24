@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.20]
+
+- **«Backup creation did not finish» now says why** — when the «create backup» task ends with no script, the card and backup window show the session's last report line (owner only) and keep «Register an existing backup» next to «Create again». The usual cause: the session found an existing daily backup and only reported its path (boards before 0.6.18 had no way to propose it) — register that copy folder instead of creating a new backup.
+
 ## [0.6.19]
 
 - **«Release new version» refuses an empty release** — with no board commits and no [Unreleased] lines since the last release, the button now answers «Nothing to release» instead of queuing a release that would send other boards an update notice with no changes (a stale screen could still show the button).
