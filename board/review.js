@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const REVIEW_MODES = ['strict', 'bundle', 'auto'];
-const GRADER = 5;   // 판정 규칙을 바꾸면 올림 — 저장된 판정을 다시 함
+const GRADER = 6;   // 판정 규칙을 바꾸면 올림 — 저장된 판정을 다시 함
 // 확인 경로 기본값 — 화면 · DB 구조 · 로그인·권한·돈 · 환경 설정 (솔루션마다 ⚙ 팀에서 바꿀 수 있음)
 const DEFAULT_REVIEW_PATHS = [
   '**/*.{vue,jsx,tsx,svelte,html,css,scss,sass,less}',
@@ -21,6 +21,9 @@ const MARK_RE = /\[(최종 확인 필요|Final check needed)\]/i;
 const WORD_RE = /(결제|환불|정산|금액|가격|요금|과금|로그인|비밀번호|권한|삭제|DB 구조|테이블 구조|마이그레이션|스키마|개인정보|payment|refund|billing|pricing|login|password|permission|delete|migration|schema|personal data)/i;
 // 개발 DB 의 데이터 넣기·고치기(시험 데이터)는 운영 위험이 아님 — 구조를 바꾸는 명령만
 const DB_CMD_RE = /\b(ALTER|DROP|CREATE)\s+TABLE\b|\b(DROP|CREATE)\s+(UNIQUE\s+)?INDEX\b|\bRENAME\s+TABLE\b|\bDROP\s+(DATABASE|SCHEMA)\b|\bnpm\s+run\s+[\w:-]*migrat|\bnode\s+\S*migrat|\bTRUNCATE\b|\bsequelize(-cli)?\s+db:migrate|\b(knex|prisma|typeorm)\b[^\n]*\bmigrat|\bsync\(\s*\{\s*(alter|force)\s*:\s*true/i;
+// 파일은 안 고쳐도 데이터를 바꾸는 SQL(지우기·고치기·넣기) — 있으면 보고의 위험 낱말을 그대로 셈
+//   ssh·curl·pm2 는 넣지 않음: 운영 읽기 접속·상황판 알림이 거의 모든 방에 있어 가르는 힘이 없음(실측)
+const ACT_CMD_RE = /\bDELETE\s+FROM\b|\bUPDATE\s+[`\w.]+\s+SET\b|\b(INSERT|REPLACE)\s+INTO\b/i;
 const PATHISH_RE = /(?:~|\.{0,2})?\/?[\w.@-]+(?:\/[\w.@-]+)+|[\w@-][\w.@-]*\.[A-Za-z0-9]{1,6}\b/g;
 const MAX_BYTES = 60 * 1024 * 1024;
 const exists = (f) => { try { return fs.statSync(f).isFile(); } catch (_) { return false; } };
@@ -76,7 +79,7 @@ function editsOf(file, dir) {
   if (size > MAX_BYTES) return null;
   let txt; try { txt = fs.readFileSync(file, 'utf8'); } catch (_) { return null; }
   try { const sd = path.join(file.replace(/\.jsonl$/, ''), 'subagents'); for (const f of fs.readdirSync(sd)) if (f.endsWith('.jsonl')) { const fp = path.join(sd, f); size += fs.statSync(fp).size; if (size > MAX_BYTES) return null; txt += '\n' + fs.readFileSync(fp, 'utf8'); } } catch (_) { /* 없음 */ }
-  const files = new Set(); let db = false, opaque = false, lines = 0;
+  const files = new Set(); let db = false, opaque = false, act = false, lines = 0;
   for (const line of txt.split('\n')) {
     if (!line.includes('"tool_use"')) continue;
     let o; try { o = JSON.parse(line); } catch (_) { continue; }
@@ -90,6 +93,7 @@ function editsOf(file, dir) {
         const cmd = inp.command;
         if (DB_CMD_RE.test(cmd)) db = true;
         if (OPAQUE_WRITE_RE.test(cmd)) opaque = true;
+        if (ACT_CMD_RE.test(cmd)) act = true;
         // 명령이 «쓰는» 대상만(> · tee · sed -i · cp/mv 의 마지막 · rm · git checkout/restore …) — 읽기만 한 파일(.env 를 grep 등)은 셈하지 않음
         //   그중 솔루션 폴더에 실제로 있는 파일만(«application/json»·주소 조각 같은 잡음 빼기)
         // «cd 하위폴더 && …» 면 상대 경로를 그 폴더 기준으로도 찾음(하위 폴더에서 고친 화면 파일을 놓치지 않게)
@@ -102,7 +106,7 @@ function editsOf(file, dir) {
       }
     }
   }
-  return { files: [...files], db, opaque, lines };
+  return { files: [...files], db, opaque, act, lines };
 }
 
 /**
@@ -114,10 +118,11 @@ function grade(o) {
   if (o.raised) why.push('raised:' + (o.raised.by || '?'));
   const rep = String(o.report || '');
   if (MARK_RE.test(rep)) why.push('marker');
-  const w = rep.match(WORD_RE); if (w) why.push('word:' + w[1]);
+  const w = rep.match(WORD_RE);
   const ed = o.transcript ? editsOf(o.transcript, o.dir) : null;
-  if (!ed) why.push('unknown');
+  if (!ed) { if (w) why.push('word:' + w[1]); why.push('unknown'); }
   else {
+    let code = false;   // 이 솔루션의 코드·설정 파일을 하나라도 고쳤나 (기록·문서만이면 아님)
     if (ed.db) why.push('db-command');
     if (ed.opaque) why.push('shell-write');
     const hit = matcher(o.paths), dir = String(o.dir || '').replace(/\/+$/, '');
@@ -125,9 +130,12 @@ function grade(o) {
       let rel = f.replace(/^~\//, (process.env.HOME || '') + '/');
       if (rel.startsWith('/')) { if (!dir || !rel.startsWith(dir + '/')) continue; rel = rel.slice(dir.length + 1); }
       rel = rel.replace(/^\.\//, '');
+      if (/(^|\/)\.claude\/worktrees\/[^/]+\/./.test(rel) && !/\.md$/i.test(rel)) code = true;
       if (/^(\/tmp|tmp\/|node_modules\/|(.*\/)?\.claude\/(worktrees|plans|projects)\/)/.test(rel) || /(^|\/)session-state\.md$/i.test(rel) || (/\.md$/i.test(rel) && !/(^|\/)CLAUDE\.md$/.test(rel))) continue;
+      code = true;
       if (hit(rel)) { why.push('path:' + rel.slice(0, 80)); break; }
     }
+    if (w && (code || ed.db || ed.opaque || ed.act || !ed.lines)) why.push('word:' + w[1]);
   }
   return { need: why.length > 0, why: why.slice(0, 4) };
 }

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.15]
+
+- **«Final check needed» can be ticked at once** — the deploy dialog has «Tick all N «needed»» (rows stay visible; deploy still needs every box) and the check list has «Mark all N «needed» as checked» (with a confirm). Each task is still recorded separately with who and when. Risk words in a report (permissions, payment, login, delete…) now make a task «needed» only when the session also changed code in the project, ran a DB-structure or opaque write command, or ran data-changing SQL — reports that merely say «did not touch money or permissions», answer an inquiry or explain research stay «normal». Grades are recomputed once.
+
+- **A single server now gets a backup, not just a path form** — a project (or the server card) with no backup shows red «no backup» with «Create automatic backup…»: the board queues a task in that project's session to write one daily backup script (`scripts/board-backup.sh` — non-blocking DB dump with end-marker check, `.part` then rename, disk-space guard, 14-day retention that always keeps the newest 3, passwords read at run time never stored), add one cron line and test-restore once; then the owner approves on the card. If a daily backup already exists the session reports its paths instead. The server card uses the new `kit/server-backup.sh` (board records, sign-in data, shared rules, crontab copy). «Download newest copy to PC» (owner, SSH tunnel or Tailscale screen, authenticator, one-time ticket) is the off-server copy for a single server — within 8 days it replaces the yellow «no copy off this server». The register form no longer says «leave empty on a single server» as if that were fine.
+- **Backup card wording** — «script changed, approve again» now says «the backup script was edited after approval» (it used to say a project session edited it, which was wrong on the server card).
+
 ## [0.6.14]
 
 - **Adding a team member is one flow** — ⚙ Team & roles now takes the person's server account name and SSH public key; after saving, the card shows one «Paste in a terminal» line (creates the account if missing, installs the key as that account, sets the shell) with a copy button, and the row turns «✔ Ready» once it has run. Only job «Developer» gets a shell; every other job gets the board tunnel only (nologin + `restrict,port-forwarding,permitopen` on the key — no shell, commands or other destinations). The «no server account (Tailscale only)» choice is gone — Tailscale stays as an optional extra route; tunnel-only accounts now show in the account list; admin (sudo) and system accounts are refused.

@@ -3178,7 +3178,7 @@ async function buildBoard0(gen) {
         .concat(scoutHold(p, rooms, projects, st, limit, now))
         .concat(!holdingRooms(rooms, p.key, now).length && wokeRecently(p.key, now, rooms) ? [K('다음 일을 막 시작했어요 — 방이 목록에 잡히는 중(몇 초)', 'Next task just started — waiting for it to appear in the list (a few seconds)')] : []),
       runner: runner.conf(p) ? runner.summary(p) : null,
-      backup: backupView(p),
+      backup: backupView(p, st, rooms),
       devdone: p.noDevDone ? null : devdoneState(st, rooms, p.key, now),
       prodDeploy: p.prodMarker ? Object.assign({}, (st.prodSeen || {})[p.key] || {}, prodErr[p.key] ? { error: prodErr[p.key].error } : {}) : null,
       ...devInfo[p.key] })),
@@ -3199,12 +3199,28 @@ function devdoneState(st, rooms, key, now) {
   if (!q) return null;
   return { state: 'wait', at: q.createdAt || null, after: holdingRooms(rooms, key, now).map((r) => r.name) };
 }
-function backupView(p) {
-  if (!backup.conf(p)) return null;
+/** «자동 백업 만들기» 일이 살아 있나 — 대기열에 있거나 그 일을 받은 방이 도는 중·답 기다림 (14절 · Fable 꼭 ②: 7일 시계 아님) */
+function backupMaking(key, st, rooms) {
+  const m = ((st || peekState()).backupMade || {})[key];
+  if (!m) return null;
+  const q = ((st || peekState()).queue || []).find((x) => x.ref === 'backup-create:' + key);
+  if (q) return { at: m.at, by: m.by, where: 'queue' };
+  // 대기열에서 빠진 뒤엔 시작한 방 번호(qStarted)로도 찾는다 — 방이 목록에 잡히기 전 몇 초 틈에 «다시 만들기» 가 열리지 않게 (Fable 완료 ③)
+  const qs = m.qid && ((st || peekState()).qStarted || {})[m.qid];
+  const r = (rooms || []).find((x) => x.project === key && ((qs && qs.id && x.id === qs.id) || (x.firstPrompt || '').includes(m.mark)) && x.alive && x.status && !['done', 'blocked', 'stopped', 'off'].includes(x.status.code));
+  if (r) return { at: m.at, by: m.by, where: 'room', room: r.id, roomName: r.name };
+  if (qs && Date.now() - Date.parse(qs.at) < 3 * 60e3) return { at: m.at, by: m.by, where: 'room' };
+  return null;
+}
+function backupView(p, st, rooms) {
+  if (!backup.conf(p)) { const mk = backupMaking(p.key, st, rooms); return { level: 'none', making: mk || undefined, made: !!((st || peekState()).backupMade || {})[p.key] || undefined }; }
   const m = backupMem[p.key];
   if (!m || Date.now() - m.at > 5 * 60 * 1000 || m.fp !== backup.fingerprint(p) || (m.v && m.v.run && m.v.run.result === 'running')) backupRefresh(p);
   const v = m ? m.v : { level: 'loading' };
-  return Object.assign({}, v, { approved: backup.isApproved(p), approvalWhy: backup.approvalWhy(p) || undefined });
+  const c = backup.conf(p), made = ((st || peekState()).backupMade || {})[p.key], mk = made ? backupMaking(p.key, st, rooms) : null;
+  // 자동 백업 만들기로 등록했는데 스크립트가 아직 없음 — 일이 살아 있으면 «만드는 중», 아니면 «다시 만들기» (Fable 꼭 ②)
+  const pending = made && c.script && !fs.existsSync(c.script) ? (mk ? 'making' : 'stalled') : undefined;
+  return Object.assign({}, v, { approved: backup.isApproved(p), approvalWhy: backup.approvalWhy(p) || undefined, making: pending === 'making' ? mk : undefined, pending, pulled: ((st || peekState()).backupPulled || {})[p.key] || undefined });
 }
 function backupRefresh(p, force) {
   const m = backupMem[p.key] || (backupMem[p.key] = { at: 0, v: null });
@@ -3216,10 +3232,130 @@ function backupRefresh(p, force) {
 function gitForViewer(g) { return g ? Object.assign({}, g, { where: undefined, up: undefined, branch: undefined }) : g; }
 /** 주인 아닌 사람에게 — 승인 안 된(또는 승인 뒤 바뀐) 설정이면 경로·이름을 감춘다 (Fable ②) */
 function backupForViewer(b) {
+  if (b && b.level === 'none') return { level: 'none', making: b.making ? { where: b.making.where } : undefined };
+  if (b) b = Object.assign({}, b, { pulled: undefined, making: b.making ? { where: b.making.where } : undefined });
   if (!b || b.approved) return b && Object.assign({}, b, { log: undefined, command: undefined, git: gitForViewer(b.git), problems: (b.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')) });
   return { level: 'unapproved', approved: false };
 }
 
+// ── 자동 백업 만들기 · PC 로 받기 ──
+const BACKUP_MADE_CMD = 'scripts/board-backup.sh';
+function backupMadeConf(proj) {
+  const base = path.join(HOME, 'backups', 'board');
+  return { command: BACKUP_MADE_CMD, log: path.join(base, proj.key + '.log'), local: [{ label: K('이 서버 사본', 'On this server'), path: path.join(base, proj.key) }], restore: 'docs/BACKUP_RESTORE.md' };
+}
+function backupCreateTask(proj, b, mark, acctName) {
+  const isServer = proj.key === 'server', dir = proj.dir, out = b.local[0].path, log = b.log, script = path.join(dir, BACKUP_MADE_CMD);
+  return K('[상황판 — 백업 만들기] ' + proj.name + ' 이 서버 자동 백업 만들기 — ' + OWNER + ' 가 상황판 «백업» 에서 맡김 ' + mark + '\n' +
+    '- 허락된 것은 셋뿐: 스크립트 1개(' + script + ') · crontab 1줄 · 복원 문서 1개(' + path.join(dir, 'docs/BACKUP_RESTORE.md') + ', 없을 때만). 코드·DB·서비스 재시작·projects.json·/api/files 로 사본 내주기는 하지 않는다.\n' +
+    '- 0. 먼저 확인: crontab -l 과 이 폴더의 기존 백업 스크립트(backup·dump 이름)를 본다. 이미 매일 도는 백업이 있으면 새로 만들지 말고 멈춘 뒤 ⏸ — 그 스크립트·기록 파일·사본 폴더 경로를 보고하고 «⚙ 경로 설정» 에 넣을 값으로 안내한다.\n' +
+    '- 1. 조사: ' + (isServer ? '서버 카드 — ' + path.join(dir, 'kit/server-backup.sh') + ' 를 복사해 쓴다(BACKUP_ROOT=' + out + ' 로 고정 · 다른 서버로 보내는 줄 없음). DB 는 없다.' : 'DB 종류·이름(설정 파일에서 읽음) · 사용자가 올린 파일 폴더 · .env 등 설정 파일 · 코드(원격 저장소가 있으면 빼고, 없으면 node_modules·빌드 결과 빼고 넣음).') + '\n' +
+    '- 2. 스크립트 규칙: set -euo pipefail · umask 077 · flock 으로 겹침 막기 · 출력 ' + out + '/YYYYMMDD/ · 파일은 .part 로 쓰고 끝에 이름 바꿈 · 시작 전 디스크 여유 10% 미만이거나 지난 사본×2 보다 적으면 만들지 않고 실패 · 폴더 700·파일 600 · ' +
+    'DB 덤프는 서비스를 멈추지 않게(MySQL --single-transaction · PostgreSQL pg_dump -Fc · SQLite .backup) 하고 크기·끝 표시(mysqldump «Dump completed» · pg_restore -l 성공)를 확인해 빈 사본을 성공으로 치지 않음 · ' +
+    '비밀번호는 스크립트에 쓰지 않는다 — 돌 때마다 솔루션 설정에서 읽어 mktemp(600) 파일로(--defaults-extra-file · PGPASSFILE) 넘기고 trap 으로 지움 · 명령줄 인자·echo·set -x 금지 · ' +
+    '보관 정리는 오늘 사본을 확인한 뒤에만, ' + out + ' 안의 날짜 이름 폴더만, 14일 지난 것 — 단 최신 3개는 날짜와 상관없이 남김 · 다른 서버로 보내지 않음 · 끝 줄 «✅ board-backup ok <UTC 시각>» · 실패면 0 아닌 종료.\n' +
+    '- 3. 시험: 깨끗한 환경(env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=' + HOME + ' nice -n 10 ' + script + ')으로 한 번 돌려 사본·크기·걸린 시간 확인 → ' + path.join(HOME, 'backups') + ' 안 700 임시 폴더에 풀어 DB 덤프 표 수·파일 수 대조(개발 DB 는 덮지 않음) → 임시 폴더 지움. «하루 크기 × 14» 가 남은 디스크의 절반을 넘으면 cron 을 넣지 말고 ⏸(보관 줄이기 등 제안).\n' +
+    '- 4. crontab(' + acctName + ' 계정 — 상황판이 백업을 이 계정으로 돌린다. 다른 계정이면 넣지 말고 ⏸ 로 주인이 붙일 명령을 남김): 먼저 crontab -l > ' + path.join(HOME, 'crontab.bak-<날짜>') + ' → 같은 줄이 없을 때만, 이미 있는 백업 줄과 30분 이상 떨어진 새벽 시간에 «nice -n 10 ionice -c3 ' + script + ' >> ' + log + ' 2>&1» 한 줄을 더함(다른 줄은 안 바꿈).\n' +
+    '- 5. ' + (isServer ? '커밋하지 않는다(상황판 폴더는 새 판 받기와 엉킴 — 스크립트는 git 이 모르는 파일로 둠).' : '스크립트와 복원 문서는 이 솔루션 커밋 규칙대로 커밋(규칙이 «지시 때만» 이면 이 일이 그 지시). git clean 에 사라지면 백업이 조용히 멈추기 때문.') + '\n' +
+    '- 6. 보고 ✅: 담은 것·뺀 것 · 사본 크기·걸린 시간 · cron 줄 · 복원 시험 결과 · «상황판 카드의 «백업 설정 승인» 을 눌러 주세요(정기 백업은 승인과 상관없이 이미 돌아요 — 승인은 «지금 백업»·복원 요청을 여는 것)».',
+    '[Board — create backup] Create an automatic on-server backup for ' + proj.name + ' — requested by the owner from the board «Backup» box ' + mark + '\n' +
+    '- Only three things are allowed: one script (' + script + ') · one crontab line · one restore document (' + path.join(dir, 'docs/BACKUP_RESTORE.md') + ', only if missing). No code, DB or service-restart changes, no projects.json edits, never hand out copies via /api/files.\n' +
+    '- 0. Check first: crontab -l and existing backup scripts in this folder (names with backup/dump). If a daily backup already exists, do not create another — stop and ask (⏸), reporting its script, log file and copy folder as values for «⚙ Paths».\n' +
+    '- 1. Survey: ' + (isServer ? 'server card — copy ' + path.join(dir, 'kit/server-backup.sh') + ' (fix BACKUP_ROOT=' + out + ' · no sending to other servers). There is no DB.' : 'DB type and name (from the config files) · user-upload folders · config files such as .env · code (skip it if a remote repository exists; otherwise include it without node_modules/build output).') + '\n' +
+    '- 2. Script rules: set -euo pipefail · umask 077 · flock against overlap · output ' + out + '/YYYYMMDD/ · write .part files and rename at the end · before starting, fail without writing if free disk is under 10% or under 2× the last copy · folders 700, files 600 · ' +
+    'dump the DB without stopping the service (MySQL --single-transaction · PostgreSQL pg_dump -Fc · SQLite .backup) and check size and end marker (mysqldump «Dump completed» · pg_restore -l succeeds) so an empty copy never counts as success · ' +
+    'never write passwords into the script — read them from the project config on each run, pass them via a mktemp (600) file (--defaults-extra-file · PGPASSFILE) removed by trap · never on the command line, echo or set -x · ' +
+    'prune only after today\'s copy is verified, only date-named folders inside ' + out + ', older than 14 days — always keep the newest 3 regardless of date · never send to other servers · last line «✅ board-backup ok <UTC time>» · non-zero exit on failure.\n' +
+    '- 3. Test: run once in a clean environment (env -i PATH=/usr/local/bin:/usr/bin:/bin HOME=' + HOME + ' nice -n 10 ' + script + ') and check copy, size, duration → unpack into a 700 temp folder inside ' + path.join(HOME, 'backups') + ' and compare DB table counts and file counts (never overwrite the dev DB) → delete the temp folder. If «daily size × 14» exceeds half the free disk, do not add cron — ask (⏸) with options such as shorter retention.\n' +
+    '- 4. crontab (account ' + acctName + ' — the board runs backups as this account; if you are a different account, do not add it — ask (⏸) leaving the command for the owner): first crontab -l > ' + path.join(HOME, 'crontab.bak-<date>') + ' → only if no identical line exists, add one line at night at least 30 minutes away from other backup lines: «nice -n 10 ionice -c3 ' + script + ' >> ' + log + ' 2>&1» (change no other line).\n' +
+    '- 5. ' + (isServer ? 'Do not commit (the board folder would tangle with board updates — leave the script untracked).' : 'Commit the script and restore document following this project\'s commit rules (if the rule is «only on instruction», this task is that instruction) — a git clean would otherwise silently stop backups.') + '\n' +
+    '- 6. Report ✅: what is included/excluded · copy size and duration · cron line · restore test result · «Press «Approve backup settings» on the board card (the nightly backup already runs regardless — approval unlocks «Back up now» and restore requests)».');
+}
+function backupCreate(res, proj, by) {
+  const st = loadState(), rooms = cache.data && cache.data.rooms;
+  if (!rooms) return send(res, 409, { ok: false, message: K('방 목록을 읽는 중이에요 — 몇 초 뒤 다시', 'Still reading the session list — try again in a few seconds') });
+  const c = backup.conf(proj);
+  if (c && !(loadState().backupMade || {})[proj.key]) return send(res, 409, { ok: false, message: K('이미 백업이 등록돼 있어요 — «열기» 에서 보세요', 'A backup is already registered — see «Open»') });
+  if (c && c.script && fs.existsSync(c.script)) return send(res, 409, { ok: false, message: K('백업 스크립트가 이미 있어요 — 카드에서 «백업 설정 승인» 을 누르세요', 'The backup script already exists — press «Approve backup settings» on the card') });
+  if (backupMaking(proj.key, st, rooms)) return send(res, 409, { ok: false, message: K('백업 만들기 일이 이미 대기열·방에 있어요', 'A create-backup task is already queued or running') });
+  const b = backupMadeConf(proj);
+  const next = Object.assign({}, proj, { backup: Object.assign({}, (proj.backup && proj.backup.git === false) ? { git: false } : {}, b) });
+  const pr = backup.problems(backup.conf(next)).filter((x) => !/스크립트가 없거나|script missing/i.test(x));
+  if (pr.length) return send(res, 400, { ok: false, message: pr.join(' · ') });
+  try { fs.mkdirSync(LOG_DIR, { recursive: true }); fs.copyFileSync(PROJECTS_FILE, path.join(LOG_DIR, 'projects-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json')); } catch (_) {}
+  const all = JSON.parse(fs.readFileSync(PROJECTS_FILE, 'utf8'));   // 쓰기 직전에 다시 읽고 이 솔루션 backup 칸만
+  all.forEach((p) => { if (p.key === proj.key) p.backup = next.backup; });
+  fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(all, null, 2) + '\n'); fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
+  const qid = 'bkc' + Date.now().toString(36), mark = '[backup-create ' + proj.key + ' ' + qid + ']';
+  const s2 = loadState();
+  s2.backupMade = s2.backupMade || {}; s2.backupMade[proj.key] = { at: new Date().toISOString(), by, qid, mark };
+  if (s2.backupApproved) delete s2.backupApproved[proj.key];
+  s2.queue.push({ qid, project: proj.key, task: backupCreateTask(proj, b, mark, acct.accountOf('backup')), title: K('백업 만들기', 'Create backup'), ref: 'backup-create:' + proj.key, createdAt: new Date().toISOString() });
+  saveState(s2); delete backupMem[proj.key]; cache.at = 0;
+  writeLog({ action: 'backup-create-queued', project: proj.key, by, qid, backup: next.backup });
+  return send(res, 200, { ok: true, qid, message: K(proj.name + ' 대기열에 «백업 만들기» 를 넣었어요 — 방이 스크립트·매일 실행을 만들고 시험한 뒤 보고해요. 그 뒤 카드에서 «백업 설정 승인»', 'Queued «create backup» for ' + proj.name + ' — the session builds and tests the script and daily run, then reports. Then approve on the card') });
+}
+// PC 로 받기 — 주인 · 화면 로그인(통로·Tailscale — 암호화된 길) · 인증 앱 등록 · 30분 재확인(SENSITIVE_POST) → 한 번 쓰는 5분 표 (Fable 꼭 7·8)
+const backupDl = new Map();   // token → { key, path, name, dir, user, exp }
+let backupDlBusy = false;
+async function backupDownloadTicket(res, who, proj, body) {
+  if (!(who.via === 'tunnel' || who.via === 'tailscale')) return send(res, 403, { ok: false, message: K('PC 로 받기는 SSH 통로나 Tailscale 주소로 연 화면에서만 돼요', 'Download works only from a screen opened via the SSH tunnel or the Tailscale address') });
+  if (!auth.hasTotp(who.user)) return send(res, 403, { ok: false, message: K('인증 앱을 등록한 최종 컨펌자만 받을 수 있어요', 'Only the final approver with an authenticator can download') });
+  if (!backup.conf(proj)) return send(res, 400, { ok: false, message: K(proj.name + ' 은 백업이 등록되지 않았어요', proj.name + ' has no backup registered') });
+  if (!backup.isApproved(proj)) return send(res, 409, { ok: false, message: K('백업 설정 승인 먼저', 'Approve the backup settings first') });
+  const kind = body.kind === 'received' ? 'received' : 'local';
+  const cp = await backup.pickCopy(proj, kind, body.i, body.name);
+  if (!cp) return send(res, 400, { ok: false, message: K('그 사본을 등록 폴더에서 찾지 못했어요 — 창을 다시 열어 고르세요', 'That copy is not in the registered folder — reopen and pick again') });
+  const now = Date.now();
+  for (const [k, v] of backupDl) if (v.exp < now) backupDl.delete(k);
+  const token = crypto.randomBytes(16).toString('hex');
+  backupDl.set(token, { key: proj.key, path: cp.path, name: cp.name, dir: !!cp.dir, kind, user: who.user, exp: now + 5 * 60e3 });
+  writeLog({ action: 'backup-download-ticket', project: proj.key, by: who.name || who.user, copy: cp.path });
+  return send(res, 200, { ok: true, url: '/api/backup-dl/' + token, name: cp.name + (cp.dir ? '.tar.gz' : '') });
+}
+function backupDownloadServe(req, res, who, token) {
+  const t = backupDl.get(token);
+  backupDl.delete(token);   // 시작하면 표 소진(이어받기 없음)
+  if (!t || t.exp < Date.now()) return send(res, 404, { ok: false, message: K('받기 표가 없거나 지났어요 — 창에서 다시 누르세요', 'Download ticket missing or expired — press again in the box') });
+  if (!isOwner(who) || who.user !== t.user || !(who.via === 'tunnel' || who.via === 'tailscale')) return send(res, 403, { ok: false });
+  if (backupDlBusy) return send(res, 409, { ok: false, message: K('다른 사본을 받는 중이에요 — 끝난 뒤에', 'Another copy is downloading — try after it finishes') });
+  const fname = t.name + (t.dir ? '.tar.gz' : ''), ascii = fname.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  let src, child = null, size = null;
+  if (t.dir) {
+    child = acct.spawn('backup', 'nice', ['-n', '10', 'tar', '-cz', '-C', path.dirname(t.path), '--', path.basename(t.path)], { stdio: ['ignore', 'pipe', 'ignore'], detached: true, env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME } });
+    src = child.stdout;
+  } else {
+    try { size = fs.statSync(t.path).size; } catch (_) { return send(res, 404, { ok: false }); }
+    src = fs.createReadStream(t.path);
+  }
+  backupDlBusy = true;
+  const h = { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + ascii + '"; filename*=UTF-8\'\'' + encodeURIComponent(fname),
+    'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; sandbox" };
+  if (size != null) h['Content-Length'] = size;
+  res.writeHead(200, h);
+  let ended = false, failed = false;
+  const stop = () => { if (child) { try { process.kill(-child.pid, 'SIGTERM'); } catch (_) {} } };
+  const finish = () => {
+    if (ended) return; ended = true; backupDlBusy = false;
+    if (failed) { writeLog({ action: 'backup-download-cut', project: t.key, name: fname }); return; }
+    const st = loadState(); st.backupPulled = st.backupPulled || {};
+    st.backupPulled[t.key] = { at: new Date().toISOString(), by: who.name || who.user, name: fname, kind: t.kind };
+    saveState(st); cache.at = 0;
+    writeLog({ action: 'backup-download', project: t.key, by: who.name || who.user, name: fname });
+  };
+  const abort = () => { failed = true; stop(); try { src.destroy(); } catch (_) {} try { res.destroy(); } catch (_) {} };
+  res.on('close', () => { if (!res.writableFinished) { failed = true; stop(); try { src.destroy(); } catch (_) {} } finish(); });
+  src.on('error', abort);
+  if (child) {
+    // tar 는 끝 코드가 0 일 때만 응답을 끝맺는다 — 중간 실패가 «정상 파일» 로 보이거나 «PC 로 받음» 이 기록되지 않게 (Fable 완료 ④)
+    let srcEnd = false, code = undefined;
+    const tryEnd = () => { if (srcEnd && code !== undefined) { if (code === 0) res.end(); else abort(); } };
+    child.on('error', abort);
+    child.on('exit', (c) => { code = c; tryEnd(); });
+    src.on('end', () => { srcEnd = true; tryEnd(); });
+    src.pipe(res, { end: false });
+  } else src.pipe(res);
+}
 // 큰 글 묶음 번호 — 방마다·끝난 일 목록의 지문. 최근 묶음 몇 개를 기억해 화면이 가진 묶음과의 차이만 보낸다 (/api/board X-Board-Delta)
 const heavySnaps = new Map();
 let heavyMemo = { data: null, v: null };
@@ -3748,7 +3884,7 @@ function markChecked(st, sids, by, level, info) {
   for (const s of sids) {
     const prev = st.deployChecked[s], i = (info && info[s]) || {};
     if (level === 'mid') st.deployChecked[s] = { by, at, level: 'mid', need: i.need || undefined, why: i.why };
-    else st.deployChecked[s] = { by, at, level: 'final', need: i.need || undefined, why: i.why, mid: prev && prev.level === 'mid' ? { by: prev.by, at: prev.at } : undefined };
+    else st.deployChecked[s] = { by, at, level: 'final', need: i.need || undefined, why: i.why, all: i.all || undefined, mid: prev && prev.level === 'mid' ? { by: prev.by, at: prev.at } : undefined };
   }
   const ks = Object.keys(st.deployChecked); if (ks.length > 2000) for (const k of ks.slice(0, ks.length - 2000)) delete st.deployChecked[k];
 }
@@ -4736,11 +4872,13 @@ async function handleAction(req, res, url, who) {
     const a = runner.approve(next, by); cache.at = 0;   // 주인이 화면에서 명령을 보고 넣은 것 = 승인(같은 기록 줄 · 지문)
     return send(res, 200, { ok: true, message: K('연결했어요 — 상황판이 이 명령만 실행합니다: ', 'Connected — the board runs only this command: ') + a.command + (next.deploy.dryRun ? K(' · 먼저 «시험 배포» 로 확인해 보세요', ' · try «Dry run» first') : '') });
   }
-  const mbk = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/backup-(setup|approve|run|restore)$/);
+  const mbk = url.match(/^\/api\/projects\/([a-z0-9_-]+)\/backup-(setup|approve|run|restore|create|download)$/);
   if (mbk) {
     const all = loadProjects(), proj = all.find((p) => p.key === mbk[1]);
     if (!proj) return send(res, 404, { ok: false, message: K('솔루션을 찾을 수 없습니다', 'Project not found') });
     const by = who.name || who.user;
+    if (mbk[2] === 'create') return backupCreate(res, proj, by);
+    if (mbk[2] === 'download') return backupDownloadTicket(res, who, proj, body);
     if (mbk[2] === 'setup') {
       const clean = (v, n) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, n || 300);
       const rows = (v, k) => (Array.isArray(v) ? v : []).map((x) => ({ label: clean(x && x.label, 40), [k]: clean(x && x[k]) })).filter((x) => x[k]).slice(0, 8);
@@ -4767,7 +4905,8 @@ async function handleAction(req, res, url, who) {
       fs.writeFileSync(PROJECTS_FILE + '.tmp', JSON.stringify(out, null, 2) + '\n'); fs.renameSync(PROJECTS_FILE + '.tmp', PROJECTS_FILE);
       writeLog({ action: 'backup-setup', project: proj.key, by, off: body.off === true || undefined, backup: next.backup || null });
       delete backupMem[proj.key]; cache.at = 0;
-      if (body.off === true) { const s1 = loadState(); if (s1.backupApproved) delete s1.backupApproved[proj.key]; saveState(s1); return send(res, 200, { ok: true, message: K('백업 등록을 지웠어요(백업 스크립트·사본은 그대로)', 'Backup registration removed (scripts and copies untouched)') }); }
+      if (body.off === true) { const s1 = loadState(); if (s1.backupApproved) delete s1.backupApproved[proj.key]; if (s1.backupMade) delete s1.backupMade[proj.key]; saveState(s1); return send(res, 200, { ok: true, message: K('백업 등록을 지웠어요(백업 스크립트·사본은 그대로)', 'Backup registration removed (scripts and copies untouched)') }); }
+      { const s1 = loadState(); if (s1.backupMade && s1.backupMade[proj.key] && next.backup.command !== BACKUP_MADE_CMD) { delete s1.backupMade[proj.key]; saveState(s1); } }   // 주인이 다른 백업을 등록하면 «만들기» 표시를 지움 (Fable 완료 ⑥)
       backup.approve(next, by); backupRefresh(next, true);
       return send(res, 200, { ok: true, message: K('저장하고 승인했어요 — 현황을 다시 재는 중', 'Saved and approved — re-reading status') });
     }
@@ -4950,8 +5089,9 @@ async function handleAction(req, res, url, who) {
       if (nd.length) return send(res, 403, { ok: false, message: K('«최종 확인 필요» 일은 최종 컨펌자만 확인합니다: ', '«Final check needed» tasks are checked by the final approver only: ') + nd.map((x) => '«' + x.name + '»').join(', ') });
       level = 'mid';
     }
-    const s0 = loadState(); markChecked(s0, pick.map((x) => x.sid), name, level, Object.fromEntries(pick.map((x) => [x.sid, { need: x.need, why: x.why }]))); saveState(s0); cache.at = 0;
-    writeLog({ action: 'deploy-check', project: proj.key, sids: pick.map((x) => x.id), level, by: actorOf(who) });
+    if (body.all && pick.some((x) => (x.why || []).some((w) => /^raised:/.test(w)))) return send(res, 400, { ok: false, message: K('사람이 «필요» 로 올린 일은 하나씩 확인해 주세요', 'Tasks raised to «needed» by a person are checked one by one') });
+    const s0 = loadState(); markChecked(s0, pick.map((x) => x.sid), name, level, Object.fromEntries(pick.map((x) => [x.sid, { need: x.need, why: x.why, all: body.all && x.need ? true : undefined }]))); saveState(s0); cache.at = 0;
+    writeLog({ action: 'deploy-check', project: proj.key, sids: pick.map((x) => x.id), level, by: actorOf(who), all: body.all ? true : undefined });
     return send(res, 200, { ok: true, message: level === 'mid' ? K(pick.length + '개를 중간 확인했습니다 — 최종 컨펌자가 배포 때 묶음으로 승인합니다', 'Reviewed ' + pick.length + ' — the final approver approves them as a bundle at deploy')
       : (EN ? `Marked ${pick.length} as checked` : `${pick.length}개를 확인 완료로 표시했습니다`) });
   }
@@ -5343,9 +5483,9 @@ async function handleAction(req, res, url, who) {
     }
     { const unc = uncheckedWork(board, peekState(), proj.key);
       const shown = Array.isArray(body.sids) ? body.sids.map(String) : null;   // 화면이 본 목록 — 그 사이 새로 끝난 일이 있으면 다시 보여 줌 (Fable 완료 검증 ③)
-      const needL = unc.filter((x) => x.need), needOk = Array.isArray(body.needSids) ? body.needSids.map(String) : [];
-      if (unc.length && (body.checkAll !== true || !shown || unc.some((x) => !shown.includes(x.sid)) || needL.some((x) => !needOk.includes(x.sid)))) return send(res, 409, { ok: false, code: 'UNCHECKED', list: unc, mode: reviewMode(proj.key), message: EN ? `${proj.name}: ${unc.length} finished task(s) since the last deploy are not marked «Checked»` + (needL.length ? ` — ${needL.length} need your own look one by one` : '') + `. Look at each «Where to check», then confirm.` : `${proj.name}: 지난 배포 뒤 끝난 일 ${unc.length}개가 아직 «확인 완료» 가 아닙니다` + (needL.length ? ` — 그중 ${needL.length}개는 «최종 확인 필요»(하나씩 체크)` : '') + `. 각 일의 «확인할 곳» 을 본 뒤 확인 완료하세요.` });
-      if (unc.length) { const s0 = loadState(); markChecked(s0, unc.map((x) => x.sid), who.name || who.user, 'final', Object.fromEntries(unc.map((x) => [x.sid, { need: x.need, why: x.why }]))); saveState(s0); writeLog({ action: 'deploy-check', project: proj.key, sids: unc.map((x) => x.id), need: needL.map((x) => x.id), via: 'deploy-button' }); } }
+      const needL = unc.filter((x) => x.need), needOk = Array.isArray(body.needSids) ? body.needSids.map(String) : [], needAll = new Set(Array.isArray(body.needAll) ? body.needAll.map(String) : []);
+      if (unc.length && (body.checkAll !== true || !shown || unc.some((x) => !shown.includes(x.sid)) || needL.some((x) => !needOk.includes(x.sid)))) return send(res, 409, { ok: false, code: 'UNCHECKED', list: unc, mode: reviewMode(proj.key), message: EN ? `${proj.name}: ${unc.length} finished task(s) since the last deploy are not marked «Checked»` + (needL.length ? ` — ${needL.length} need your own tick («final check needed»)` : '') + `. Look at each «Where to check», then confirm.` : `${proj.name}: 지난 배포 뒤 끝난 일 ${unc.length}개가 아직 «확인 완료» 가 아닙니다` + (needL.length ? ` — 그중 ${needL.length}개는 «최종 확인 필요»(체크)` : '') + `. 각 일의 «확인할 곳» 을 본 뒤 확인 완료하세요.` });
+      if (unc.length) { const s0 = loadState(); markChecked(s0, unc.map((x) => x.sid), who.name || who.user, 'final', Object.fromEntries(unc.map((x) => [x.sid, { need: x.need, why: x.why, all: x.need && needAll.has(x.sid) && !(x.why || []).some((w) => /^raised:/.test(w)) ? true : undefined }]))); saveState(s0); writeLog({ action: 'deploy-check', project: proj.key, sids: unc.map((x) => x.id), need: needL.map((x) => x.id), needAll: needAll.size ? [...needAll].length : undefined, via: 'deploy-button' }); } }
     // 실행기 솔루션(projects.json «deploy») — 조건을 먼저 보고, 맞으면 일시정지 → (준비 방) → 상황판이 배포 명령을 누른다
     let rItem = null;
     if (runner.conf(proj)) {
@@ -6417,7 +6557,7 @@ async function handleAction(req, res, url, who) {
 
 const AUTH_ISSUER = 'Server Board';
 const setupPending = new Map();   // nonce → { id, secret, exp } — 인증 앱 등록 중(15분)
-const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup)|backup-(setup|approve|run|restore)|git-(key|connect))$/, /^\/api\/deploy-check$/,
+const SENSITIVE_POST = [/^\/api\/team$/, /^\/api\/gate$/, /^\/api\/settings$/, /^\/api\/projects\/[a-z0-9_-]+\/(deploy|devdone|deploy-(approve|dry|ack|unhold|baseline|setup)|backup-(setup|approve|run|restore|create|download)|git-(key|connect))$/, /^\/api\/deploy-check$/,
   /^\/api\/schedules/, /^\/api\/rooms\/[0-9a-f]{8}\/delete$/, /^\/api\/queue\/[0-9a-z]+\/delete$/, /^\/api\/asks\/[0-9a-z]+\/delete$/, /^\/api\/fable-wait\/fw[0-9a-z]+\/delete$/,
   /^\/api\/ai-login\//, /^\/api\/setup\/(start|reopen|done)$/, /^\/api\/update\/(apply|revert)$/, /^\/api\/auth\/(invite|kick|remove)$/, /^\/api\/inquiries\/auto$/];
 const needsFresh = (who, url) => who.role === 'owner' && who.via !== 'terminal' && SENSITIVE_POST.some((re) => re.test(url)) && !who.fresh;
@@ -6725,7 +6865,7 @@ const server = http.createServer(async (req, res) => {
   const who = whoIs(req);
   if (req._sessMove) res.setHeader('Set-Cookie', SESS_COOKIE + '=' + req._sessMove + '; Path=/; HttpOnly; SameSite=Lax' + (tsHost && hh === tsHost ? '; Secure' : '') + '; Max-Age=' + Math.floor(auth.ABS_MS / 1000));   // 새 이름으로 옮김(옛 쿠키는 다른 서버 것일 수 있어 지우지 않음)
   if (who.role === 'stranger') {
-    writeLog({ action: 'deny-stranger', by: 'stranger:' + who.user, via: who.via, url: String(req.url || '').slice(0, 80) });
+    writeLog({ action: 'deny-stranger', by: 'stranger:' + who.user, via: who.via, url: String(req.url || '').replace(/(\/api\/backup-dl\/)[0-9a-f]+/, '$1…').slice(0, 80) });
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end(K('이 계정(' + who.user + ')은 이 상황판의 팀에 없습니다 — 주인이 상황판 «⚙ 팀·권한» 에서 넣어야 열립니다.', 'This account (' + who.user + ') is not on this board\'s team — the owner must add it under «⚙ Team & roles».'));
   }
@@ -6784,7 +6924,8 @@ async function serveReq(req, res, who) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(html);
     }
-    { const fm = url.match(/^\/api\/files\/(f[0-9a-z]{8,24})$/); if (fm) return fileServe(req, res, who, fm[1]); }   // 📥 방이 내준 파일
+    { const fm = url.match(/^\/api\/files\/(f[0-9a-z]{8,24})$/); if (fm) return fileServe(req, res, who, fm[1]); }
+    { const bm = url.match(/^\/api\/backup-dl\/([0-9a-f]{32})$/); if (bm) return backupDownloadServe(req, res, who, bm[1]); }   // 💾 백업 사본 PC 로 받기 (14절)   // 📥 방이 내준 파일
     if (url === '/api/gate') {   // ⚙ 개발 사이트 관문 — 주인만
       if (!isOwner(who)) return send(res, 403, { ok: false, message: K('주인만 볼 수 있습니다', 'Owner only') });
       return send(res, 200, { ok: true, projects: gate.settings(), always: gate.ALWAYS, defaults: gate.DEFAULT_EXCEPT, names: Object.fromEntries(loadProjects().map((p) => [p.key, p.name])),
@@ -6829,6 +6970,7 @@ async function serveReq(req, res, who) {
       if (!own && !(on && backup.isApproved(proj))) return send(res, 200, { ok: true, key: proj.key, name: proj.name, on, level: on ? 'unapproved' : 'none' });
       if (on) await backupRefresh(proj, q.get('fresh') === '1');
       const v = on ? Object.assign({}, (backupMem[proj.key] || {}).v || {}, { approved: backup.isApproved(proj), approvalWhy: backup.approvalWhy(proj) || undefined }) : { level: 'none' };
+      { const x = backupView(proj, loadState(), cache.data && cache.data.rooms); v.pending = x.pending; v.making = own ? x.making : (x.making ? { where: x.making.where } : undefined); if (own) { v.made = x.made; v.pulled = x.pulled; v.via = who.via; v.totp = auth.hasTotp(who.user); } }   // 팀원에게는 누가·어느 방·받은 기록을 안 보냄 (Fable 완료 ⑤)
       if (!own) { delete v.log; delete v.command; v.git = gitForViewer(v.git); v.problems = (v.problems || []).map(() => K('설정 문제 — 최종 컨펌자 확인', 'Settings problem — final approver to check')); return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, on }, v)); }
       return send(res, 200, Object.assign({ ok: true, key: proj.key, name: proj.name, dir: proj.dir, on, raw: proj.backup || null, approvedBy: backup.approvedOf(proj.key), tail: await backup.runTail(proj.key) }, v));
     }

@@ -100,7 +100,7 @@ The recommendations come from running this board every day on a real server with
 | E2 | Model for independent verification | `model` in the `fable-verify` command | The strongest model the account has. **Use it sparingly**: only for judgments that are hard to undo or can't be settled by a machine check (design, money, permissions, production data, public URLs, outgoing messages) · at most twice per issue (design once + verify once) · everything else is proven by running it and reporting numbers |
 | E3 | Where secrets live (.env, DB settings) | Location only (S9) | Never read or write the values |
 | **F** | **Backups** | | |
-| F1 | Where backups go | "Watch out" in the report | Read the backup scripts for lines that copy elsewhere (scp, rsync, cloud upload) before judging · if they really are only on the same disk, note "lost together if the server dies" and recommend an off-server copy (creating it sends data out, so it's the owner's call) |
+| F1 | Where backups go | "Watch out" in the report · `projects.json` `backup` | Read the backup scripts for lines that copy elsewhere (scp, rsync, cloud upload) before judging · if a daily backup exists, report its script, log and copy folder as `backup` values (the owner approves on the card) · **if there is no backup at all, do not create one** — tell the owner in the report: card red «no backup» → press «Create automatic backup» (server card included) · if copies are only on the same disk, note "lost together if the server dies" and recommend «Download to PC» in the box or an off-server copy (sending data out is the owner's call) |
 
 ## 1c. Install plan — one table with the answers applied
 

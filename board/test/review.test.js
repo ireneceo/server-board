@@ -51,6 +51,13 @@ test('등급: 경로·표지·낱말·판정 불가는 «필요», 서버 코드
   assert.equal(g({ report: '✅ 완료', transcript: tf('/p/db/migrations/2026-add.js') }).need, true);
   assert.equal(g({ report: '✅ 완료', transcript: tf('/p/backend/x.js'), raised: { by: 'mem' } }).need, true);
   assert.equal(g({ report: '✅ 완료', transcript: tf('/p/README.md') }).need, false, '문서만 = 보통');
+  assert.equal(g({ report: '✅ 완료 — 돈·권한은 건드리지 않았습니다', transcript: tf('/p/README.md') }).need, false, '문서만 + 낱말 = 보통');
+  assert.deepEqual(g({ report: '✅ 완료 — 권한 확인 고침', transcript: tf('/p/backend/x.js') }).why, ['word:권한'], '코드 + 낱말 = 필요');
+  assert.deepEqual(g({ report: '✅ 완료 — 로그인 문의 답장', transcript: null }).why, ['word:로그인', 'unknown'], '판정 불가면 낱말도 남김');
+  const tc = (cmd) => { const t = path.join(tmpRoot, Math.random().toString(36).slice(2) + '.jsonl'); fs.writeFileSync(t, JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: cmd } }] } }) + '\n'); return t; };
+  assert.equal(g({ report: '✅ 완료 — 시험 계정 삭제', transcript: tc('mysql db -e "DELETE FROM users WHERE id=3"') }).need, true, '파일 없어도 데이터 바꾸는 SQL + 낱말 = 필요');
+  assert.equal(g({ report: '✅ 완료 — 권한 고침', transcript: tf('/p/.claude/worktrees/w1/backend/acl.js') }).need, true, 'worktree 안 코드 + 낱말 = 필요');
+  assert.equal(g({ report: '✅ 완료 — 권한 문의 확인', transcript: tc('ssh prod-ro cat log; curl -s -X POST -d x http://127.0.0.1:8800/api/asks') }).need, false, '읽기 접속·상황판 알림 + 낱말 = 보통');
   assert.equal(g({ report: '✅ 완료', transcript: tf('/elsewhere/a.vue') }).need, false, '솔루션 밖 파일은 셈하지 않음');
   assert.equal(g({ report: '✅ 완료', transcript: tf('/p/backend/x.js'), paths: ['backend/**'] }).need, true, '솔루션별 경로');
   assert.deepEqual(review.writeTargets('grep KEY app/.env > /dev/null'), [], '읽기만 = 셈 안 함');
@@ -161,7 +168,11 @@ test('API: reviewer 자기 일 403 · 필요 403 · 남의 보통 200 level=mid 
     const b5 = board.uncheckedWork(await board.buildBoard(), board.loadState(), 'demo').find((x) => x.name === 'b');
     assert.equal(b5.need, true); assert.match(b5.why[0], /^raised:/);
     // 주인 확인 = final, 중간 기록 보존
-    const [s3] = await call('owner', '/api/deploy-check', { project: 'demo', sids: [SID(4), SID(6)] });
+    // «모두 확인 완료»(all) — 사람이 올린 일이 끼면 거절, 기계 «필요» 만이면 기록에 all
+    assert.equal((await call('owner', '/api/deploy-check', { project: 'demo', sids: [SID(5), SID(6)], all: true }))[0], 400, '올린 일은 하나씩');
+    const [s3] = await call('owner', '/api/deploy-check', { project: 'demo', sids: [SID(4), SID(6)], all: true });
+    assert.equal(board.loadState().deployChecked[SID(6)].all, true, '모두 체크 흔적');
+    assert.equal(board.loadState().deployChecked[SID(4)].all, undefined, '보통 일엔 all 안 붙음');
     assert.equal(s3, 200);
     const c4 = board.loadState().deployChecked[SID(4)];
     assert.equal(c4.level, 'final'); assert.equal(c4.mid.by, '검토');
