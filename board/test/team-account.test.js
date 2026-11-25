@@ -173,3 +173,11 @@ test('만든 열쇠 + 표지 없는 있는 계정 — 붙여 넣기 전엔 준�
   // 표지 없는 예전 계정에 그 사람이 보낸 열쇠(keyGen 아님)는 예전처럼
   assert.equal(board.accountSetup({ user: 'kim', job: 'planner', pubkey: pub }, [{ user: 'kim', shell: 'tunnel', admin: false, note: '' }]).ready, true);
 });
+
+// 안내문 열쇠 파일 이름 — 한글 서버 이름이면 «----_board» 대신 접속 주소로
+test('열쇠 파일 이름: 한글 서버 이름은 접속 주소로', () => {
+  assert.equal(board.boardKeyName('개발서버', '203.0.113.10'), '203-0-113-10_board');
+  assert.equal(board.boardKeyName('My Server', '1.2.3.4'), 'my-server_board');
+  assert.equal(board.boardKeyName('dev서버', '1.2.3.4'), 'dev_board');
+  assert.equal(board.boardKeyName('개발서버', ''), 'server_board');
+});

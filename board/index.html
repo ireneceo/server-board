@@ -6978,7 +6978,14 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       });
       parent.appendChild(b); return b;
     }
-    function keyFileName() { return String((info.route && info.route.serverName) || 'server').replace(/[^A-Za-z0-9_.-]/g, '-').slice(0, 40).toLowerCase() + '_board'; }
+    function keyFileName() {
+      var R = info.route || {}, t = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9_.-]+/g, '-').replace(/-+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 40); };
+      var a = /[a-z0-9]/.test(t(R.serverName)) ? t(R.serverName) : t(String(R.host || '').replace(/\./g, '-'));
+      return (a || 'server') + '_board';
+    }
+    // ② 맨 앞 «서버 창 열기» — 맥 터미널에서 이 서버로 들어가는 줄 (4615 터미널 로그인 안내와 같은 문구)
+    var OPEN_SRV = K('서버 창 열기 — 맥 터미널 새 탭(⌘+T)에 아래 줄을 붙여 넣고 Enter → 메뉴가 뜨면 아무것도 고르지 말고 Enter → 끝 줄이 …$ 가 되면 서버 창 (이미 서버 창이면 건너뛰기)',
+      'Open a server window — paste the line below into a new Mac terminal tab (⌘+T) and press Enter → if a menu appears, press Enter without choosing → when the last line ends in …$ you are in a server window (skip if already there)');
     function hhmm(t) { var d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
     function row(m, fresh) {
       var R = (info && info.route) || {};
@@ -7123,9 +7130,10 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             : su.block === 'admin' ? K('관리자 계정이라 팀원 계정으로 쓰지 않아요 — 다른 아이디로', 'Admin account — not used for members; pick another ID') : K('시스템 계정이라 쓸 수 없어요 — 다른 아이디로', 'System account — pick another ID'))); return; }
           if (acctOk) {
             d.appendChild(el('b', '', K('✔ 준비됨 — 서버 계정 ' + su.user + ' · ' + kind + (su.keyGen ? ' · 상황판이 만든 열쇠' : ''), '✔ Ready — account ' + su.user + ' · ' + kind + (su.keyGen ? ' · board-made key' : ''))));
+            if (!(ui && (ui.inviteExp || ui.pwAt))) d.appendChild(el('small', '', K('다음: ③ «안내문 만들기·복사» 를 눌러 그 사람에게 1:1 로 보내요(저절로 가지 않아요).', 'Next: press ③ «Make invitation & copy» and send it to them 1:1 (nothing is sent automatically).')));
             var dt = document.createElement('details'); dt.appendChild(el('summary', '', K('열쇠 바꾸기 · 다시 붙여 넣기', 'Change key · paste again')));
             if (su.canGen) { dt.appendChild(el('small', '', K('그 사람이 열쇠를 잃었거나 새로 받아야 하면:', 'If they lost the key or need a new one:'))); keyGenBtn(dt, su.user, true); }
-            if (!su.keyGen) { dt.appendChild(kl); if (su.cmd) cmdLine(dt, su.cmd); }
+            if (!su.keyGen) { dt.appendChild(kl); if (su.cmd) { dt.appendChild(el('small', '', OPEN_SRV)); cmdLine(dt, DEV_SSH); dt.appendChild(el('small', '', K('그 서버 창에 아래 한 줄을 붙여 넣고 Enter → sudo 비밀번호 → 끝에 OK', 'Paste the line below in that server window and press Enter → sudo password → done at OK'))); cmdLine(dt, su.cmd); } }
             d.appendChild(dt);
             return;
           }
@@ -7141,8 +7149,8 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             if (!lost) { var dm = document.createElement('details'); dm.appendChild(el('summary', '', K('그 사람이 보낸 공개 열쇠(ssh-ed25519 …)가 이미 있으면 — 붙여 넣고 저장', 'Already have their public key (ssh-ed25519 …)? Paste it and save'))); dm.appendChild(kl); d.appendChild(dm); }
             return;
           }
-          d.appendChild(el('b', '', su.acctOk ? K('열쇠 등록 — 터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Register the key — paste in a server terminal → done when it prints OK')
-            : K('서버 계정 만들기 — 터미널에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Create the server account — paste in a server terminal → done when it prints OK')));
+          d.appendChild(el('b', '', su.acctOk ? K('열쇠 등록 — 서버 창에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Register the key — paste in a server window → done when it prints OK')
+            : K('서버 계정 만들기 — 서버 창에 붙여 넣기 → 끝에 OK 가 나오면 끝', 'Create the server account — paste in a server window → done when it prints OK')));
           d.appendChild(el('small', '', (su.exists ? K('있는 계정 ' + su.user + ' 을 «' + kind + '» 로 맞추고' + (su.needKey ? '' : ' 열쇠를 이 열쇠 하나로 바꿉니다.'), 'Sets existing account ' + su.user + ' to «' + kind + '»' + (su.needKey ? '' : ' and replaces its keys with this one.'))
             : K('서버 계정 ' + su.user + ' 을 «' + kind + '» 로 만듭니다' + (su.needKey ? ' — 열쇠는 받은 뒤 넣어도 돼요.' : '(열쇠도 같이).'), 'Creates server account ' + su.user + ' as «' + kind + '»' + (su.needKey ? ' — the key can be added later.' : ' (with the key).'))) + K(' sudo 비밀번호를 물어요.', ' Asks for your sudo password.')));
           if (su.exists && su.hadKeys) d.appendChild(el('small', 'tm-warn', K('⚠ 있는 계정 ' + su.user + ' 의 SSH 열쇠(authorized_keys)는 이 한 줄로 모두 바뀌어요 — 그 계정으로 들어오던 다른 열쇠는 막혀요.', '⚠ This replaces all SSH keys (authorized_keys) of existing account ' + su.user + ' — other keys for it stop working.')));
@@ -7151,9 +7159,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           rb.addEventListener('click', function () { load(); });
           var ss = [];
           if (!su.keyGen && saved.pubkey) ss.push([K('공개 열쇠 넣어 저장함', 'Public key saved'), true]);
-          ss.push([K('아래 한 줄의 «복사» 누르기', 'Press «Copy» on the line below'), false, function (li) { cmdLine(li, su.cmd); }]);
-          ss.push([K('서버 창(이 서버 터미널)에 붙여 넣고 엔터 → sudo 비밀번호 넣기 → 끝에 OK 가 나오면 끝', 'Paste it in a server shell and press Enter → type your sudo password → done when it prints OK'), false]);
-          ss.push([K('여기 «실행했어요 — 다시 보기» 누르기 → ② 가 ✔ 준비됨 으로 바뀌어요', 'Press «Done — check again» here → ② turns ✔ Ready'), false, function (li) { li.appendChild(rb); }]);
+          ss.push([OPEN_SRV, false, function (li) { cmdLine(li, DEV_SSH); }]);
+          ss.push([K('아래 한 줄의 «복사» 누르기 → 그 서버 창에 붙여 넣고 Enter → sudo 비밀번호 넣기 → 끝에 OK 가 나오면 끝', 'Press «Copy» on the line below → paste it in that server window and press Enter → type your sudo password → done when it prints OK'), false, function (li) { cmdLine(li, su.cmd); }]);
+          ss.push([K('여기 «실행했어요 — 다시 보기» 누르기 → ② 가 ✔ 준비됨 으로 바뀌어요 → ✔ 준비됨이 되면 ③ «안내문 만들기·복사» 를 눌러 그 사람에게 1:1 로 보내요(저절로 가지 않아요)', 'Press «Done — check again» here → ② turns ✔ Ready → then press ③ «Make invitation & copy» and send it to them 1:1 (nothing is sent automatically)'), false, function (li) { li.appendChild(rb); }]);
           subSteps(d, ss);
         });
         // ③ 안내문 보내기 (로그인 링크 포함)
@@ -7257,8 +7265,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         L.push(useKf ? K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 열쇠를 넣은 그 컴퓨터에서, 쓸 때마다 터미널에 아래 명령을 켜 두기(창을 닫으면 끊겨요 · 처음 한 번 «yes» 를 물으면 yes)', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — on the computer with the key, keep this running in a terminal each time (closing the window disconnects · type yes if asked the first time)')
           : K((viaTs ? '  [A] ' : '  ') + 'SSH 통로 — 보내 주신 공개 열쇠가 있는 그 컴퓨터에서, 쓸 때마다 터미널에 아래 명령을 켜 두기(창을 닫으면 끊겨요)', (viaTs ? '  [A] ' : '  ') + 'SSH tunnel — on the computer whose public key you sent, keep this running in a terminal each time (closing the window disconnects)'));
         L.push('      ' + ssh);
+        L.push(K('      엔터 뒤 아무 글도 안 나오면 연결된 것 — 그 창은 그대로 두고 브라우저에서 아래 링크를 열어요.', '      If nothing prints after Enter, you are connected — leave that window open and open the link below in your browser.'));
         L.push(K('      상황판 주소: http://localhost:' + port, '      Board address: http://localhost:' + port));
-        L.push(p.shell ? K('      서버 터미널: ', '      Server shell: ') + 'ssh ' + (useKf ? '-o IdentitiesOnly=yes -i ~/.ssh/' + kf + ' ' : '') + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'))
+        L.push(p.shell ? K('      서버 터미널(새 터미널 창에서): ', '      Server shell (in a new terminal window): ') + 'ssh ' + (useKf ? '-o IdentitiesOnly=yes -i ~/.ssh/' + kf + ' ' : '') + (R.sshPort ? '-p ' + R.sshPort + ' ' : '') + p.user + '@' + (R.host || K('<서버 주소>', '<server address>'))
           : K('      이 계정은 상황판 통로만 열려요(서버 터미널은 안 됨).', '      This account opens the board tunnel only (no server shell).'));
       }
       if (viaTs) {

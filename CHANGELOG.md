@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.27]
+
+- **Clearer team-member setup and invitation** — in ⚙ Team & roles, step ② now starts with «Open a server window»: the connect line (`ssh you@server`) with a Copy button and what to do when the menu appears, then «paste the line below in that server window». The last sub-step says what comes next: once ② shows ✔ Ready, press ③ «Make invitation & copy» and send it 1:1 (nothing is sent automatically). The invitation's key file no longer turns a non-Latin server name into `----_board` — it falls back to the server address (e.g. `203-0-113-10_board`). Under the tunnel command it now says that nothing printing after Enter means you are connected, and the developer server-shell line says to use a new terminal window.
+
 ## [0.6.26]
 
 - **Page width choice and better resizing** — «⚙ Settings» has a new «Page width» option: «Normal — centered, 1100px» (as before) or «Wide — full screen». It applies right away and is remembered per browser only. Solution columns now follow the real width (each at least 330px) instead of a fixed 1023px breakpoint, so a 1024px window shows 2 roomy columns instead of 3 cramped ones, and wide screens fit more. Resizing the window or rotating a phone re-lays out the columns without waiting for new data. Korean text no longer breaks in the middle of a word.
