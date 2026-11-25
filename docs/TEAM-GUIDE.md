@@ -21,7 +21,7 @@
 ## What you can do
 - You see only your assigned projects.
 - **Requests go in as proposals.** The final approver chooses do / edit & do / don't before work starts (depending on settings).
-- You can answer questions from sessions started from your own proposals (setting «Sessions members answer»).
+- You can answer questions from sessions started from your own proposals (setting «Sessions members answer» — the final approver may set it per person to «every session in their projects» or «none»).
 - Deploys, settings, deletes and team changes are for the final approver.
 - **Check list before deploy** (project card «Check list n · needed k» — when the project has a «Normal tasks» mode on): the board splits finished tasks into «final check needed» (touched screens, DB structure, login, permissions, money or deletion, marked by the session, or could not be graded) and «normal». Anyone can **raise** a «normal» task to «needed» (only the final approver lowers). The final approver checks «needed» tasks one by one or with **«Tick all»** (still recorded per task, who and when). Risk words in a report (permissions, payment…) count toward «needed» only when that session changed code or ran a data-changing command.
 - With **Reviewer** access you «Review» «normal» tasks in your projects and approve or decline members' proposals as written (editing is for the final approver). Not your own tasks or proposals. «Final check needed» tasks and deploys stay with the final approver.

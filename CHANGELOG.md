@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.24]
+
+- **Per-member settings and an invitation email address in «⚙ Team & roles»** — each account card gets an optional «invitation email» field: «③ Make invitation & copy» copies the text and opens a new message to that address in your own mail app (`mailto:` — the board has no mail server and never sends mail itself). An invitation that contains a private key is not opened in the mail app automatically; it gets a separate «Send by email» button with a warning to confirm. A new «this person only» row sets «sessions they can answer» (team default / their own tasks only / every session in their projects / none) and «their tasks» (team default / after approval / start directly), overriding the team values (`members[].answers`, `members[].approval`, `members[].email`). Hidden for viewers and the final approver; the authenticator setting stays team-wide. An invalid email address is refused on save.
+
 ## [0.6.23]
 
 - **The update box no longer shows an old version as current** — after updating by hand in a server terminal (for example the one-time 0.6.22 rebase step), the board kept its last check for up to 6 hours and its last result for a day, so it said «Board updated to 0.6.15» with nothing newer while 0.6.22 was running. Now the box uses the version actually running (`board/VERSION`): a past «updated to X» or failed result that no longer matches is hidden, a check made against another version is ignored and redone 20 seconds after start (and hourly), and after every update the board checks again within seconds in case a newer version came out meanwhile. The «updated» box also shows «Now X · latest published Y (checked at …)».

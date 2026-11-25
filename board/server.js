@@ -3637,6 +3637,13 @@ const cleanTitle = (x) => String(x || '').replace(/[\u0000-\u001f\u007f-\u009f\u
 const jobName = (j) => JOB_NAMES[j] ? K(JOB_NAMES[j][0], JOB_NAMES[j][1]) : '';
 const isWorker = (who) => !!who && (who.role === 'member' || who.role === 'designer' || who.role === 'reviewer');
 const ANSWER_MODES = ['own', 'project', 'none'];
+const EMAIL_RE = /^(?:(?![@<>"'`,;:\\()\[\]])[\x21-\x7e]){1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?)+$/;
+const cleanEmail = (x) => { const v = String(x || '').trim(); return v.length <= 120 && EMAIL_RE.test(v) ? v : ''; };
+/** 이 사람 계정별 설정(없으면 팀 기본) — { answers: own|project|none, approval: true|false } */
+function memberRule(user) {
+  const m = TEAM.members.find((x) => loginIdOf(x) === String(user || '').toLowerCase());
+  return { answers: (m && m.answers) || TEAM.memberAnswers, approval: m && m.approval ? m.approval === 'on' : TEAM.approval };
+}
 function normTeam(t) {
   t = t && typeof t === 'object' ? t : {};
   const members = (Array.isArray(t.members) ? t.members : []).map((m) => ({
@@ -3650,6 +3657,10 @@ function normTeam(t) {
     pubkey: cleanPubkey(m && m.pubkey),   // 그 사람 SSH 공개 열쇠(종류·base64 만) — «붙여 넣기 한 줄» 에 들어감
     keyGen: !!(m && m.keyGen),   // 공개 열쇠를 상황판이 만들었음(개인 열쇠는 메모리에만 · 초대 때 한 번) — 저장 때 서버가 다시 가름
     active: !(m && m.active === false),   // 끄면 로그인·접속이 바로 막힌다(지운 것과 달리 설정은 남음)
+    email: cleanEmail(m && m.email),   // 안내 메일 받을 주소(선택) — 화면이 «메일로 보내기» 에 씀 · 상황판이 직접 보내지 않음(그 사람 메일 앱이 엶)
+    // 계정별 설정 — 비면 팀 기본값(아래 approval·memberAnswers)
+    answers: ANSWER_MODES.includes(m && m.answers) ? m.answers : '',
+    approval: m && (m.approval === 'on' || m.approval === 'off') ? m.approval : '',
   })).filter((m) => /^[a-z_][a-z0-9_.-]{0,31}$/.test(m.user) || /@/.test(m.tailscale));
   return {
     members,
@@ -3815,8 +3826,9 @@ const AGENT_POST = [/^\/api\/asks$/, /^\/api\/todos$/, /^\/api\/todos\/(drop|che
 /** 팀원이 이 방에 답해도 되나 — 설정 «팀원이 답하는 방» */
 function memberMayAnswer(who, roomId, projKey) {
   if (!canSee(who, projKey) || !isWorker(who)) return false;
-  if (TEAM.memberAnswers === 'project') return true;
-  if (TEAM.memberAnswers === 'none') return false;
+  const mode = memberRule(who.user).answers;   // 계정별 → 없으면 팀 기본
+  if (mode === 'project') return true;
+  if (mode === 'none') return false;
   const by = (peekState().roomBy || {})[roomId];
   return !!by && by.user === who.user;
 }
@@ -4984,6 +4996,8 @@ async function handleAction(req, res, url, who) {
     const rawBad = (Array.isArray(t.members) ? t.members : []).find((m) => m && String(m.user || '').trim() && !ACCT_RE.test(String(m.user).trim()));
     if (rawBad) return send(res, 400, { ok: false, message: K('계정 이름은 영어 소문자·숫자·_ - 만(32자까지): ', 'Account name: lowercase letters, digits, _ - (max 32): ') + String(rawBad.user).slice(0, 40) });
     const noUser = (Array.isArray(t.members) ? t.members : []).find((m) => m && !String(m.user || '').trim());
+    const badMail = (Array.isArray(t.members) ? t.members : []).find((m) => m && String(m.email || '').trim() && !cleanEmail(m.email));
+    if (badMail) return send(res, 400, { ok: false, message: K('메일 주소가 이상해요: ', 'Invalid email address: ') + String(badMail.email).slice(0, 60) });
 
     if (noUser) return send(res, 400, { ok: false, message: K('아이디를 적어 주세요(서버 계정도 이 이름으로 만들어요): ', 'Enter an ID (the server account gets the same name): ') + String(noUser.name || noUser.tailscale || '').slice(0, 40) });
     const badName = n.members.find((m) => !ACCT_RE.test(m.user));
@@ -5016,7 +5030,7 @@ async function handleAction(req, res, url, who) {
     if (n.memberTotp) for (const m of n.members) { const id = loginIdOf(m); if (m.role !== 'owner' && !auth.hasTotp(id)) { gate.bump(id); const k = auth.dropUserSessions(id); if (k) writeLog({ action: 'auth-kick', target: id, n: k, why: 'needs-totp' }); } }   // 인증 앱이 필요해졌는데 없는 사람 — 비밀번호만으로 연 접속·관문 쿠키를 끊음
     for (const m of n.members) if (!m.active) { gate.bump(loginIdOf(m)); const k = auth.dropUserSessions(loginIdOf(m)); if (k) writeLog({ action: 'auth-kick', target: loginIdOf(m), n: k, why: 'inactive' }); }
     if (newly.length) { const s0 = loadState(); s0.deployConfirmSince = s0.deployConfirmSince || {}; for (const k of newly) s0.deployConfirmSince[k] = new Date().toISOString(); saveState(s0); }
-    writeLog({ action: 'team', members: n.members.map((m) => loginIdOf(m) + ':' + m.role + (m.job ? '/' + m.job : '') + (m.active ? '' : ':off') + ':' + m.projects.join('+')), approval: n.approval, smallDirect: n.smallDirect, memberTotp: n.memberTotp, memberAnswers: n.memberAnswers, deployConfirm: n.deployConfirm, review: n.review, reviewPaths: Object.keys(n.reviewPaths) });
+    writeLog({ action: 'team', members: n.members.map((m) => loginIdOf(m) + ':' + m.role + (m.job ? '/' + m.job : '') + (m.active ? '' : ':off') + ':' + m.projects.join('+') + (m.answers ? ':ans=' + m.answers : '') + (m.approval ? ':appr=' + m.approval : '') + (m.email ? ':mail' : '')), approval: n.approval, smallDirect: n.smallDirect, memberTotp: n.memberTotp, memberAnswers: n.memberAnswers, deployConfirm: n.deployConfirm, review: n.review, reviewPaths: Object.keys(n.reviewPaths) });
     cache.at = 0;
     return send(res, 200, { ok: true, message: K('저장했습니다 — 바로 적용됩니다', 'Saved — applies right away'), risks: teamRisks() });
   }
@@ -5690,7 +5704,7 @@ async function handleAction(req, res, url, who) {
     // 누가 넣은 일인가 — 상황판 안에서 대신 넣는 것(상의 창 «일로 넘기기»·제안 승인)은 body.by 를 그대로
     const asker = who.role === 'system' && body.by && typeof body.by === 'object' ? { role: String(body.by.role || 'owner'), job: TEAM_JOBS.includes(body.by.job) ? body.by.job : undefined, title: cleanTitle(body.by.title) || undefined, user: String(body.by.user || ''), name: String(body.by.name || body.by.user || '') } : { role: who.role, job: who.job || undefined, title: who.title || undefined, user: who.user, name: who.name };
     if (isWorker(asker)) { delete body.priority; delete body.front; }
-    if (body.queue === true && isWorker(asker) && TEAM.approval && !(who.role === 'system' && body.approved === true) && !(TEAM.smallDirect && body.small === true)) {
+    if (body.queue === true && isWorker(asker) && memberRule(asker.user).approval && !(who.role === 'system' && body.approved === true) && !(TEAM.smallDirect && body.small === true)) {
       if (!task) return send(res, 400, { ok: false, message: K('할 일을 적어 주세요', 'Write the task') });
       if (task.length > 20000) return send(res, 400, { ok: false, message: K('할 일이 너무 깁니다(2만 자 이하)', 'Task is too long (max 20,000 characters)') });
       const st = loadState(); st.proposals = st.proposals || {};
@@ -7426,7 +7440,7 @@ async function serveReq(req, res, who) {
       if (who.via === 'tunnel') out.me.tunShell = tunnelShell(req.socket);   // 통로 종류 — «늘 열어 두기» 권하기를 셸 창 통로에만
       { const ps = peekState(); out.proposals = Object.values(ps.proposals || {}); out.proposalDone = (ps.proposalDone || []).slice(-30); }
       if (TEAM.deployConfirm.length) { const ps2 = peekState(); out.projects = (out.projects || []).map((p) => TEAM.deployConfirm.includes(p.key) ? Object.assign({}, p, { unchecked: uncheckedWork(data, ps2, p.key), reviewMode: reviewMode(p.key) }) : p); }
-      out.team = { members: TEAM.members.length, approval: TEAM.approval, smallDirect: TEAM.smallDirect, deployConfirm: TEAM.deployConfirm };
+      out.team = { members: TEAM.members.length, approval: isWorker(who) ? memberRule(who.user).approval : TEAM.approval, smallDirect: TEAM.smallDirect, deployConfirm: TEAM.deployConfirm };
       return send(res, 200, scopeBoard(out, who));
     }
     // 알림 — 화면이 since 뒤 새 알림만 받아 시스템 알림으로 띄운다 (가벼움 · 숨은 탭도 읽음)
@@ -9992,4 +10006,4 @@ const TODO_REPOST_MS = 12 * 3600 * 1000;
 function todoRepostOf(st, project, title, now) {
   return (st.todoDoneRecent || []).filter((x) => x.project === project && now - Date.parse(x.at) < TODO_REPOST_MS && sameWork(x.title, title));
 }
-module.exports = { solDirCheck, solDrift, solPrepTask, solConfirmedLine, setupItems, accountSetup, genKeys, genKeyPending, makeKeyPair, cleanPubkey, humanAccounts, uncheckedWork, markChecked, reviewMode, reviewNote, gradeKick, gradeJobs, fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile: (f, a, o, cb) => execFileAs(isClaudeFile(f) ? 'claude' : 'self', f, a, o, cb), execFileAs, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupForViewer, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };
+module.exports = { solDirCheck, solDrift, solPrepTask, solConfirmedLine, setupItems, accountSetup, genKeys, genKeyPending, makeKeyPair, cleanPubkey, humanAccounts, uncheckedWork, markChecked, reviewMode, reviewNote, gradeKick, gradeJobs, fileServe, scopeBoard, fileDrop, fileOffer, filesByRoom, filesSweep, FILE_SECRET, publishScan, publishView, publishQueue, publishTick, publishTask, pubUnreleased, pubNext, sshSeenRefresh, sshGuess, sshSeenNow: () => sshSeen, setupBoard, resetAgentsCache: () => { agentsShared = { at: 0, v: null, p: null }; cache.at = 0; cache.data = null; }, worktreeWarn, bgIsolationOf, attachSweep, attachResolve, attachText, consultContent, attSafeName, reportOk, updateBootResult, updateView, updateCheckMessage, updateTick, keyWin, execFile: (f, a, o, cb) => execFileAs(isClaudeFile(f) ? 'claude' : 'self', f, a, o, cb), execFileAs, listAgents, longKeySync, isActionTitle, todoIsCheck, todoRepostOf, server, gate, termHolder, queueLaterRooms, retireStops, laterStatus, laterUntil, gateKind, OWN, claudeContract, claudeCheckRun, runSelfTests, startHandNow, gitRecent, tzOffsetText, ymd, decideWho, pathOk, personOf, needTotpFor, memberRule, memberMayAnswer, cleanEmail, serverLabel, needsFresh, permit, sockOf, auth, authStatus, authAgain: () => { authCache.at = 0; }, setTeamForTest: (x) => { TEAM = normTeam(x); }, aiView, aiLoginStart, aiLoginCode, aiLoginStop, LOGIN_GONE_RE, triageTick, fbtOpen, fbtFinish, fbtUpload, fbtText, fbtPoll, fbtPollSql, fbtExclude, fbtWrite, fbtReadResult, fbtRoomState, fbtBlock, fbtImages, fbtFailed, queueAppend, runnerDone, deployAutoTick, deployAutoWhyNot, deployAutoBlock, DEPLOY_AUTO, pauseForGate, gateUnpauseTick, startQueuedNow, runnerGo, runCheck, runner, backup, backupView, backupForViewer, backupRefresh, devdoneState, deployState, handoverRooms, handoverText, lastUserText, jobTooLong, stopWhy, isCheckTitle, todoDue, todoDates, todoCheckTask, todoCheckQueue, todoCheckRunning, todoWaiting, todoRank, todoStale, todoMention, todoExtIds, todoOverlap, todoBrief, withTodoBrief, similarTodos, queueTick, loadState, saveState, collectAsks, loadProjects, precheck, checkPrompt, checkContext, parseCheck, needsCheck, inqReplyTick, checkOk, checkHeld, needAskMake, needAnswer, checkResolve, checkApply, seenAnswer, seenWhat, seenAskMake, checkWaitTick, checkHead, startCheck, flowOf, flowParse, sendModeOf, doctorTick, sessionProcs, diagnose, cpuBusy, subagentActivity, doctorSummary, buildBoard: () => buildBoard(), DONE_LINE_RE, GATE_ROOM_RE, markFg, onScreen, fgOf, sendPushAll, notifyWanted, notifyKinds, notifyTick, notifyState: () => notify, pushEncrypt, pushAuth, pushKeys, sendPushOne, LANG, TZ, CMD, SUPPORT_URL, tzParts, tzLocalToUtc, tzMDHM, renderIndex, scheduleTick, schedNext, schedLastDue, schedDayEnd, fireSchedule, schedSteps, schedStepsFor, schedValid, fableTick, fableRetryText, FABLE_KINDS, asideCandidates, waitSince, ASIDE_MS, isPaused, gateItem, resumeItem, holdingRooms, replyHolders, setJustWoke: (k, v) => { if (v) justWoke[k] = v; else delete justWoke[k]; }, holdWhy, workKey, sameWork, extractLinks, parseAsTag, signDevLogin, openAsUrl, devLoginSecret, pendingQuestion, pendingFromState, makeTitle, readMessages, readTranscript, judge, waitingNotes, transcriptPath, TASK_HEADER, taskHeader, noAiDeployAsk, noAiDeployCmd, setLimitNow: (l) => { limitNow = l; }, limitActive };

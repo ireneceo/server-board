@@ -757,6 +757,7 @@
   .teambox .tm-top .tm-sp { flex: 1 1 0; }
   .teambox .tm-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 8px; }
   .teambox .tm-line > span:first-child { color: var(--muted); font-size: 13px; }
+  .teambox .tm-rule label { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0; max-width: 100%; } .teambox .tm-rule select { max-width: 100%; } .teambox .tm-row .tm-email { width: 16em; max-width: 100%; }
   .teambox .tm-todo { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px dashed var(--line); }
   .teambox .tm-todo > li { display: grid; grid-template-columns: 1.6em 1fr; gap: 0 6px; margin: 6px 0; align-items: start; }
   .teambox .tm-todo .tm-mk { font-weight: 700; text-align: center; }
@@ -840,7 +841,8 @@
     <div id="tm-rows"></div>
     <button type="button" class="btn" id="tm-add">+ <!--ko-->계정 넣기<!--/ko--><!--en-->Add account<!--/en--></button>
     <label class="tm-chk"><input type="checkbox" id="tm-mtotp"> <!--ko-->최종 컨펌자가 아닌 사람(일 제안·보기만)도 <b>자기 휴대폰 인증 앱</b>(6자리)으로 로그인 (권장) — 켜면 안내문의 로그인 링크를 연 사람이 비밀번호와 함께 자기 인증 앱을 등록합니다. 인증 앱 없이 비밀번호만 정한 사람은 새 안내문을 받아야 들어옵니다.<!--/ko--><!--en-->Everyone who is not a final approver (Propose, View only) also signs in with <b>their own authenticator app</b> (6 digits) (recommended) — the person opening the invitation's sign-in link registers their own app along with a password. Anyone who only set a password needs a new invitation.<!--/en--></label>
-    <div class="nsec"><h3><!--ko-->② 팀원이 넣은 일<!--/ko--><!--en-->② Tasks from members<!--/en--></h3>
+    <div class="nsec"><h3><!--ko-->② 팀원이 넣은 일 — 팀 기본<!--/ko--><!--en-->② Tasks from members — team default<!--/en--></h3>
+      <small><!--ko-->계정마다 다르게 하려면 위 그 사람 카드의 «이 사람만» 줄에서 고르세요(«팀 기본» 이면 여기 값).<!--/ko--><!--en-->To set it per person, use the «This person» line on their card above («Team default» = the values here).<!--/en--></small>
       <label class="tm-chk"><input type="checkbox" id="tm-approval"> <!--ko-->최종 컨펌자가 «하기 · 고쳐서 하기 · 안 하기» 를 정한 뒤 시작<!--/ko--><!--en-->Start only after the final approver chooses do / edit & do / don't<!--/en--></label>
       <label class="tm-chk"><input type="checkbox" id="tm-small"> <!--ko-->팀원이 «소규모» 로 표시한 일은 승인 없이 바로<!--/ko--><!--en-->Tasks a member marks «small» start without approval<!--/en--></label>
       <label><span><!--ko-->팀원이 답할 수 있는 방<!--/ko--><!--en-->Sessions a member can answer<!--/en--></span>
@@ -6983,17 +6985,41 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var ts = document.createElement('input'); ts.type = 'text'; ts.className = 'tm-ts'; ts.placeholder = 'name@gmail.com'; ts.value = m.tailscale || '';
       var tsl = el('div', 'tm-line'); tsl.appendChild(el('span', '', K('Tailscale 로도 (선택) 로그인 이메일', 'Also via Tailscale (optional) login email'))); tsl.appendChild(ts); r.appendChild(tsl);
       if (!R.tsHost && !m.tailscale) tsl.style.display = 'none';
+      // 안내 메일 주소 — ③ 에서 «메일로 보내기» 가 이 주소로 메일 쓰기 창을 엶
+      var em = document.createElement('input'); em.type = 'text'; em.inputMode = 'email'; em.className = 'tm-email'; em.placeholder = 'name@example.com'; em.value = m.email || ''; em.maxLength = 120; em.autocapitalize = 'none'; em.spellcheck = false;
+      em.setAttribute('aria-label', K('안내 메일 받을 주소', 'Email for the invitation'));
+      var eml = el('div', 'tm-line'); eml.appendChild(el('span', '', K('안내 메일 받을 주소 (선택)', 'Email for the invitation (optional)'))); eml.appendChild(em); r.appendChild(eml);
+      // 계정별 설정 — «팀 기본» 이면 아래 ② 칸 값
+      var dfl = info.team || {};
+      var an = document.createElement('select'); an.className = 'tm-ans'; an.setAttribute('aria-label', K('답할 수 있는 방', 'Sessions they can answer'));
+      [['', K('팀 기본 (', 'Team default (') + (ANS[dfl.memberAnswers] || ANS.own).replace(/ \((권장|recommended)\)$/, '') + ')'], ['own', ANS.own], ['project', ANS.project], ['none', ANS.none]].forEach(function (x) { var o = document.createElement('option'); o.value = x[0]; o.textContent = x[1]; an.appendChild(o); });
+      an.value = m.answers || '';
+      var ap = document.createElement('select'); ap.className = 'tm-appr'; ap.setAttribute('aria-label', K('넣은 일 시작', 'How their tasks start'));
+      [['', K('팀 기본 (', 'Team default (') + (dfl.approval !== false ? K('승인 뒤 시작', 'after approval') : K('바로 시작', 'start at once')) + ')'], ['on', K('최종 컨펌자 승인 뒤 시작', 'Start after the final approver approves')], ['off', K('승인 없이 바로 시작', 'Start at once, no approval')]].forEach(function (x) { var o = document.createElement('option'); o.value = x[0]; o.textContent = x[1]; ap.appendChild(o); });
+      ap.value = m.approval || '';
+      function dflPaint() {
+        var ga = document.getElementById('tm-answers'), gp = document.getElementById('tm-approval');
+        an.options[0].textContent = K('팀 기본 (', 'Team default (') + (ANS[ga && ga.value] || ANS[dfl.memberAnswers] || ANS.own).replace(/ \((권장|recommended)\)$/, '') + ')';
+        ap.options[0].textContent = K('팀 기본 (', 'Team default (') + ((gp ? gp.checked : dfl.approval !== false) ? K('승인 뒤 시작', 'after approval') : K('바로 시작', 'start at once')) + ')';
+      }
+      ['tm-answers', 'tm-approval'].forEach(function (id) { var x = document.getElementById(id); if (x) x.addEventListener('change', dflPaint); });
+      var rul = el('div', 'tm-line tm-rule'); rul.appendChild(el('span', '', K('이 사람만', 'This person')));
+      var la = el('label', ''); la.appendChild(document.createTextNode(K('답할 수 있는 방 ', 'Can answer '))); la.appendChild(an); rul.appendChild(la);
+      var lp = el('label', ''); lp.appendChild(document.createTextNode(K('넣은 일 ', 'Their tasks '))); lp.appendChild(ap); rul.appendChild(lp);
+      r.appendChild(rul);
       var todo = el('ol', 'tm-todo'); r.appendChild(todo);
-      var saved = { user: m.user || '', pubkey: m.pubkey || '', tailscale: m.tailscale || '', role: mRole, job: mJob, title: m.title || '', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(',') };
+      var saved = { user: m.user || '', pubkey: m.pubkey || '', tailscale: m.tailscale || '', role: mRole, job: mJob, title: m.title || '', name: m.name || '', active: m.active !== false, projects: (m.projects || []).slice().sort().join(','), email: m.email || '', answers: m.answers || '', approval: m.approval || '' };
       var msgBox = null, fullTxt = '';
       function step(cls, mark, build) { var li = el('li', 'tm-s-' + ({ ok: 'ok', todo: 'do', wait: 'wait' })[cls]); li.appendChild(el('span', 'tm-mk', mark)); var d = el('div'); build(d); li.appendChild(d); todo.appendChild(li); }
       function curProjects() { return Array.prototype.filter.call(pj.querySelectorAll('input'), function (c) { return c.checked; }).map(function (c) { return c.value; }); }
       function dirty() {
         return fresh || u.value.trim().toLowerCase() !== saved.user || kk.value.trim() !== saved.pubkey || ts.value.trim() !== saved.tailscale || rl.value !== saved.role || jb.value !== saved.job || tt.value.trim() !== saved.title || nm.value.trim() !== saved.name || onc.checked !== saved.active
+          || em.value.trim() !== saved.email || an.value !== saved.answers || ap.value !== saved.approval
           || (rl.value !== 'owner' && curProjects().sort().join(',') !== saved.projects);
       }
       function paint() {
         pjl.style.display = rl.value === 'owner' ? 'none' : '';
+        rul.style.display = rl.value === 'owner' || rl.value === 'viewer' ? 'none' : '';   // 최종 컨펌자는 늘 전부 · 보기만은 일·답을 못 함
         todo.textContent = '';
         var user = u.value.trim().toLowerCase(), mail = ts.value.trim(), lid = user;
         var ui = authInfo.users.filter(function (x) { return x.id === lid; })[0], ns = authInfo.sessions.filter(function (x) { return x.id === lid; }).length;
@@ -7073,7 +7099,9 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
           else if (su && su.keyGen) d.appendChild(el('small', '', K('열쇠는 처음 안내문에만 들어가요. 그 사람이 열쇠를 못 받았거나 잃었으면 ② «열쇠 바꾸기» 에서 새 열쇠를 만드세요.', 'The key is only in the first invitation. If they never got it or lost it, make a new key in ②.')));
           d.appendChild(el('small', '', regDone ? K('휴대폰을 바꿨거나 비밀번호를 잊었으면 새 안내문을 보내요(비밀번호·인증 앱을 다시 정함).', 'Lost phone or password? Send a new invitation (they set password and app again).')
             : K('로그인 링크(24시간·한 번)와 들어오는 법·로그인 순서가 들어 있어요. 메신저·메일로 그 사람에게만 보내세요. 다시 만들면 전에 보낸 링크는 안 열려요.', 'Holds the sign-in link (24 h, single use), how to connect and how to sign in. Send it to that person only. A new one cancels the previous link.')));
-          var b = el('button', 'btn' + (regDone || inv ? '' : ' primary'), inv && !regDone ? K('새 안내문 만들기·복사', 'Make new invitation & copy') : K('안내문 만들기·복사', 'Make invitation & copy')); b.type = 'button';
+          var hasMail = !!em.value.trim() && !isDirty;
+          if (hasMail) d.appendChild(el('small', '', K('메일 주소가 있어 누르면 복사와 함께 ' + em.value.trim() + ' 앞 메일 쓰기 창이 열려요 — 보내기는 메일 앱에서.', 'With an email set, this also opens a new email to ' + em.value.trim() + ' — press send in your mail app.')));
+          var b = el('button', 'btn' + (regDone || inv ? '' : ' primary'), (inv && !regDone ? K('새 안내문 만들기·', 'Make new invitation & ') : K('안내문 만들기·', 'Make invitation & ')) + (hasMail ? K('복사·메일', 'copy · email') : K('복사', 'copy'))); b.type = 'button';
           b.addEventListener('click', function () {
             b.disabled = true;
             post('/api/auth/invite', { id: lid }).then(function (j) {
@@ -7085,6 +7113,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
               // 개인 열쇠는 화면 글상자에 두지 않음 — 복사본에만(Fable 조건 2) · 복사가 안 되는 브라우저면 어쩔 수 없이 글상자에
               fullTxt = txt;
               msgBox.value = j.privKey ? inviteText(pp, Object.assign({}, j, { privKey: K('(개인 열쇠 — 복사본에만 들어 있어요)', '(private key — only in the copied text)') })) : txt;
+              if (em.value.trim() && !j.privKey) setTimeout(function () { mailIt(em.value.trim(), pp, txt, !!j.privKey); }, 300);   // 메일 주소가 있으면 복사와 함께 메일 쓰기 창
               copyText(txt, function () { toast(j.privKey ? K('열쇠가 든 안내문을 복사했어요 — 그 사람과 1:1 대화로만 보내세요(상황판엔 열쇠가 더 남지 않아요)', 'Invitation with the key copied — send it 1:1 only (the board keeps no copy)') : K('안내문을 복사했어요 — 메신저·메일에 붙여 넣어 보내세요', 'Invitation copied — paste it into chat or email')); },
                 function () { msgBox.value = txt; toast(K('아래 안내문을 골라 복사하세요', 'Select the text below and copy it')); });
               var ex = j.hours ? Date.now() + j.hours * 3600e3 : null; if (ui) ui.inviteExp = ex; else authInfo.users.push({ id: lid, pwAt: null, inviteExp: ex });
@@ -7096,6 +7125,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
             d.appendChild(msgBox);
             var cb = el('button', 'btn', K('다시 복사', 'Copy again')); cb.type = 'button';
             cb.addEventListener('click', function () { copyText(fullTxt || msgBox.value, function () { toast(K('복사됨', 'Copied')); }, function () { msgBox.value = fullTxt || msgBox.value; msgBox.select(); }); }); d.appendChild(cb);
+            if (em.value.trim()) { var mb = el('button', 'btn', K('메일로 보내기', 'Send by email')); mb.type = 'button'; mb.addEventListener('click', function () { mailIt(em.value.trim(), { name: nm.value.trim() || lid }, fullTxt || msgBox.value, /BOARD_KEY_END/.test(fullTxt)); }); d.appendChild(mb); }
           }
         });
         // ④ 그 사람 등록
@@ -7111,11 +7141,20 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       }
       [u, rl, onc].forEach(function (x) { x.addEventListener('change', paint); });
       Array.prototype.forEach.call(pj.querySelectorAll('input'), function (x) { x.addEventListener('change', paint); });
-      [nm, ts, kk, u, jb].forEach(function (x) { x.addEventListener('change', paint); });
+      [nm, ts, kk, u, jb, em, an, ap].forEach(function (x) { x.addEventListener('change', paint); });
       r._dirty = dirty;
       paint();
       rowsEl.appendChild(r);
       if (fresh) nm.focus();
+    }
+    // 안내 메일 — 상황판은 메일을 직접 보내지 않고(메일 서버 없음) 이 기기의 메일 앱에 받는 사람·제목·본문을 채워 엶. 본문이 잘리는 메일 앱이면 이미 복사된 글을 붙여 넣기
+    function mailIt(to, p, txt, hasKey) {
+      if (hasKey && !window.confirm(K('이 안내문에는 그 사람 접속 열쇠가 들어 있어요. 메일로 보내면 양쪽 메일함에 남아요 — 메신저 1:1 이 더 안전해요. 그래도 메일 쓰기 창을 열까요?', 'This invitation carries their access key. Email keeps it in both mailboxes — a 1:1 chat is safer. Open an email anyway?'))) return;
+      var srv = (info.route && info.route.serverName) || 'server';
+      var sub = K('[' + srv + ' 상황판] ' + (p.name || '') + ' 님 계정을 만들었어요 — 들어오는 법', '[' + srv + ' board] Your account is ready — how to sign in');
+      var href = 'mailto:' + encodeURIComponent(to).replace(/%40/g, '@') + '?subject=' + encodeURIComponent(sub) + '&body=' + encodeURIComponent(String(txt).replace(/\r?\n/g, '\r\n'));
+      var a = document.createElement('a'); a.href = href; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+      toast(K('메일 쓰기 창을 열었어요 — 본문이 비었거나 잘렸으면 붙여 넣기(이미 복사됨) 후 보내세요', 'Opened a new email — if the body is empty or cut, paste (already copied) and send'));
     }
     // 그 사람에게 보낼 안내문 — 들어오는 길·로그인 링크·로그인 순서·규칙 (TEAM-GUIDE 의 요점을 이 사람·이 서버 값으로 채움)
     function inviteText(p, j) {
@@ -7233,6 +7272,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var members = Array.prototype.map.call(rowsEl.querySelectorAll('.tm-row'), function (r) {
         var role = r.querySelector('.tm-role').value;
         return { user: r.querySelector('.tm-user').value, name: r.querySelector('.tm-name').value.trim(), role: role, job: r.querySelector('.tm-job').value, title: r.querySelector('.tm-title').value.trim(), tailscale: r.querySelector('.tm-ts').value.trim(), pubkey: r.querySelector('.tm-key').value.trim(), active: r.querySelector('.tm-active').checked,
+          email: r.querySelector('.tm-email').value.trim(), answers: role === 'owner' || role === 'viewer' ? '' : r.querySelector('.tm-ans').value, approval: role === 'owner' || role === 'viewer' ? '' : r.querySelector('.tm-appr').value,
           projects: role === 'owner' ? ['*'] : Array.prototype.filter.call(r.querySelectorAll('.tm-pj input'), function (c) { return c.checked; }).map(function (c) { return c.value; }) };
       }).filter(function (m) { return m.user || m.tailscale || m.name; });
       members.forEach(function (m) { m.user = m.user.trim().toLowerCase(); });
