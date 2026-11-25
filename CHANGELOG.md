@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.6.25]
+
+- **«⚙ Team & roles» account card walks you through it step by step** — the current step is marked «You are here», and each step shows small 1·2·3 sub-steps (done ones get ✔, the next one is bold). Under «① Saved» and the invitation email field it now says plainly that saving sends nothing — no email, no link; the email opens only from «③ Make invitation & copy», and you press send in your own mail app. The developer key step ② is laid out in order: copy the request (or «Request by email» when an address is set) → paste the public key line they send back and save → copy the server-shell line, paste it, sudo, `OK` → «Done — check again». Changing only the key keeps ① «Saved» (one save button inside ②), and ③·④ say what they are waiting for.
+- **Developer key step explains who does what** — the final approver pastes the line in a server shell; the key pair is made on the member's own computer (a private key passed through chat would leak command access), and the server line installs the public key they sent into their account.
+- **«This person only» lists just the real values** — the separate «Team default (…)» entries are gone, since they duplicated a real value. The choice starts on the team (②) value; a member left equal to ② follows it when ② changes, a different value applies to that person only. The ② heading now reads «Tasks from members — whole team». Stored format unchanged.
+
 ## [0.6.24]
 
 - **Per-member settings and an invitation email address in «⚙ Team & roles»** — each account card gets an optional «invitation email» field: «③ Make invitation & copy» copies the text and opens a new message to that address in your own mail app (`mailto:` — the board has no mail server and never sends mail itself). An invitation that contains a private key is not opened in the mail app automatically; it gets a separate «Send by email» button with a warning to confirm. A new «this person only» row sets «sessions they can answer» (team default / their own tasks only / every session in their projects / none) and «their tasks» (team default / after approval / start directly), overriding the team values (`members[].answers`, `members[].approval`, `members[].email`). Hidden for viewers and the final approver; the authenticator setting stays team-wide. An invalid email address is refused on save.
