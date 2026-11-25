@@ -145,12 +145,63 @@ test('업데이트: 고친 파일·갈라진 이력·옮겨진 태그·바뀐 �
     assert.strictEqual(c.why, 'origin-changed');
     c = await up.check(t.inst, {}, { tags: { 'v0.2.0': '0'.repeat(40) } }, '7');
     assert.strictEqual(c.why, 'tag-moved');
-    sh(t.inst, 'git -c user.name=t -c user.email=t@t commit -q --allow-empty -m local');
+    // 같은 줄을 고친 이 서버 커밋 → 저절로 못 얹음(겹친 파일·커밋 목록) · 임시 작업 폴더가 남지 않음
+    fs.writeFileSync(path.join(t.inst, 'board', 'VERSION'), '0.1.0\n');
+    fs.writeFileSync(path.join(t.inst, 'CHANGELOG.md'), '# local\n');
+    sh(t.inst, 'git -c user.name=t -c user.email=t@t commit -qam local-cl');
     c = await up.check(t.inst, {}, {}, '7');
-    assert.strictEqual(c.why, 'diverged');
+    assert.strictEqual(c.why, 'diverged', JSON.stringify(c)); assert.strictEqual(c.canApply, false);
+    assert.deepStrictEqual(c.conflict, ['CHANGELOG.md']); assert.match(c.local[0], /local-cl$/);
+    assert.strictEqual(sh(t.inst, 'git worktree list').split('\n').length, 1);
+    assert.strictEqual(sh(t.inst, 'git status --porcelain --untracked-files=no'), '');
+    sh(t.inst, 'git reset -q --hard origin/main');
     c = await up.check(t.inst, { update: { off: true } }, {}, '7');
     assert.strictEqual(c.on, false);
     assert.strictEqual(up.start(t.inst, { tag: 'main', pm2: t.pm }).ok, false);
+  } finally { t.cleanup(); }
+});
+
+test('업데이트: 이 서버에만 있는 커밋 → 새 판 위에 다시 얹어 받음 · 원래 이력은 백업 가지 (2026-11-25 0.6.15→0.6.21 갈라짐)', async () => {
+  const t = await setup();
+  try {
+    fs.writeFileSync(path.join(t.inst, 'LOCAL.md'), 'mine\n');
+    sh(t.inst, 'git add LOCAL.md && git -c user.name=t -c user.email=t@t commit -qm local-note && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m local-empty');
+    const before = t.head();
+    t.release('0.2.0');
+    const c = await up.check(t.inst, {}, {}, '7');
+    assert.strictEqual(c.canApply, true, JSON.stringify(c)); assert.strictEqual(c.why, null);
+    assert.strictEqual(c.rebase.local.length, 2); assert.strictEqual(c.rebase.kept, 2);
+    assert.strictEqual(sh(t.inst, 'git worktree list').split('\n').length, 1);
+    assert.strictEqual(t.head(), before, '확인만으로 설치본이 바뀜');
+    up.start(t.inst, { tag: c.tag, port: t.port, pm2: t.pm, env: t.runEnv });
+    const r = await t.waitDone();
+    assert.strictEqual(r.result, 'done', JSON.stringify(r)); assert.ok(r.rebased); assert.match(r.backup, /^board-local-backup-/);
+    assert.strictEqual(fs.readFileSync(path.join(t.inst, 'board', 'VERSION'), 'utf8').trim(), '0.2.0');
+    assert.strictEqual(fs.readFileSync(path.join(t.inst, 'LOCAL.md'), 'utf8'), 'mine\n');
+    sh(t.inst, 'git merge-base --is-ancestor v0.2.0 HEAD');
+    assert.strictEqual(sh(t.inst, 'git rev-parse ' + r.backup), before);
+    assert.strictEqual(sh(t.inst, 'git for-each-ref refs/board-update'), '');
+    assert.deepStrictEqual(fs.readdirSync(path.join(t.root, 'tmp')), []);
+    assert.strictEqual(fs.readFileSync(path.join(t.inst, 'board', 'state.json'), 'utf8'), '{"keep":"old"}');
+    // 그다음 판도 같은 식으로
+    t.release('0.3.0');
+    const c2 = await up.check(t.inst, {}, c, '7');
+    assert.strictEqual(c2.canApply, true, JSON.stringify(c2)); assert.strictEqual(c2.rebase.local.length, 2);
+  } finally { t.cleanup(); }
+});
+
+test('업데이트: 시험하는 사이 이 서버에서 커밋이 생김 → 바꿔 끼우지 않음(그 커밋이 사라지지 않게)', async () => {
+  const t = await setup();
+  try {
+    t.release('0.2.0');
+    const c = await up.check(t.inst, {}, {}, '7');
+    const env = Object.assign({}, t.runEnv, { UPDATE_TEST_CMD: 'git -C ' + JSON.stringify(t.inst) + ' -c user.name=t -c user.email=t@t commit -q --allow-empty -m mid-test' });
+    up.start(t.inst, { tag: c.tag, port: t.port, pm2: t.pm, env });
+    const r = await t.waitDone();
+    assert.strictEqual(r.result, 'blocked', JSON.stringify(r)); assert.strictEqual(r.why, 'head-moved');
+    assert.strictEqual(sh(t.inst, 'git log -1 --format=%s'), 'mid-test');
+    assert.strictEqual(fs.readFileSync(path.join(t.inst, 'board', 'VERSION'), 'utf8').trim(), '0.1.0');
+    const res = await fetch('http://127.0.0.1:' + t.port + '/'); assert.strictEqual(res.status, 200);
   } finally { t.cleanup(); }
 });
 
@@ -189,7 +240,7 @@ test('업데이트: 상황판이 결과를 재시작 없이 읽음 · 멈춘 받
     board.updateBootResult();
     assert.strictEqual(board.updateView().stalled.tag, 'v0.3.0');
     assert.strictEqual(board.loadState().update.last.result, 'stalled');
-    for (const u of ['/api/update/apply', '/api/update/revert', '/api/update/check', '/api/update/keep', '/api/update/templates']) {
+    for (const u of ['/api/update/apply', '/api/update/revert', '/api/update/check', '/api/update/keep', '/api/update/templates', '/api/update/diverged']) {
       const d = await board.permit({ role: 'agent', user: 'x', projects: ['*'] }, u, {});
       assert.ok(d && d[0] === 403, u);
       const m = await board.permit({ role: 'member', user: 'm', projects: ['*'] }, u, {});

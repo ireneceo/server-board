@@ -622,9 +622,9 @@ function updateView() {
   if (!c && !u.last && !run && !stalled) return null;
   if (c && c.on === false && c.why === 'no-version' && !u.last) return null;   // 원본 서버
   return { on: c ? c.on : null, current: c ? c.current : null, latest: c ? c.latest || null : null, newer: !!(c && c.newer), canApply: !!(c && c.canApply), why: c ? c.why || null : null, repo: String(CONFIG.repoUrl || 'https://github.com/ireneceo/server-board').replace(/\.git$/, ''),
-    dirty: c && c.dirty || null, notes: c && c.notes ? String(c.notes).slice(0, 4000) : '', templates: c && c.templates || [], checkedAt: c ? c.checkedAt : null, err: c && c.err ? String(c.err).slice(0, 300) : null,
+    dirty: c && c.dirty || null, local: c && c.local || [], conflict: c && c.conflict || [], rebase: c && c.rebase || null, tag: c && c.tag || null, divergedQueued: !!(u.divergedQueued && c && u.divergedQueued === c.tag), notes: c && c.notes ? String(c.notes).slice(0, 4000) : '', templates: c && c.templates || [], checkedAt: c ? c.checkedAt : null, err: c && c.err ? String(c.err).slice(0, 300) : null,
     running: run ? { at: run.at, mode: run.mode, tag: run.tag } : null, stalled: stalled ? { tag: stalled.tag, phase: stalled.phase, at: stalled.startedAt } : null,
-    last: u.last ? { result: u.last.result, why: u.last.why || null, from: u.last.from || null, to: u.last.to || null, at: u.last.at || u.last.startedAt, log: u.last.log || null, templatesQueued: !!u.templatesQueued } : null,
+    last: u.last ? { result: u.last.result, why: u.last.why || null, backup: u.last.backup || null, conflict: u.last.conflict || null, from: u.last.from || null, to: u.last.to || null, at: u.last.at || u.last.startedAt, log: u.last.log || null, templatesQueued: !!u.templatesQueued } : null,
     lastTemplates: u.last && u.last.result === 'done' && u.applyTemplates && u.applyTemplates.tag === 'v' + u.last.to && !u.templatesQueued ? u.applyTemplates.paths : [] };
 }
 
@@ -6217,6 +6217,26 @@ async function handleAction(req, res, url, who) {
     const r = publishQueue('button');
     return send(res, r.ok ? 200 : 409, { ok: r.ok, message: r.ok ? K('서버 방 대기열에 넣었어요 — 묶기·시험·Fable 공개 판정 뒤 올려요', 'Added to the server queue — it packs, tests and gets a Fable review before pushing')
       : r.why === 'busy' ? K('이미 맡긴 새 판 내기가 있어요', 'A release is already queued or running') : r.why === 'no-room' ? K('서버 방(projects.json 의 server)이 없어요', 'No server room (server in projects.json)') : K('낼 것이 없어요', 'Nothing to release') });
+  }
+  if (url === '/api/update/diverged') {   // 이 서버 커밋이 새 판과 겹쳐 저절로 못 얹음 — 서버 방에 맡김
+    const u = updateView();
+    const proj = loadProjects().find((p) => p.key === 'server');
+    if (!u || !u.newer || !/^diverged/.test(u.why || '') || !u.tag || !proj) return send(res, 409, { ok: false, message: K('맡길 갈라짐이 없어요', 'Nothing to hand over') });
+    const st = loadState(); st.queue = st.queue || [];
+    if (st.queue.some((q) => q.ref === 'diverged:' + u.tag)) return send(res, 409, { ok: false, message: K('이미 맡겼어요', 'Already queued') });
+    const qid = 'q' + Date.now().toString(36);
+    const task = K('상황판 새 판 ' + u.tag + ' 을 받으려는데 이 서버에서 따로 한 상황판 커밋이 새 판과 겹쳐 저절로 다시 얹지 못했다(' + (u.why || '') + (u.conflict.length ? ' · 겹친 파일: ' + u.conflict.join(', ') : '') + '). ' +
+      '1) cd ' + UPD_DIR + ' && git status --short --untracked-files=no && git log --oneline ' + u.tag + '..HEAD 로 이 서버 커밋을 본다. 2) git branch board-local-backup-$(date +%Y%m%d%H%M) 로 지금 이력을 남긴다. ' +
+      '3) 새 판에 이미 들어간 것·필요 없어진 것은 버리고, 이 서버에 꼭 필요한 것만 ' + u.tag + ' 위에 다시 얹는다(git rebase ' + u.tag + ' 에서 겹침을 풀거나, 안 되면 git reset --keep ' + u.tag + ' 뒤 필요한 것만 다시 커밋). 판 번호(board/VERSION)는 새 판 그대로. ' +
+      '4) cd board && node --test $(ls test/*.test.js | grep -v public.test) 통과 확인(메모리 자리표 규칙대로) 뒤 pm2 restart dev-board. 5) 보고에 버린 것·다시 얹은 것·백업 가지 이름. 상황판 코드 고침은 앞으로 공개판 쪽에 부탁하는 편이 낫다는 것도 한 줄.',
+      'Installing board ' + u.tag + ' failed because commits made on this server conflict with it (' + (u.why || '') + (u.conflict.length ? ' · files: ' + u.conflict.join(', ') : '') + '). ' +
+      '1) cd ' + UPD_DIR + ' && git status --short --untracked-files=no && git log --oneline ' + u.tag + '..HEAD. 2) git branch board-local-backup-$(date +%Y%m%d%H%M). ' +
+      '3) Drop what the new version already has or no longer needs; re-apply only what this server really needs on top of ' + u.tag + ' (resolve git rebase ' + u.tag + ', or git reset --keep ' + u.tag + ' and recommit what is needed). Keep board/VERSION from the new version. ' +
+      '4) cd board && node --test $(ls test/*.test.js | grep -v public.test) must pass (memory-slot rules), then pm2 restart dev-board. 5) Report what was dropped, re-applied and the backup branch name.');
+    st.queue.push({ qid, project: 'server', task, ref: 'diverged:' + u.tag, title: K('상황판 갈라진 이력 풀기 ', 'Board history fix ') + u.tag, createdAt: new Date().toISOString() });
+    st.update = st.update || {}; st.update.divergedQueued = u.tag; saveState(st); cache.at = 0;
+    writeLog({ action: 'update-diverged-queued', qid, tag: u.tag, local: u.local.length });
+    return send(res, 200, { ok: true, message: K('서버 방 대기열에 넣었어요', 'Added to the server queue') });
   }
   if (url === '/api/update/templates') {   // 바뀐 규칙·명령 틀을 이 서버 사본에 반영 — 서버 방 대기열 (2-5 · Fable: 범위·경로만 넘김, 자동으로 넣지 않음)
     const u = updateView();

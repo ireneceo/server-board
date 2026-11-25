@@ -4243,7 +4243,10 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
   }
   var UPD_WHY = {
     dirty: K('이 서버에서 상황판 파일을 직접 고친 것이 있어 덮어쓰지 않았어요', 'Board files were edited on this server, so nothing was overwritten'),
-    diverged: K('이 서버의 상황판 이력이 공개판과 갈라졌어요', 'This board\'s history has diverged from the public one'),
+    diverged: K('이 서버에서 따로 한 상황판 커밋이 새 판과 같은 곳을 고쳐서 저절로 다시 얹지 못했어요', 'Commits made on this server touch the same lines as the new version, so they could not be re-applied automatically'),
+    'head-moved': K('새 판을 시험하는 사이 이 서버에서 상황판 커밋·고침이 생겨 바꿔 끼우지 않았어요(지금 판 그대로) — «다시 확인» 뒤 다시', 'A board commit or edit happened on this server while the new version was being tested, so nothing was switched (current version kept) — «Check again», then retry'),
+    'diverged-merge': K('이 서버 상황판 이력에 합친(merge) 커밋이 있어 저절로 다시 얹지 못했어요', 'This board\'s history has merge commits, so it could not be re-applied automatically'),
+    'diverged-version': K('이 서버 커밋이 판 번호(board/VERSION)를 바꿔서 저절로 다시 얹지 못했어요', 'A commit on this server changed board/VERSION, so it could not be re-applied automatically'),
     'no-pm2': K('상황판이 PM2(이름 dev-board)로 돌지 않아 버튼으로 다시 켤 수 없어요', 'The board is not running under PM2, so it cannot restart itself'),
     'origin-changed': K('받아 오는 저장소 주소가 처음과 달라졌어요 — 안전을 위해 멈춤', 'The download address changed since install — stopped for safety'),
     'tag-moved': K('같은 판 번호의 내용이 바뀌었어요 — 안전을 위해 멈춤', 'The same version number now points to different code — stopped for safety'),
@@ -4299,7 +4302,10 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
     return box;
   }
   function updateBox(u) {
-    var manual = 'cd ~/dev-server && git pull --ff-only && pm2 restart dev-board';
+    // 손으로 받는 명령 — 까닭마다 다름. 갈라짐에 «git pull --ff-only» 를 내주면 그대로 실패했다
+    var manual = /^diverged/.test(u.why || '') ? 'cd ~/dev-server && git log --oneline ' + (u.tag || 'origin/main') + '..HEAD'
+      : u.why === 'dirty' ? 'cd ~/dev-server && git status --short --untracked-files=no'
+      : 'cd ~/dev-server && git pull --ff-only && pm2 restart dev-board';
     var box, row, b;
     if (u.stalled) {
       box = el('div', 'err'); box.style.cssText = 'margin:10px 0 0;';
@@ -4346,6 +4352,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         : u.last.result === 'kept' ? K('멈췄던 상황판 업데이트 — 지금 판 그대로 씀', 'Stopped board update — kept the current version')
         : u.last.result === 'blocked' ? K('상황판 업데이트를 하지 않았어요', 'The board update did not run') : K('상황판 업데이트 실패 — 확인 필요', 'Board update failed — needs a look')));
       if (u.last.why) box.appendChild(el('div', null, UPD_WHY[u.last.why] || u.last.why));
+      if (u.last.result === 'done' && u.last.backup) box.appendChild(el('small', null, K('이 서버에서 따로 한 커밋은 새 판 위에 다시 얹었어요 · 원래 이력은 가지 ' + u.last.backup + ' 에 남겨 둠', 'Commits made on this server were re-applied on top · the original history is kept in branch ' + u.last.backup)));
       if (u.last.log && u.last.result !== 'done') box.appendChild(el('small', null, K('기록: ~/dev-server/', 'Log: ~/dev-server/') + u.last.log));
       if (u.lastTemplates && u.lastTemplates.length) {
         box.appendChild(el('div', null, K('설치 때 복사해 둔 규칙·명령 틀도 바뀌었어요(' + u.lastTemplates.length + '개) — 이 서버 사본에는 AI 가 손질한 부분을 지키며 반영해요.', 'Rule and command templates copied at install also changed (' + u.lastTemplates.length + ') — the AI applies them to this server\'s copies, keeping local edits.')));
@@ -4365,6 +4372,13 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         box.appendChild(det);
       }
       row = el('div', 'row'); row.style.marginTop = '6px';
+      if (u.canApply && u.rebase && u.rebase.local && u.rebase.local.length) {
+        var rdet = document.createElement('details'); var rsm = document.createElement('summary');
+        rsm.textContent = K('이 서버에서 따로 한 커밋 ' + u.rebase.local.length + '개는 새 판 위에 다시 얹어요' + (u.rebase.kept === 0 ? '(모두 새 판에 이미 들어 있음)' : '') + ' — 원래 이력은 백업 가지에 남김', u.rebase.local.length + ' commit(s) made on this server will be re-applied on top' + (u.rebase.kept === 0 ? ' (all already in the new version)' : '') + ' — the original history is kept in a backup branch');
+        rdet.appendChild(rsm); var rul = document.createElement('ul'); rul.style.cssText = 'margin:4px 0 0;padding-left:18px;font-size:12px;';
+        u.rebase.local.forEach(function (h) { var li = document.createElement('li'); li.textContent = h; rul.appendChild(li); });
+        rdet.appendChild(rul); rdet.style.marginTop = '6px'; box.appendChild(rdet);
+      }
       if (u.canApply) {
         b = el('button', 'btn primary', K('업데이트', 'Update'));
         b.onclick = function () {
@@ -4375,7 +4389,16 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         row.appendChild(b);
       } else {
         box.appendChild(el('div', null, (UPD_WHY[u.why] || u.why || '') + (u.dirty && u.dirty.length ? ' — ' + u.dirty.slice(0, 5).join(', ') : '')));
-        if (u.why !== 'origin-changed' && u.why !== 'tag-moved') { var mc = el('code', null, manual); mc.style.cssText = 'display:block;margin-top:4px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:12px;'; box.appendChild(el('small', null, K('손으로 받으려면(고친 것을 먼저 정리):', 'To update by hand (sort out local edits first):'))); box.appendChild(mc); }
+        if (/^diverged/.test(u.why || '')) {
+          if (u.conflict && u.conflict.length) box.appendChild(el('small', null, K('겹친 파일: ', 'Conflicting files: ') + u.conflict.slice(0, 6).join(', ')));
+          if (u.local && u.local.length) box.appendChild(el('small', null, K('이 서버 커밋 ' + u.local.length + '개: ', u.local.length + ' local commit(s): ') + u.local.slice(0, 3).join(' · ') + (u.local.length > 3 ? ' …' : '')));
+          var db = el('button', 'btn primary', u.divergedQueued ? K('서버 방에 맡겼어요', 'Handed to the server room') : K('서버 방 AI 에게 풀기 맡기기 ▶', 'Ask the server room AI to sort it out ▶'));
+          db.disabled = !!u.divergedQueued;
+          db.onclick = function () { db.disabled = true; post('/api/update/diverged', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () { db.disabled = false; }); };
+          row.appendChild(db);
+          box.appendChild(el('small', null, K('AI 가 지금 이력을 백업 가지로 남기고, 새 판에 이미 들어간 것은 버리고, 꼭 필요한 것만 새 판 위에 다시 얹은 뒤 시험·재시작해요.', 'The AI keeps the current history in a backup branch, drops what the new version already has, re-applies only what is needed, then tests and restarts.')));
+        }
+        if (u.why !== 'origin-changed' && u.why !== 'tag-moved') { var mc = el('code', null, manual); mc.style.cssText = 'display:block;margin-top:4px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:12px;'; box.appendChild(el('small', null, /^diverged/.test(u.why || '') ? K('이 서버에만 있는 커밋 보기:', 'See the commits only on this server:') : u.why === 'dirty' ? K('고친 파일 보기(정리한 뒤 «다시 확인»):', 'See edited files (then «Check again»):') : K('손으로 받으려면:', 'To update by hand:'))); box.appendChild(mc); }
       }
       var cb = el('button', 'btn', K('다시 확인', 'Check again'));
       cb.onclick = function () { cb.disabled = true; post('/api/update/check', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () {}).then(function () { cb.disabled = false; }); };

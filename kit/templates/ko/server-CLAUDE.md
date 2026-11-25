@@ -24,4 +24,5 @@
 
 ## 기록
 - 이 폴더는 git 저장소. 고쳤으면 커밋 — `board/state.json`·`board/log/` 는 커밋하지 않는다.
+- 상황판 코드(`board/`·`kit/`·`public/`·`bin/`)는 공개판에서 받는 코드다. 새 판을 받을 때 이 서버 커밋은 새 판 위에 저절로 다시 얹지만, 같은 줄을 고쳤으면 받기가 막힌다 — 꼭 이 서버에만 필요한 것만 고치고, 서버마다 다른 값은 설정 파일(`board/config.json`·`projects.json`)로.
 - 작업기록: `~/dev-server/session-state.md` · 끝나면 보고 첫 줄 ✅/⏸/❌ · «확인할 곳» 은 `http://localhost:{{PORT}}`.

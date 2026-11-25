@@ -87,8 +87,49 @@ function pm2Owns(pm, dir) {
 }
 
 /**
+ * 이 서버에서 따로 한 커밋(공개판에 없는 것)을 새 판 위에 다시 얹어 보기 — 설치본은 건드리지 않고 임시 작업 폴더(git worktree)에서만.
+ *   설치한 서버의 서버 방은 규칙상 «고쳤으면 커밋» 이라 로컬 커밋이 생긴다 → 예전엔 «앞으로만» 이라 받기가 영영 막혔다
+ *.
+ *   → { ok, commit, local:[«짧은번호 제목»], kept, conflict:[파일], why }   (update-runner.js 에 같은 일을 하는 rebaseOnto 가 있다 — 실행기는 임시 사본으로 돌아 이 파일을 못 부름)
+ */
+async function rebasePlan(dir, tag) {
+  const merges = await git(dir, ['rev-list', '--merges', tag + '..HEAD']);
+  if (!merges.ok) return { ok: false, why: 'git', err: merges.err };
+  const lg = await git(dir, ['log', '--no-merges', '--format=%h %s', tag + '..HEAD']);
+  const local = lg.ok && lg.out ? lg.out.split('\n').slice(0, 30) : [];
+  if (merges.out) return { ok: false, why: 'diverged-merge', local };
+  // 지난 확인이 중간에 죽어 남은 임시 작업 폴더 정리(폴더가 있으면 prune 이 안 지움)
+  const tmpd = require('os').tmpdir();
+  try { for (const n of fs.readdirSync(tmpd)) if (/^board-rebase-/.test(n)) { const f = path.join(tmpd, n); try { if (Date.now() - fs.statSync(f).mtimeMs > 3600e3) fs.rmSync(f, { recursive: true, force: true }); } catch (_) {} } } catch (_) {}
+  await git(dir, ['worktree', 'prune']);
+  const wt = fs.mkdtempSync(path.join(tmpd, 'board-rebase-'));
+  const ident = ['-c', 'user.name=Server Board', '-c', 'user.email=board@localhost', '-c', 'rebase.updateRefs=false', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];   // 다른 가지를 같이 옮기지 않게 · 서명·훅 때문에 실패하지 않게 (Fable 공개 판정 0.6.22)   // 이 서버에 git 이름이 없어도 다시 얹기가 되게(본래 작성자는 그대로)
+  try {
+    const add = await git(dir, ['worktree', 'add', '--detach', '--quiet', wt, 'HEAD'], 60000);
+    if (!add.ok) return { ok: false, why: 'git', err: add.err, local };
+    const rb = await git(wt, ident.concat(['rebase', '--quiet', tag]), 120000);
+    if (!rb.ok) {
+      const u = await git(wt, ['diff', '--name-only', '--diff-filter=U']);
+      await git(wt, ['rebase', '--abort']);
+      const cf = u.ok && u.out ? u.out.split('\n').slice(0, 20) : [];
+      return { ok: false, why: cf.length ? 'diverged' : 'git', local, conflict: cf, err: rb.err };   // 겹친 파일이 없으면 겹침이 아니라 git 문제(서명·훅 등)
+    }
+    const nh = await git(wt, ['rev-parse', 'HEAD']);
+    const ver = await git(wt, ['show', 'HEAD:board/VERSION']), tv = await git(dir, ['show', tag + ':board/VERSION']);
+    if (!nh.ok || !ver.ok || ver.out !== tv.out) return { ok: false, why: 'diverged-version', local };   // 로컬 커밋이 판 번호를 바꿈
+    const kept = await git(wt, ['rev-list', '--count', tag + '..HEAD']);
+    return { ok: true, commit: nh.out, local, kept: kept.ok ? +kept.out : null };
+  } finally {
+    await git(dir, ['worktree', 'remove', '--force', wt]);
+    try { fs.rmSync(wt, { recursive: true, force: true }); } catch (_) {}
+    await git(dir, ['worktree', 'prune']);
+  }
+}
+
+/**
  * 확인 — { on, current, latest, tag, commit, notes, newer, canApply, why, dirty, templates, origin, checkedAt }
- *   why: off · no-version · no-origin · fetch · origin-changed · tag-moved · tag-version · no-pm2 · dirty · diverged · git · null
+ *   why: off · no-version · no-origin · fetch · origin-changed · tag-moved · tag-version · no-pm2 · dirty · diverged(다시 얹기 겹침) · diverged-merge · diverged-version · git · null
+ *   rebase: { local, kept } — 이 서버 커밋을 새 판 위에 다시 얹어 받음(canApply 그대로 true)
  *   seen: 지난 확인 결과(state.update) — 처음 본 origin·태그 커밋을 고정해 바뀌면 거부(Fable ⑥)
  */
 async function check(dir, config, seen, pmId) {
@@ -121,8 +162,14 @@ async function check(dir, config, seen, pmId) {
   if (dirty === null) return Object.assign(res, { canApply: false, why: 'git' });
   if (dirty.length) return Object.assign(res, { canApply: false, why: 'dirty', dirty });
   const anc = await git(dir, ['merge-base', '--is-ancestor', 'HEAD', best.tag]);
-  if (!anc.ok) return Object.assign(res, { canApply: false, why: 'diverged' });
-  const tp = await git(dir, ['diff', '--name-only', 'HEAD', best.tag, '--', 'kit/templates', 'kit/commands']);
+  let target = best.tag;
+  if (!anc.ok) {   // 이 서버에만 있는 커밋 — 새 판 위에 다시 얹을 수 있으면 받는다(원래 이력은 받을 때 백업 가지로)
+    const rp = await rebasePlan(dir, best.tag);
+    if (!rp.ok) return Object.assign(res, { canApply: false, why: rp.why, local: rp.local || [], conflict: rp.conflict || [], err: rp.err || undefined });
+    res.rebase = { local: rp.local, kept: rp.kept };
+    target = rp.commit;
+  }
+  const tp = await git(dir, ['diff', '--name-only', 'HEAD', target, '--', 'kit/templates', 'kit/commands']);
   res.templates = tp.ok && tp.out ? tp.out.split('\n').slice(0, 30) : [];
   return Object.assign(res, { canApply: true, why: null });
 }
@@ -169,4 +216,4 @@ function start(dir, opts) {
   return { ok: true };
 }
 
-module.exports = { parseVer, cmpVer, fmtVer, currentVersion, enabled, check, notesBetween, pm2Info, pm2Owns, running, readResult, stalled, start, lockFile, resultFile };
+module.exports = { rebasePlan, parseVer, cmpVer, fmtVer, currentVersion, enabled, check, notesBetween, pm2Info, pm2Owns, running, readResult, stalled, start, lockFile, resultFile };

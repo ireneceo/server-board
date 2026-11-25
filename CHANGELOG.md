@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.22]
+
+- **Updates no longer get stuck on «history has diverged»** — commits made on this server (for example by the server session, whose rules say «commit what you change») used to block every later update, and the box offered `git pull --ff-only`, which fails the same way. Now «Update» re-applies those commits on top of the new version in a temporary git worktree (the install is untouched while it tries), tests that result, switches to it and keeps the original history in a `board-local-backup-<time>` branch. If a local commit edits the same lines as the release, the box lists the local commits and conflicting files and offers «Ask the server room AI to sort it out ▶»; the manual line now shows the local commits instead of a pull that cannot work. The server-session template now says board code is shared and should be changed locally only when really needed. Boards on 0.6.21 or earlier that already show «diverged» need one manual step, because the update runs the installed (old) updater: in a server terminal `cd ~/dev-server && git status --short --untracked-files=no` (must be empty), then `git fetch origin --tags && git branch board-local-backup-$(date +%Y%m%d%H%M%S) && git -c user.name="Server Board" -c user.email=board@localhost rebase v0.6.22 && pm2 restart dev-board` (on a conflict: `git rebase --abort` and hand it to the server session). If the board then still has a broken update notice, press «Check again».
+
 ## [0.6.21]
 
 - **Trust a project folder from the board** — «📂 Projects» cards get a «① Trust folder» button: the board records the folder as trusted in `~/.claude.json` (same lock Claude Code uses, other fields kept), so sessions no longer fail with «This folder is not trusted yet» until someone runs `claude` in a server shell. Same folder checks as adding; owner only with the authenticator re-check. A queued task that failed for this reason shows «📂 Go trust the folder» and restarts once the folder is trusted. Servers with a separate working account still get the paste-in line.

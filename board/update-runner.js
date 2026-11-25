@@ -2,10 +2,10 @@
 'use strict';
 /**
  *
- *  apply  1 잠금 · 배포 중이면 안 함 → 2 다시 확인(고친 파일 0 · 앞으로만 · 메모리)
+ *  apply  1 잠금 · 배포 중이면 안 함 → 2 다시 확인(고친 파일 0 · 메모리 · 앞으로만 못 가면 이 서버 커밋을 새 판 위에 다시 얹음)
  *         → 3 새 판 코드를 임시 폴더에 꺼내 자동 시험(설치본은 아직 그대로 — 실패면 아무것도 안 바뀜)
  *         → 4 결과 파일에 phase=switching·prev 먼저(중간에 죽으면 상황판이 켜질 때 알아챔)
- *         → 5 pm2 stop → 설정·기록 사본(멈춘 뒤라 최신) → git merge --ff-only → pm2 restart → 뜨는지(/api/ping·/ 가 20초 계속 대답)
+ *         → 5 pm2 stop → 설정·기록 사본(멈춘 뒤라 최신) → git merge --ff-only (이 서버에만 있는 커밋이 있으면: 임시 폴더에서 새 판 위에 다시 얹은 커밋으로 reset --keep · 원래 이력은 board-local-backup-* 가지) → pm2 restart → 뜨는지(/api/ping·/ 가 20초 계속 대답)
  *         → 6 안 뜨면: stop → 새 판이 쓴 기록은 state.after.json 으로 남김 → (고친 파일 0 일 때만) reset --hard prev → 기록 되돌림 → restart
  *  revert 받는 도중 멈춘 판을 주인 버튼으로 prev 로 되돌림 — 코드만(그사이 쌓인 기록은 지금 것 유지 · Fable 완료 검증 ②)
  * 결과: board/update-result.json { phase, result: done|rolled-back|blocked|broken, … } · 과정: board/log/update/<시각>/run.log
@@ -72,6 +72,7 @@ function writeRec(extra) {
 }
 let TDIR = null;
 function finish(result, extra) {
+  try { require('child_process').execFileSync('git', ['-C', DIR, 'update-ref', '-d', 'refs/board-update/candidate'], { stdio: 'ignore', timeout: 10000 }); } catch (_) {}   // 다시 얹은 커밋 임시 표지 — 시험 실패·멈춤 실패 때도 남지 않게
   if (TDIR) { try { fs.rmSync(TDIR, { recursive: true, force: true }); } catch (_) {} TDIR = null; }
   writeRec(Object.assign({ result, phase: 'end', at: new Date().toISOString() }, extra || {}));
   log('결과 ' + result + ' ' + JSON.stringify(extra || {}));
@@ -104,6 +105,30 @@ async function healthy() {
     await sleep(1000);
   }
   return false;
+}
+/** 이 서버에만 있는 커밋을 새 판 위에 다시 얹기 — 설치본 말고 임시 작업 폴더에서 (updater.js rebasePlan 과 같은 일 · 이 실행기는 임시 사본이라 그 파일을 못 부름)
+ *  → { ok, commit, why, conflict, err } */
+async function rebaseOnto(tag) {
+  const mg = await git('rev-list', '--merges', tag + '..HEAD');
+  if (!mg.ok) return { ok: false, why: 'git', err: mg.err };
+  if (mg.out) return { ok: false, why: 'diverged-merge' };
+  const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'board-rebase-'));
+  const gw = (...a) => run('git', ['-C', wt, '-c', 'user.name=Server Board', '-c', 'user.email=board@localhost', '-c', 'rebase.updateRefs=false', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'].concat(a), { timeout: 120000, env: Object.assign({}, process.env, { GIT_TERMINAL_PROMPT: '0' }) });
+  try {
+    const add = await git('worktree', 'add', '--detach', '--quiet', wt, 'HEAD');
+    if (!add.ok) return { ok: false, why: 'git', err: add.err };
+    const rb = await gw('rebase', '--quiet', tag);
+    if (!rb.ok) { const u = await gw('diff', '--name-only', '--diff-filter=U'); await gw('rebase', '--abort'); const cf = u.out ? u.out.split('\n').slice(0, 20) : []; return { ok: false, why: cf.length ? 'diverged' : 'git', conflict: cf, err: rb.err }; }
+    const nh = await gw('rev-parse', 'HEAD'), v1 = await gw('show', 'HEAD:board/VERSION'), v2 = await git('show', tag + ':board/VERSION');
+    if (!nh.ok || !v1.ok || v1.out !== v2.out) return { ok: false, why: 'diverged-version' };
+    const keep = await git('update-ref', 'refs/board-update/candidate', nh.out);   // 임시 폴더를 지워도 새 커밋이 정리(gc)되지 않게
+    if (!keep.ok) return { ok: false, why: 'git', err: keep.err };
+    return { ok: true, commit: nh.out };
+  } finally {
+    await git('worktree', 'remove', '--force', wt);
+    try { fs.rmSync(wt, { recursive: true, force: true }); } catch (_) {}
+    await git('worktree', 'prune');
+  }
 }
 function memAvailMb() { try { return Math.round(+fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1] / 1024); } catch (_) { return Infinity; } }
 
@@ -158,15 +183,23 @@ async function rollback(prev, snapDir, why) {
   if (st.out) return finish('blocked', { why: 'dirty', dirty: st.out.split('\n').slice(0, 20) });
   const head = await git('rev-parse', 'HEAD'), tagc = await git('rev-parse', TAG + '^{commit}');
   if (!head.ok || !tagc.ok) return finish('blocked', { why: 'git', err: head.err || tagc.err });
-  if (!(await git('merge-base', '--is-ancestor', 'HEAD', TAG)).ok) return finish('blocked', { why: 'diverged' });
   if (memAvailMb() < MIN_MEM_MB) return finish('blocked', { why: 'memory', memMb: memAvailMb() });
   const prev = head.out, from = readVer();
-  writeRec({ prev, from, to: TAG.slice(1) });
+  // 앞으로만 갈 수 있으면 태그 그대로 · 이 서버에만 있는 커밋이 있으면 새 판 위에 다시 얹은 커밋으로(원래 이력은 백업 가지)
+  let target = TAG, backup = null;
+  if (!(await git('merge-base', '--is-ancestor', 'HEAD', TAG)).ok) {
+    const rb = await rebaseOnto(TAG);
+    if (!rb.ok) return finish('blocked', Object.assign({ why: rb.why }, rb.conflict ? { conflict: rb.conflict } : {}, rb.err ? { err: rb.err } : {}));
+    target = rb.commit;
+    backup = 'board-local-backup-' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
+    log('이 서버 커밋을 ' + TAG + ' 위에 다시 얹음 → ' + target + ' (원래 이력 → 가지 ' + backup + ')');
+  }
+  writeRec({ prev, from, to: TAG.slice(1), rebased: !!backup, backup });
 
   // 3 새 판 코드를 임시 폴더에 꺼내 시험 — 설치본은 그대로
   const tdir = TDIR = fs.mkdtempSync(path.join(os.tmpdir(), 'board-update-'));
   try {
-    const ar = await run('/bin/sh', ['-c', 'git -C "$0" archive --format=tar "$1" board | tar -x -C "$2"', DIR, TAG, tdir], { timeout: 60000 });
+    const ar = await run('/bin/sh', ['-c', 'git -C "$0" archive --format=tar "$1" board | tar -x -C "$2"', DIR, target, tdir], { timeout: 60000 });
     if (!ar.ok) return finish('blocked', { why: 'archive', err: ar.err });
     const tb = path.join(tdir, 'board');
     const cmd = TEST_CMD ? TEST_CMD.split('{dir}').join(tb)
@@ -184,12 +217,19 @@ async function rollback(prev, snapDir, why) {
   if (!s1.ok) { writeRec({ phase: null }); return finish('blocked', { why: 'pm2', err: s1.err }); }
   try { for (const p of SNAP) { const f = path.join(DIR, ...p); if (fs.existsSync(f)) fs.copyFileSync(f, path.join(RUN_DIR, snapName(p))); } }
   catch (e) { await pm2('restart', PM2ID, '--update-env'); return finish('blocked', { why: 'snapshot', err: e.message }); }   // 받기 전이라 다시 켜기만
-  const mg = await git('merge', '--ff-only', '--quiet', TAG);
+  const h2 = await git('rev-parse', 'HEAD'), st2 = await git('status', '--porcelain', '--untracked-files=no');
+  if (!h2.ok || h2.out !== prev || !st2.ok || st2.out) { await pm2('restart', PM2ID, '--update-env'); return finish('blocked', { why: 'head-moved' }); }
+  if (backup) {
+    const bk = await git('branch', backup, prev);
+    if (!bk.ok) { await pm2('restart', PM2ID, '--update-env'); return finish('blocked', { why: 'merge', err: bk.err }); }
+  }
+  const mg = backup ? await git('reset', '--keep', '--quiet', target) : await git('merge', '--ff-only', '--quiet', TAG);
+  if (backup) await git('update-ref', '-d', 'refs/board-update/candidate');
   if (!mg.ok) {
     await pm2('restart', PM2ID, '--update-env');
     return finish('blocked', { why: 'merge', err: mg.err });
   }
-  log('받음 ' + tagc.out + ' · 판 ' + readVer());
+  log('받음 ' + (backup ? target + ' (' + TAG + ' + 이 서버 커밋)' : tagc.out) + ' · 판 ' + readVer());
   const r1 = await pm2('restart', PM2ID, '--update-env');
   log('재시작 ' + (r1.ok ? 'ok' : 'fail ' + r1.err));
   if (r1.ok && await healthy()) return finish('done', {});

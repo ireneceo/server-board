@@ -89,7 +89,9 @@
 ## 10. 상황판 새 판 받기 (최종 컨펌자)
 - 상황판이 6시간마다(확인이 실패했으면 1시간 뒤 다시 · 그리고 제목의 서버 이름 옆 **판 번호(v… ↻)** 를 누르면 바로) 공개 저장소의 새 판 표시(태그)를 봅니다. 저장소에 연결하지 못하면 맨 위에 «새 판을 확인하지 못하고 있어요» 칸과 서버 창에서 확인할 한 줄이 나옵니다. 하는 일은 그 태그를 `git ls-remote`·`git fetch` 하는 것뿐 — 이 서버 정보는 어디에도 보내지 않습니다.
 - **업데이트**(30분 지났으면 인증 앱 코드): 새 판을 임시 폴더에 풀어 자동 시험 → 상황판 멈춤 · 기록(`board/state.json`·`board/config.json`·`projects.json`)을 `board/log/update/<시각>/` 에 복사 → `git merge --ff-only <태그>` → 다시 켜기 → 20초 동안 계속 대답해야 성공. 아니면 이전 커밋과 그 기록을 되돌려 다시 켭니다(새 판이 쓴 기록은 옆에 `*.after` 로 남음). 작업방은 그동안에도 하던 일을 계속합니다.
-- 받지 않는 경우: 이 서버에서 상황판 파일을 직접 고침 · 이력이 갈라짐 · 받아 오는 주소가 처음과 달라짐 · 같은 판 번호가 다른 코드를 가리킴 · PM2 로 돌지 않음. 칸에 까닭과 손으로 받는 줄이 나옵니다: `cd ~/dev-server && git pull --ff-only && pm2 restart dev-board`
+- **이 서버에서 따로 한 커밋**(서버 방이 고치고 커밋한 것 등)이 있어도 받습니다: 먼저 임시 작업 폴더(git worktree)에서 그 커밋들을 새 판 위에 다시 얹어 보고(설치본은 그동안 그대로) 그 결과로 시험한 뒤 바꿔 끼웁니다. 원래 이력은 `board-local-backup-<시각>` 가지에 남습니다. 새 판과 같은 줄을 고쳤으면 칸에 이 서버 커밋·겹친 파일과 **서버 방 AI 에게 풀기 맡기기 ▶** 가 나옵니다(백업 가지 → 새 판에 이미 든 것은 버림 → 꼭 필요한 것만 다시 얹기 → 시험 → 재시작).
+- 0.6.21 이하에서 «갈라짐» 으로 막혀 있으면: 그 판은 스스로 다시 얹지 못해 서버 창에서 한 번만 — `cd ~/dev-server && git status --short --untracked-files=no`(아무것도 안 나와야 함) 뒤 `git fetch origin --tags && git branch board-local-backup-$(date +%Y%m%d%H%M%S) && git -c user.name="Server Board" -c user.email=board@localhost rebase origin/main && pm2 restart dev-board`. 겹침이 나면 `git rebase --abort`(아무것도 안 바뀜) 뒤 서버 방에 맡깁니다.
+- 받지 않는 경우: 추적 파일을 커밋 없이 고쳐 둠 · 이 서버 커밋이 새 판과 겹침(위) · 받아 오는 주소가 처음과 달라짐 · 같은 판 번호가 다른 코드를 가리킴 · PM2 로 돌지 않음. 칸에 까닭과 서버 창에서 볼 줄이 나옵니다(고친 파일 `git status` · 이 서버 커밋 `git log --oneline <태그>..HEAD`).
 - 받는 도중 멈추면(정전·메모리 부족) 맨 위에 **이전 판으로 되돌리기**(코드만 — 그사이 쌓인 기록은 그대로, 사본은 `board/log/update/<시각>/`)와 **이 판 그대로 쓰기** 가 나옵니다.
 - 상황판이 아예 안 뜨면: `pm2 logs dev-board --lines 50 --nostream` 확인 뒤 `cd ~/dev-server && git reset --hard <prev>`(`prev` 는 `board/update-result.json`) · `pm2 restart dev-board`.
 - 저장소를 일부러 옮겼으면: 상황판을 멈춘 채 `board/state.json` 의 `update.origin`·`update.tags` 를 지우고 켜면, 다음 확인이 새 주소로 고정합니다.
