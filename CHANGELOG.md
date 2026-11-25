@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.28]
+
+- **All chosen solutions stay on one row on a computer** — the solution columns no longer wrap: at the normal 1100px page width the 4th column was pushed down to a second row by the 330px minimum column width added in 0.6.26. On a computer every chosen solution now shares one row; on a phone (under 760px) it is still one column at a time with tabs.
+
 ## [0.6.27]
 
 - **Clearer team-member setup and invitation** — in ⚙ Team & roles, step ② now starts with «Open a server window»: the connect line (`ssh you@server`) with a Copy button and what to do when the menu appears, then «paste the line below in that server window». The last sub-step says what comes next: once ② shows ✔ Ready, press ③ «Make invitation & copy» and send it 1:1 (nothing is sent automatically). The invitation's key file no longer turns a non-Latin server name into `----_board` — it falls back to the server address (e.g. `203-0-113-10_board`). Under the tunnel command it now says that nothing printing after Enter means you are connected, and the developer server-shell line says to use a new terminal window.

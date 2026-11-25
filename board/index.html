@@ -4545,13 +4545,10 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       return j;
     });
   }
-  // 솔루션 칸 수 — main 안쪽 폭 기준(칸 사이 16px)
-  var GRID_MIN = 330, layoutKey = '', layoutN = 1;
-  function gridCols(n) {
-    var m = document.querySelector('main'); if (!m) return Math.max(1, n);
-    var cs = getComputedStyle(m), w = m.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    return Math.max(1, Math.min(n, Math.floor((w + 16) / (GRID_MIN + 16))));
-  }
+  // 솔루션 칸 수 — 고른 솔루션은 언제나 한 줄에 전부
+  //   옛(같은 날 오전): 칸 최소 330px 로 나눠 1100px 에서 4번째 칸이 다음 줄로 밀림. 휴대폰(760px 아래)은 탭으로 한 칸씩이라 해당 없음.
+  var layoutKey = '', layoutN = 1;
+  function gridCols(n) { return Math.max(1, n); }
   // 창 크기를 바꾸거나 휴대폰을 돌리면 칸 수·휴대폰 보기를 다시 맞춤(옛: 새 자료가 와야 바뀜)
   (function () {
     var t = null;
