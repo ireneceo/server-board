@@ -4352,6 +4352,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
         : u.last.result === 'kept' ? K('멈췄던 상황판 업데이트 — 지금 판 그대로 씀', 'Stopped board update — kept the current version')
         : u.last.result === 'blocked' ? K('상황판 업데이트를 하지 않았어요', 'The board update did not run') : K('상황판 업데이트 실패 — 확인 필요', 'Board update failed — needs a look')));
       if (u.last.why) box.appendChild(el('div', null, UPD_WHY[u.last.why] || u.last.why));
+      if (u.last.result === 'done' && !u.newer && !u.stale && u.latest && u.checkedAt) box.appendChild(el('small', null, K('지금 ' + u.current + ' · 공개 최신 ' + u.latest + ' (' + fmt(u.checkedAt) + ' 확인)', 'Now ' + u.current + ' · latest published ' + u.latest + ' (checked ' + fmt(u.checkedAt) + ')')));
       if (u.last.result === 'done' && u.last.backup) box.appendChild(el('small', null, K('이 서버에서 따로 한 커밋은 새 판 위에 다시 얹었어요 · 원래 이력은 가지 ' + u.last.backup + ' 에 남겨 둠', 'Commits made on this server were re-applied on top · the original history is kept in branch ' + u.last.backup)));
       if (u.last.log && u.last.result !== 'done') box.appendChild(el('small', null, K('기록: ~/dev-server/', 'Log: ~/dev-server/') + u.last.log));
       if (u.lastTemplates && u.lastTemplates.length) {

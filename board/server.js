@@ -572,9 +572,15 @@ async function updateCheckRun(why) {
   } catch (e) { writeLog({ action: 'update-check-error', err: String(e.message || e).slice(0, 300) }); return null; }
   finally { updBusy = false; }
 }
+/** 지금 돌고 있는 판(board/VERSION) — 원본 서버·시험 상자는 null */
+function updLiveVer() { const v = updater.currentVersion(UPD_DIR); return v ? updater.fmtVer(v) : null; }
+/** 지난 확인 뒤 판이 바뀜(서버 창에서 손으로 받음·되돌림 등) — 그 확인 결과(지금 판·최신·받을 수 있음)는 낡음
+ */
+function updCheckStale(c) { const live = updLiveVer(); return !!(live && c && c.current && c.current !== live); }
 async function updateTick() {
   const u = peekState().update || {};
   if (u.check && u.check.on === false && u.check.why === 'no-version') return;   // 원본 서버
+  if (updCheckStale(u.check)) { await updateCheckRun('version-moved'); return; }
   const every = u.check && UPD_FAIL.includes(u.check.why) && !u.check.newer ? UPD_RETRY_MS : UPD_EVERY_MS;
   if (!u.check || Date.now() - Date.parse(u.check.checkedAt || 0) > every - 60000) await updateCheckRun('daily');
 }
@@ -604,6 +610,8 @@ function updateBootResult() {
   if (!r.result || u.lastAt === r.at) return;
   u.lastAt = r.at; u.last = r; if (u.check && r.result === 'done') u.check = Object.assign({}, u.check, { current: updater.currentVersion(UPD_DIR) ? updater.fmtVer(updater.currentVersion(UPD_DIR)) : u.check.current, newer: false, canApply: false });
   saveState(st);
+  // 받은 판보다 더 새 판이 그사이 나왔을 수 있음 — 6시간 기다리지 않고 바로 다시 확인(전에는 «최신» 으로 굳어 있었음)
+  if (r.result === 'done') setTimeout(() => { updateCheckRun('after-update').catch(() => {}); }, 5000).unref();
   writeLog({ action: 'update-result', result: r.result, why: r.why || null, from: r.from || null, to: r.to || null, mode: r.mode });
   const bad = r.result === 'rolled-back' || r.result === 'broken' || (r.result === 'blocked' && r.why === 'tests');
   if (r.result === 'done' || bad) {
@@ -621,11 +629,17 @@ function updateView() {
   const stalled = updater.stalled(UPD_DIR);
   if (!c && !u.last && !run && !stalled) return null;
   if (c && c.on === false && c.why === 'no-version' && !u.last) return null;   // 원본 서버
-  return { on: c ? c.on : null, current: c ? c.current : null, latest: c ? c.latest || null : null, newer: !!(c && c.newer), canApply: !!(c && c.canApply), why: c ? c.why || null : null, repo: String(CONFIG.repoUrl || 'https://github.com/ireneceo/server-board').replace(/\.git$/, ''),
+  // 확인 뒤 판이 바뀌었으면 그 확인은 옛 판 기준 — 새 판·받기 단추는 다시 확인(켠 뒤 20초·1시간마다)이 끝날 때까지 안 보임
+  const live = updLiveVer(), stale = updCheckStale(c);
+  // 지난 받기 결과가 지금 판과 안 맞으면(손으로 다른 판을 받음 · 그 뒤 더 새 판을 받음) 옛 «…로 업데이트했어요»·실패 칸을 보이지 않음
+  const lastOld = !!(u.last && live && u.last.to && !run && !stalled && (u.last.result === 'done' ? u.last.to !== live : !!updater.parseVer(u.last.to) && updater.cmpVer(updater.parseVer(u.last.to), updater.parseVer(live)) <= 0));
+  const last = lastOld ? null : u.last;
+  if (!c && !last && !run && !stalled) return null;
+  return { on: c ? c.on : null, current: live || (c ? c.current : null), latest: c ? c.latest || null : null, newer: !!(c && c.newer && !stale), canApply: !!(c && c.canApply && !stale), stale, why: c ? c.why || null : null, repo: String(CONFIG.repoUrl || 'https://github.com/ireneceo/server-board').replace(/\.git$/, ''),
     dirty: c && c.dirty || null, local: c && c.local || [], conflict: c && c.conflict || [], rebase: c && c.rebase || null, tag: c && c.tag || null, divergedQueued: !!(u.divergedQueued && c && u.divergedQueued === c.tag), notes: c && c.notes ? String(c.notes).slice(0, 4000) : '', templates: c && c.templates || [], checkedAt: c ? c.checkedAt : null, err: c && c.err ? String(c.err).slice(0, 300) : null,
     running: run ? { at: run.at, mode: run.mode, tag: run.tag } : null, stalled: stalled ? { tag: stalled.tag, phase: stalled.phase, at: stalled.startedAt } : null,
-    last: u.last ? { result: u.last.result, why: u.last.why || null, backup: u.last.backup || null, conflict: u.last.conflict || null, from: u.last.from || null, to: u.last.to || null, at: u.last.at || u.last.startedAt, log: u.last.log || null, templatesQueued: !!u.templatesQueued } : null,
-    lastTemplates: u.last && u.last.result === 'done' && u.applyTemplates && u.applyTemplates.tag === 'v' + u.last.to && !u.templatesQueued ? u.applyTemplates.paths : [] };
+    last: last ? { result: last.result, why: last.why || null, backup: last.backup || null, conflict: last.conflict || null, from: last.from || null, to: last.to || null, at: last.at || last.startedAt, log: last.log || null, templatesQueued: !!u.templatesQueued } : null,
+    lastTemplates: last && last.result === 'done' && u.applyTemplates && u.applyTemplates.tag === 'v' + u.last.to && !u.templatesQueued ? u.applyTemplates.paths : [] };
 }
 
 // ── 공개판 내기 (원본 서버만 ·
@@ -9947,7 +9961,8 @@ if (require.main === module) {
   setInterval(fableTick, 60 * 1000);
   setInterval(claudeCheckTick, CC_EVERY_MS); setTimeout(claudeCheckTick, 3 * 60 * 1000);
   setInterval(publishTick, 5 * 60 * 1000); setTimeout(publishTick, 20 * 1000);   // 공개판 내기 — 원본 서버만(안 낸 고침 세기 · 조용하면 하루 한 번 서버 방에)
-  setInterval(updateTick, 60 * 60 * 1000); setTimeout(updateTick, 10 * 60 * 1000);   // 새 판 확인 — 하루 한 번(켠 뒤 10분)
+  setInterval(updateTick, 60 * 60 * 1000); setTimeout(updateTick, 10 * 60 * 1000);   // 새 판 확인 — 6시간마다(켠 뒤 10분)
+  setTimeout(() => { if (updCheckStale((peekState().update || {}).check)) updateTick().catch(() => {}); }, 20 * 1000);   // 서버 창에서 손으로 받고 다시 켰으면 바로 다시 확인
   try { updateBootResult(); } catch (e) { writeLog({ action: 'update-boot-error', err: String(e.message || e).slice(0, 200) }); }
   setInterval(() => { try { updateBootResult(); } catch (_) {} }, 15 * 1000);   // 실행기는 재시작 «뒤» 에 결과를 쓴다 → 켜질 때 한 번만 읽으면 놓침(Fable 완료 검증 ①)   // Claude Code 버전이 바뀌면 상황판이 기대는 모양·자동 시험 점검
   setInterval(todoCheckTick, 30 * 60 * 1000); setTimeout(todoCheckTick, 60 * 1000);   // 직접 할 일 정기 점검 — 솔루션마다 하루 한 번까지

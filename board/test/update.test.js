@@ -285,3 +285,34 @@ test('업데이트: 확인 실패(연결 못 함)를 «최신» 이라 하지 �
     } finally { board.server.close(); sb.cleanup(); }
   } finally { fs.rmSync(d, { recursive: true, force: true }); }
 });
+
+test('업데이트: 서버 창에서 손으로 받은 뒤 옛 확인·«…로 업데이트했어요» 를 보이지 않음 · 바로 다시 확인 (2026-11-25 다른 서버 0.6.15→0.6.22)', async () => {
+  const { loadBoard } = require('./sandbox');
+  const { board, sb } = loadBoard({ lang: 'ko' });
+  try {
+    const vf = path.join(sb.dir, 'VERSION');
+    fs.writeFileSync(vf, '0.6.15\n');
+    const rf = path.join(sb.dir, 'update-result.json');
+    fs.writeFileSync(rf, JSON.stringify({ mode: 'apply', tag: 'v0.6.15', phase: 'end', result: 'done', from: '0.6.14', to: '0.6.15', at: new Date().toISOString() }));
+    board.updateBootResult();
+    const st = board.loadState(); st.update.check = { on: true, why: 'diverged', current: '0.6.15', latest: '0.6.21', tag: 'v0.6.21', newer: true, canApply: false, checkedAt: new Date(Date.now() - 600e3).toISOString() }; board.saveState(st);
+    // 받은 판 그대로면 «0.6.15 로 업데이트했어요» 와 새 판 칸 그대로
+    let v = board.updateView();
+    assert.strictEqual(v.last.to, '0.6.15'); assert.strictEqual(v.newer, true); assert.strictEqual(v.stale, false);
+    // 손으로 0.6.22 를 받음 → 옛 결과·옛 확인은 안 보임, 지금 판은 실제 판
+    fs.writeFileSync(vf, '0.6.22\n');
+    v = board.updateView();
+    assert.strictEqual(v.last, null); assert.strictEqual(v.current, '0.6.22');
+    assert.strictEqual(v.newer, false); assert.strictEqual(v.canApply, false); assert.strictEqual(v.stale, true);
+    // 6시간 안이라도 바로 다시 확인(시험 상자는 git 이 없어 연결 실패 까닭으로 바뀜 — «옛 판 기준» 만 아니면 됨)
+    await board.updateTick();
+    const c = board.loadState().update.check;
+    assert.strictEqual(c.current, '0.6.22'); assert.notStrictEqual(c.why, 'diverged');
+    // 실패 결과(되돌림)는 지금 판이 그 판 이상이면 풀린 것 → 안 보임 · 아래면 그대로
+    fs.writeFileSync(rf, JSON.stringify({ mode: 'apply', tag: 'v0.6.21', phase: 'end', result: 'blocked', why: 'diverged', from: '0.6.15', to: '0.6.21', at: new Date(Date.now() + 1000).toISOString() }));
+    board.updateBootResult();
+    assert.strictEqual(board.updateView().last, null);
+    fs.writeFileSync(vf, '0.6.15\n');
+    assert.strictEqual(board.updateView().last.result, 'blocked');
+  } finally { board.server.close(); sb.cleanup(); }
+});
