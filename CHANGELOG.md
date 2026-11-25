@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.30]
+
+- **«Build from a design doc» box fits narrow cards** — the doc path field now has its own line, with «N sessions/day» and «Plan it» on one line below it (squeezing all three onto one line folded the text vertically). On narrow cards that line wraps and the button takes a full row below instead of sticking out of the card.
+
 ## [0.6.29]
 
 - **Assign to-dos to team members** — when the team has members, each to-do card has an «Assignee» picker for the final approver (team members or reviewers on that project; cards with commands to paste stay with the owner; AI sessions cannot set it). The assignee sees it under «Mine» and can press Done / Didn't work / Ask / Hand back; other people's cards show only the title and assignee (steps and commands are not sent). The to-do box gets «All / Mine / Others'» filters and counts. Session cards and finished tasks now show who added the work (owner, member proposal + approver, AI session, the board, or a to-do someone handled) — on every server, for sessions started from now on. Non-owners no longer receive commands to paste on any question card; a member's note is fenced as data in the text sent to the session. Apart from the «added by» line, single-person servers look exactly as before.

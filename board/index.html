@@ -401,6 +401,10 @@
   .sched-steps { font-size: 13px; }
   .sched-meta { color: var(--muted); font-size: 12px; }
   .sched-acts { display: flex; gap: 14px; padding-top: 4px; }
+  .sched-item > .nt-input { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 6px 10px; }
+  .prog-go { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 4px; }
+  .prog-go select { flex: 1 1 auto; min-width: 0; max-width: 100%; font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); }
+  .prog-go .btn { flex: 1 0 auto; padding: 6px 12px; white-space: nowrap; }
   .sched .lnk { all: unset; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--link); padding: 4px 0; }
   .sched .lnk.del { color: var(--muted); }
   .sched .lnk:hover { text-decoration: underline; }
@@ -5500,7 +5504,7 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       var sel = el('select', ''); [1, 2, 3, 4, 5, 6, 7, 8].forEach(function (n) { var o = el('option', '', K('하루 방 ' + n + '개', n + ' sessions/day')); o.value = n; if (n === 4) o.selected = true; sel.appendChild(o); });
       var go = el('button', 'btn primary', K('계획 세우기', 'Plan it'));
       go.addEventListener('click', function () { var d = inp.value.trim(); if (!d) { inp.focus(); return; } act('/api/programs', { project: p.key, doc: d, limit: Number(sel.value) }, go).then(function (j) { if (j && j.ok) delete progDoc[p.key]; }); });
-      var row = el('div', 'sched-acts'); row.appendChild(inp); row.appendChild(sel); row.appendChild(go); f.appendChild(row);
+      f.appendChild(inp); var row = el('div', 'prog-go'); row.appendChild(sel); row.appendChild(go); f.appendChild(row);
       body.appendChild(f);
     }
     box.appendChild(body);
