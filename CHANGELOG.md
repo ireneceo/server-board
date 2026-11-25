@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.6.29]
+
+- **Assign to-dos to team members** — when the team has members, each to-do card has an «Assignee» picker for the final approver (team members or reviewers on that project; cards with commands to paste stay with the owner; AI sessions cannot set it). The assignee sees it under «Mine» and can press Done / Didn't work / Ask / Hand back; other people's cards show only the title and assignee (steps and commands are not sent). The to-do box gets «All / Mine / Others'» filters and counts. Session cards and finished tasks now show who added the work (owner, member proposal + approver, AI session, the board, or a to-do someone handled) — on every server, for sessions started from now on. Non-owners no longer receive commands to paste on any question card; a member's note is fenced as data in the text sent to the session. Apart from the «added by» line, single-person servers look exactly as before.
+- **Build from a design doc (continuous development, stage 1)** — a new «Build from a design doc» box (line icon: document + code) on each project card (owner only). A planning session splits the doc into steps (`.claude/programs/<id>/plan.json`), one approval card at the top collects the open decisions, then each step runs in a fresh session and the board queues the next one by itself. The board judges each step by reading only (✅ report, commit, no new uncommitted files, changed files inside the step scope, no open card, a pass line in `progress.md`) and never runs commands from the plan. It stops only at planned confirm points, after one failed fix, on questions, or when the doc/plan changes; not-safe-to-ship steps hold deploys for that project. Waiting maintenance tasks go first between steps; sessions per day are capped (default 4).
+
 ## [0.6.28]
 
 - **All chosen solutions stay on one row on a computer** — the solution columns no longer wrap: at the normal 1100px page width the 4th column was pushed down to a second row by the 330px minimum column width added in 0.6.26. On a computer every chosen solution now shares one row; on a phone (under 760px) it is still one column at a time with tabs.

@@ -120,5 +120,16 @@ To change a board's port (on that server, owner):
 6. «GitHub …» on the Backup line and in «More» = the code copy. «N commits not pushed» → the window's «Code copy» box → «Start dev done (includes push)»: that project's dev done logs, commits, backs up and pushes. «No code copy» means the code exists only on this server and in backup archives.
 7. «No code copy» → the window's «Connect to GitHub…» → «Create a key» → on GitHub create an empty Private repository and paste the key under Settings → Deploy keys (tick Allow write access) → enter owner/name and «Check connection» → that project's session filters secrets and pushes the first time.
 
+## 13. Build from a design doc — continuous development (per project · final approver)
+Give one design doc; the board splits it into steps, develops them one after another, and stops only where planned. Design and review: `AUTO_DEV_PLAN.md` section 6 on the origin server.
+1. Project card «📐 Build from a design doc» → a doc path inside the project folder (e.g. `docs/design.md`) · sessions per day (default 4) → «Plan it».
+2. A planning session writes `.claude/programs/<id>/plan.md` and `plan.json` (per step: doc section, scope, pass condition, confirm or not, safe to ship or not). Open decisions (gaps in the doc, DB shape, permissions) are collected into the approval card, not asked mid-way.
+3. «Dev plan approval» card at the top — «✓ Approve and start» (decisions as recommended) or «✎ Ask for changes» (the same planning session revises it). If the doc or plan files change after approval, development stops.
+4. Each step runs in a new session. The board judges the step by reading only: first report line ✅ with no «not verified» · a commit since the step started · no new uncommitted files · changed files inside the step scope · no open question card from that session · «단계 n 통과» in `progress.md`. The board never runs commands written in the plan.
+5. A failed step gets one «fix» session; if it fails again the plan stops with a card («▶ Continue» / «✕ End plan»). If a session asks (⏸), the step waits for the answer.
+6. Confirm-point steps (money, login/permissions, outbound messages, public URLs, deletion/data moves, leaving the approved DB shape, a fork the doc doesn't answer) wait for «▶ Next step». New screens don't stop — they go to «Where to check».
+7. When a not-safe-to-ship step (safe=false) starts, deploys for that project are held; they are released when a safe step passes. Ending a plan keeps the hold — lift it if the code is fine.
+8. Maintenance tasks that were waiting go first between steps (up to 6 h). «Run now» and the deploy button always come first. One running plan per project.
+
 ## To be added (next stages)
 Key and password rotation · incident response (block → stop → revoke/rotate → keep evidence → restore) · backup and restore (code rollback vs database restore, restore drills) · what changes after OS account separation
