@@ -3915,7 +3915,9 @@ function cleanPubkey(x) { const m = String(x || '').trim().replace(/\s+/g, ' ').
 const wantsShell = (m) => !!m && m.job === 'developer';
 /** /etc/passwd 에 있는 모든 이름 */
 function allAccountNames() { const s = new Set(); try { for (const l of fs.readFileSync('/etc/passwd', 'utf8').split('\n')) { const f = l.split(':'); if (f[0]) s.add(f[0]); } } catch (_) {} return s; }
-// 상황판이 만드는 SSH 열쇠 — 통로 전용(개발자 아님) 계정만
+// 상황판이 만드는 SSH 열쇠 — 통로 전용 계정
+//   개발자(터미널) 계정도 — 그 사람에게 부탁하지 않고 최종 컨펌자가 바로
+//   그 사람이 만든 공개 열쇠가 이미 있으면 ② 칸에 붙여 넣어도 됨(그쪽이 더 안전 — 개인 열쇠가 안내문을 타지 않음)
 //   개인 열쇠는 디스크·config·state·로그·/api/team 에 두지 않고 메모리에만 → 초대 안내문을 만들 때 한 번 내주고 지움 · 24시간 지나면 버림
 //   상황판을 다시 켜면 사라짐 → 화면이 «열쇠 다시 만들기» 를 보여 줌(옛 공개 열쇠는 ② 줄을 다시 붙이면 덮여 죽음)
 const genKeys = new Map();   // user → { priv, pub, at }
@@ -3946,7 +3948,7 @@ function accountSetup(m, accts, allNames) {
   // 표지 없는 계정 = 이 줄 전에 있던 계정(예전 줄·직접 만든 계정) → 예전처럼 계정만 맞으면 열쇠도 된 것으로
   const keyOk = !!m.pubkey && !!a && (/^board/.test(a.note || '') || m.keyGen ? a.note === keyTag(m.pubkey) : true);   // 상황판이 만든 열쇠는 표지가 그 지문일 때만(Fable 완료 검증 ①)
   const r = { user: m.user, exists: !!a, shell, now: a ? a.shell : '', admin: !!(a && a.admin), acctOk, keyOk, ready: acctOk && keyOk, cmd: '', needKey: !m.pubkey, block: '',
-    keyGen: !!m.keyGen, keyPending: genKeyPending(m), canGen: shell === 'tunnel', hadKeys: !!a && !/^board/.test(a.note || '') };
+    keyGen: !!m.keyGen, keyPending: genKeyPending(m), canGen: true, hadKeys: !!a && !/^board/.test(a.note || '') };
   // 줄을 만들 때마다 다시 가름 — 저장 뒤 시스템·관리자 계정이 됐거나 config 를 다른 서버로 옮긴 경우도 (Fable 완료 검증 ③)
   if (!a && (allNames || allAccountNames()).has(m.user)) r.block = 'system';
   else if (a && (a.owner || a.admin)) r.block = 'admin';
@@ -4972,18 +4974,17 @@ async function handleAction(req, res, url, who) {
   }
 
   // ⚙ 팀·권한 저장 — 주인만(permit) · config.json «team» 만 고침, 다시 켤 필요 없음
-  if (url === '/api/team/keygen') {   // 주인만(permit 기본 거절) · 저장된 팀원 · 통로 전용만
+  if (url === '/api/team/keygen') {
     const want = String(body.user || '').trim().toLowerCase();
     const m = ACCT_RE.test(want) ? TEAM.members.find((x) => x.user === want) : null;
     if (!m) return send(res, 400, { ok: false, message: K('먼저 저장한 팀원만', 'Save the member first') });
-    if (wantsShell(m)) return send(res, 400, { ok: false, message: K('개발자(터미널) 계정은 그 사람이 직접 만든 공개 열쇠만 받아요 — 개인 열쇠가 메신저에 남으면 서버 명령 실행권이 새요', 'Developer (shell) accounts take only a key they made themselves') });
     let kp; try { kp = await makeKeyPair(m.user); } catch (e) { return send(res, 500, { ok: false, message: K('열쇠를 만들지 못했어요(ssh-keygen): ', 'Could not make the key (ssh-keygen): ') + e.message }); }
     const t = JSON.parse(JSON.stringify(TEAM));
     const tm = t.members.find((x) => x.user === m.user); tm.pubkey = kp.pub; tm.keyGen = true;
     try { saveTeam(t); } catch (e) { return send(res, 500, { ok: false, message: 'config.json: ' + e.message }); }
     genKeys.set(m.user, { priv: kp.priv, pub: kp.pub, at: Date.now() });
     const dropped = auth.dropResets(m.user);   // 새 열쇠 = 전에 보낸 로그인 링크도 무효(Fable 조건 5)
-    writeLog({ action: 'team-keygen', target: m.user, fp: keyTag(kp.pub), dropped });
+    writeLog({ action: 'team-keygen', target: m.user, shell: wantsShell(m) ? 'login' : 'tunnel', fp: keyTag(kp.pub), dropped });
     cache.at = 0;
     return send(res, 200, { ok: true, message: K('열쇠를 만들었어요 — 아래 한 줄을 서버 창에 붙여 넣으세요', 'Key made — paste the line below in a server shell') });
   }
@@ -5012,10 +5013,11 @@ async function handleAction(req, res, url, who) {
     if (new Set(n.members.map((m) => m.user || m.tailscale)).size !== n.members.length) return send(res, 400, { ok: false, message: K('같은 계정이 두 번 있습니다', 'Same account listed twice') });
     n.members.forEach((m) => {
       m.projects = m.projects.filter((k) => k === '*' || keys.has(k));
-      // «상황판이 만든 열쇠» 표시는 화면 값을 믿지 않고 서버가 가름 — 전에 만든 그 열쇠 그대로 + 통로 전용일 때만 (Fable: 개발자로 바뀌면 열쇠 버리고 새 공개 열쇠)
+      // «상황판이 만든 열쇠» 표시는 화면 값을 믿지 않고 서버가 가름 — 전에 만든 그 열쇠 그대로 + 직무 종류(통로/터미널)가 그대로일 때만 (Fable: 종류가 바뀌면 열쇠 버리고 새로)
       const prev = TEAM.members.find((x) => x.user === m.user);
       m.keyGen = !!(prev && prev.keyGen && prev.pubkey && prev.pubkey === m.pubkey);
-      if (m.keyGen && wantsShell(m)) { m.keyGen = false; m.pubkey = ''; genKeys.delete(m.user); }
+      // 통로 전용 ↔ 개발자로 바뀌면 상황판이 만든 열쇠는 버림 — 그 열쇠의 개인 쪽은 다른 권한을 전제로 건넸으니 새로 만듦
+      if (m.keyGen && wantsShell(m) !== wantsShell(prev)) { m.keyGen = false; m.pubkey = ''; genKeys.delete(m.user); }
       if (!m.keyGen) genKeys.delete(m.user);
     });
     for (const u of [...genKeys.keys()]) if (!n.members.some((m) => m.user === u)) genKeys.delete(u);   // 팀에서 뺀 사람 열쇠도 버림

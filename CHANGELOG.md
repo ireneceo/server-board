@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.6.26]
+
+- **Page width choice and better resizing** — «⚙ Settings» has a new «Page width» option: «Normal — centered, 1100px» (as before) or «Wide — full screen». It applies right away and is remembered per browser only. Solution columns now follow the real width (each at least 330px) instead of a fixed 1023px breakpoint, so a 1024px window shows 2 roomy columns instead of 3 cramped ones, and wide screens fit more. Resizing the window or rotating a phone re-lays out the columns without waiting for new data. Korean text no longer breaks in the middle of a word.
+- **The board makes developer (shell) keys too** — in «⚙ Team & roles» step ②, «Let the board make the key» now works for developer accounts as well, so you no longer have to ask the member to run `ssh-keygen` and send a line back. Their private half goes into the ③ invitation once (send it 1:1, they delete it after pasting), and the invitation's server-shell command now uses that key file. Pasting a public key they sent is still possible under «Already have their public key?». Switching a member between tunnel-only and developer drops a board-made key.
+
 ## [0.6.25]
 
 - **«⚙ Team & roles» account card walks you through it step by step** — the current step is marked «You are here», and each step shows small 1·2·3 sub-steps (done ones get ✔, the next one is bold). Under «① Saved» and the invitation email field it now says plainly that saving sends nothing — no email, no link; the email opens only from «③ Make invitation & copy», and you press send in your own mail app. The developer key step ② is laid out in order: copy the request (or «Request by email» when an address is set) → paste the public key line they send back and save → copy the server-shell line, paste it, sudo, `OK` → «Done — check again». Changing only the key keeps ① «Saved» (one save button inside ②), and ③·④ say what they are waiting for.

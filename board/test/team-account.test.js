@@ -98,7 +98,7 @@ test('저장 — 서버 계정 꼭 · 시스템·관리자 계정 거절 · 아�
 });
 
 // 상황판이 열쇠 만들기 — 통로 전용만 · 개인 열쇠는 메모리에만 · 초대 때 «준비됨» 이어야 한 번
-test('열쇠 만들기 — 개발자 거절 · 통로 전용은 공개 열쇠 저장·keyGen · 개인 열쇠는 /api/team·config 에 없음 · 준비 전 초대 거절', async () => {
+test('열쇠 만들기 — 개발자도 됨(터미널 줄) · 통로 전용은 공개 열쇠 저장·keyGen · 개인 열쇠는 /api/team·config 에 없음 · 준비 전 초대 거절', async () => {
   await new Promise((r) => board.server.listen(0, '127.0.0.1', r));
   port = board.server.address().port;
   try {
@@ -106,7 +106,17 @@ test('열쇠 만들기 — 개발자 거절 · 통로 전용은 공개 열쇠 �
     let r = await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'planner', projects: [] }, { user: 'zz-dev', name: '개발', role: 'member', job: 'developer', projects: [] }]);
     assert.equal(r.code, 200, JSON.stringify(r.j));
     r = await call('POST', '/api/team/keygen', 'terminal', { user: 'zz-dev' });
-    assert.equal(r.code, 400, '개발자(셸)는 상황판이 만든 열쇠 안 됨');
+    assert.equal(r.code, 200, '개발자(셸)도 상황판이 만든 열쇠 (2026-11-25 __OWNER__)');
+    { const t0 = await call('GET', '/api/team', 'terminal'); const sd = t0.j.setup['zz-dev'];
+      assert.deepEqual([sd.keyGen, sd.keyPending, sd.canGen, sd.shell], [true, true, true, 'login']);
+      assert.match(sd.cmd, /\/bin\/bash/); assert.doesNotMatch(sd.cmd, /restrict/, '개발자 줄은 통로 제한 없음');
+      // 같은 개발자로 다시 저장 = 열쇠 유지 · 통로 전용으로 바꾸면 버림
+      const dm = t0.j.team.members.find((x) => x.user === 'zz-dev');
+      await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'planner', projects: [] }, { user: 'zz-dev', name: '개발', role: 'member', job: 'developer', pubkey: dm.pubkey, projects: [] }]);
+      let t1 = await call('GET', '/api/team', 'terminal'); assert.equal(t1.j.team.members.find((x) => x.user === 'zz-dev').keyGen, true);
+      await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'planner', projects: [] }, { user: 'zz-dev', name: '개발', role: 'member', job: 'planner', pubkey: dm.pubkey, projects: [] }]);
+      t1 = await call('GET', '/api/team', 'terminal'); const d1 = t1.j.team.members.find((x) => x.user === 'zz-dev');
+      assert.deepEqual([d1.pubkey, d1.keyGen, board.genKeys.has('zz-dev')], ['', false, false], '개발자 → 통로 전용이면 상황판 열쇠 버림'); }
     r = await call('POST', '/api/team/keygen', 'terminal', { user: 'zz-gen' });
     assert.equal(r.code, 200, JSON.stringify(r.j));
     const t = await call('GET', '/api/team', 'terminal');
@@ -128,6 +138,12 @@ test('열쇠 만들기 — 개발자 거절 · 통로 전용은 공개 열쇠 �
     r = await save([{ user: 'zz-gen', name: '통로', role: 'member', job: 'developer', pubkey: m.pubkey, projects: [] }]);
     t2 = await call('GET', '/api/team', 'terminal');
     assert.deepEqual([t2.j.team.members[0].pubkey, t2.j.team.members[0].keyGen, board.genKeys.has('zz-gen')], ['', false, false]);
+    await save([{ user: 'zz-up', name: 'u', role: 'member', job: 'planner', projects: [] }]);
+    assert.equal((await call('POST', '/api/team/keygen', 'terminal', { user: 'zz-up' })).code, 200);
+    { const up = (await call('GET', '/api/team', 'terminal')).j.team.members[0];
+      await save([{ user: 'zz-up', name: 'u', role: 'member', job: 'developer', pubkey: up.pubkey, projects: [] }]);
+      const u2 = (await call('GET', '/api/team', 'terminal')).j.team.members[0];
+      assert.deepEqual([u2.pubkey, u2.keyGen, board.genKeys.has('zz-up')], ['', false, false], '통로 → 개발자면 상황판 열쇠 버림'); }
     // 화면이 keyGen:true 를 꾸며 보내도 안 됨
     r = await save([{ user: 'zz-x', name: 'x', role: 'member', job: 'planner', pubkey: KEY, keyGen: true, projects: [] }]);
     t2 = await call('GET', '/api/team', 'terminal');
