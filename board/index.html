@@ -4464,10 +4464,15 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       if (u.last.log && u.last.result !== 'done') {
         box.appendChild(el('small', null, K('기록: ~/dev-server/', 'Log: ~/dev-server/') + u.last.log));
         if (u.last.why === 'tests') {
-          var lc = el('code', null, 'grep -E "^not ok|결과|location|expected|actual|Error" ~/dev-server/' + u.last.log + ' | head -40');
-          lc.style.cssText = 'display:block;margin-top:4px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:12px;word-break:break-all;';
-          var lh = box.appendChild(el('small', null, K('서버 창에서 깨진 까닭 보기(나온 글을 서버 방에 붙여 넣으면 AI 가 고쳐요):', 'See why in a server terminal (paste the output into the server room and the AI fixes it):'))); lh.style.display = 'block'; lh.style.marginTop = '4px';
-          box.appendChild(lc);
+          // 까닭 찾기는 이 서버의 서버 방이 — 사람이 서버 창에서 기록을 뒤지지 않게
+          row = el('div', 'row'); row.style.marginTop = '6px';
+          var tq = el('button', 'btn primary', u.last.testfailQueued ? K('서버 방에 맡겼어요', 'Handed to the server room') : K('서버 방 AI 에게 까닭 찾기 맡기기 ▶', 'Ask the server room AI to find out why ▶'));
+          tq.disabled = !!u.last.testfailQueued;
+          tq.onclick = function () { tq.disabled = true; post('/api/update/testfail', {}).then(function (j) { toast(j.message || ''); load(); }).catch(function () { tq.disabled = false; }); };
+          row.appendChild(tq); box.appendChild(row);
+          var lh = box.appendChild(el('small', null, u.last.testfailQueued ? K('이 서버의 서버 방이 기록을 읽고 깨진 시험만 따로 다시 돌려 봐요 — 잠깐 흔들린 것이면 «업데이트» 한 번 더, 아니면 까닭과 할 일을 보고해요.', 'This server\'s server room reads the log and re-runs only the failed tests — if it was a brief glitch, press «Update» once more; otherwise it reports the cause and what to do.')
+            : K('누르면 이 서버의 서버 방이 기록을 읽고 까닭을 찾아 보고해요. 잠깐 흔들린 시험이면 «업데이트» 를 한 번 더 눌러도 돼요.', 'This server\'s server room reads the log and reports the cause. If it was a flaky test, pressing «Update» again may also work.')));
+          lh.style.display = 'block'; lh.style.marginTop = '4px';
         }
       }
       if (u.lastTemplates && u.lastTemplates.length) {

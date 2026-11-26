@@ -270,7 +270,7 @@ test('업데이트: 상황판이 결과를 재시작 없이 읽음 · 멈춘 받
     board.updateBootResult();
     assert.strictEqual(board.updateView().stalled.tag, 'v0.3.0');
     assert.strictEqual(board.loadState().update.last.result, 'stalled');
-    for (const u of ['/api/update/apply', '/api/update/revert', '/api/update/check', '/api/update/keep', '/api/update/templates', '/api/update/diverged']) {
+    for (const u of ['/api/update/apply', '/api/update/revert', '/api/update/check', '/api/update/keep', '/api/update/templates', '/api/update/diverged', '/api/update/testfail']) {
       const d = await board.permit({ role: 'agent', user: 'x', projects: ['*'] }, u, {});
       assert.ok(d && d[0] === 403, u);
       const m = await board.permit({ role: 'member', user: 'm', projects: ['*'] }, u, {});
@@ -278,6 +278,31 @@ test('업데이트: 상황판이 결과를 재시작 없이 읽음 · 멈춘 받
     }
     assert.ok(board.needsFresh({ role: 'owner', via: 'tunnel', fresh: false }, '/api/update/apply'));
     assert.ok(board.needsFresh({ role: 'owner', via: 'tunnel', fresh: false }, '/api/update/revert'));
+  } finally { board.server.close(); sb.cleanup(); }
+});
+
+test('업데이트: 시험 실패면 깨진 시험 이름을 보이고 서버 방에 까닭 찾기를 맡김(한 번만)', async () => {
+  const { loadBoard } = require('./sandbox');
+  const { board, sb } = loadBoard({ lang: 'ko', projects: [{ key: 'server', name: 'Server', dir: path.join(os.tmpdir()), stateFile: 'session-state.md' }] });
+  try {
+    fs.writeFileSync(path.join(sb.dir, 'update-result.json'), JSON.stringify({ mode: 'apply', tag: 'v0.2.0', phase: 'end', result: 'blocked', why: 'tests', from: '0.1.0', to: '0.2.0', pass: 9, fail: 1, failed: ['백업: 도는 중'], log: 'board/log/update/x/run.log', at: '2026-11-26T00:00:00.000Z' }));
+    board.updateBootResult();
+    const v = board.updateView();
+    assert.deepStrictEqual(v.last.tests, { pass: 9, fail: 1, failed: ['백업: 도는 중'], retried: false });
+    assert.strictEqual(v.last.testfailQueued, false);
+    await new Promise((r) => board.server.listen(0, '127.0.0.1', r));
+    const port = board.server.address().port;
+    const call = () => new Promise((ok, no) => {
+      const r = require('http').request({ host: '127.0.0.1', port, path: '/api/update/testfail', method: 'POST', agent: false, headers: { 'x-test-sock': 'terminal', host: 'localhost:8800', origin: 'http://localhost:8800', 'content-type': 'application/json' } }, (res) => { let d = ''; res.on('data', (c) => (d += c)); res.on('end', () => ok([res.statusCode, d])); });
+      r.on('error', no); r.end('{}');
+    });
+    const [c1, b1] = await call();
+    assert.strictEqual(c1, 200, b1);
+    const q = board.loadState().queue.filter((x) => x.ref === 'testfail:v0.2.0');
+    assert.strictEqual(q.length, 1); assert.strictEqual(q[0].project, 'server');
+    assert.match(q[0].task, /백업: 도는 중/); assert.match(q[0].task, /run\.log/); assert.match(q[0].task, /test-concurrency=1/);
+    assert.strictEqual(board.updateView().last.testfailQueued, true);
+    assert.strictEqual((await call())[0], 409, '두 번 안 넣음');
   } finally { board.server.close(); sb.cleanup(); }
 });
 

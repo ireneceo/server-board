@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.32]
+
+- **Failed board update: hand the cause-finding to this server's server room** — when a new version fails its self-tests here, the update box no longer asks you to run a log command in a server terminal. It shows **Ask the server room AI to find out why ▶**, which queues a read-and-report task in this server's server room: it reads the update log, re-runs only the failed tests on their own, and reports whether to press «Update» once more, a setting to change on this server, or a ready-to-copy note for the board maker. It does not edit board code or delete tests.
+
 ## [0.6.31]
 
 - **Board update: flaky self-tests no longer block, and failures say which test** — when the new version's self-tests fail, the update now re-runs just the failed test files once, on their own; if they pass alone (a timing race that only shows when all tests run at once, common on slower servers) the update continues. If they fail again, the update box lists the failed tests and gives a one-line command to show why; the log now keeps each failure's error (expected/actual/location).

@@ -639,7 +639,7 @@ function updateView() {
   return { on: c ? c.on : null, current: live || (c ? c.current : null), latest: c ? c.latest || null : null, newer: !!(c && c.newer && !stale), canApply: !!(c && c.canApply && !stale), stale, why: c ? c.why || null : null, repo: String(CONFIG.repoUrl || 'https://github.com/ireneceo/server-board').replace(/\.git$/, ''),
     dirty: c && c.dirty || null, local: c && c.local || [], conflict: c && c.conflict || [], rebase: c && c.rebase || null, tag: c && c.tag || null, divergedQueued: !!(u.divergedQueued && c && u.divergedQueued === c.tag), notes: c && c.notes ? String(c.notes).slice(0, 4000) : '', templates: c && c.templates || [], checkedAt: c ? c.checkedAt : null, err: c && c.err ? String(c.err).slice(0, 300) : null,
     running: run ? { at: run.at, mode: run.mode, tag: run.tag } : null, stalled: stalled ? { tag: stalled.tag, phase: stalled.phase, at: stalled.startedAt } : null,
-    last: last ? { result: last.result, why: last.why || null, backup: last.backup || null, conflict: last.conflict || null, from: last.from || null, to: last.to || null, at: last.at || last.startedAt, log: last.log || null, templatesQueued: !!u.templatesQueued,
+    last: last ? { result: last.result, why: last.why || null, backup: last.backup || null, conflict: last.conflict || null, from: last.from || null, to: last.to || null, at: last.at || last.startedAt, log: last.log || null, templatesQueued: !!u.templatesQueued, testfailQueued: !!(last.to && u.testfailQueued === 'v' + last.to),
       tests: last.why === 'tests' ? { pass: last.pass || 0, fail: last.fail || 0, failed: (Array.isArray(last.failed) ? last.failed : String(last.err || '').split('\n').filter((l) => /^not ok /.test(l)).map((l) => l.replace(/^not ok \d+ - /, ''))).slice(0, 8).map((x) => String(x).slice(0, 120)), retried: !!last.retried } : null } : null,
     lastTemplates: last && last.result === 'done' && u.applyTemplates && u.applyTemplates.tag === 'v' + u.last.to && !u.templatesQueued ? u.applyTemplates.paths : [] };
 }
@@ -6369,6 +6369,32 @@ async function handleAction(req, res, url, who) {
     st.queue.push({ qid, project: 'server', task, ref: 'diverged:' + u.tag, title: K('상황판 갈라진 이력 풀기 ', 'Board history fix ') + u.tag, createdAt: new Date().toISOString() });
     st.update = st.update || {}; st.update.divergedQueued = u.tag; saveState(st); cache.at = 0;
     writeLog({ action: 'update-diverged-queued', qid, tag: u.tag, local: u.local.length });
+    return send(res, 200, { ok: true, message: K('서버 방 대기열에 넣었어요', 'Added to the server queue') });
+  }
+  if (url === '/api/update/testfail') {   // 새 판이 이 서버 시험을 통과 못 함 — 이 서버의 서버 방에 까닭 찾기·받기 맡김
+    const u = updateView();
+    const proj = loadProjects().find((p) => p.key === 'server');
+    const L = u && u.last;
+    if (!L || L.result !== 'blocked' || L.why !== 'tests' || !L.to || !proj) return send(res, 409, { ok: false, message: K('맡길 시험 실패가 없어요', 'No test failure to hand over') });
+    const tag = 'v' + L.to;
+    const st = loadState(); st.queue = st.queue || [];
+    if (st.queue.some((q) => q.ref === 'testfail:' + tag)) return send(res, 409, { ok: false, message: K('이미 맡겼어요', 'Already queued') });
+    const qid = 'q' + Date.now().toString(36);
+    const logp = path.join(UPD_DIR, L.log || 'board/log/update');
+    const names = (L.tests && L.tests.failed.length) ? L.tests.failed.join(' · ') : '';
+    const task = K('상황판 새 판 ' + tag + ' 이 이 서버 자동 시험을 통과 못 해 받지 않았다(지금 판 그대로)' + (names ? ' · 깨진 시험: ' + names : '') + '. 기록: ' + logp + '. ' +
+      '1) 기록에서 «결과»·«not ok»·«깨진 시험 자세히» 줄로 깨진 시험과 오류 글을 본다. 2) 그 판을 임시 폴더에 꺼내(git -C ' + UPD_DIR + ' archive ' + tag + ' board | tar -x -C <임시>) 깨진 시험 파일만 cd <임시>/board && node --test --test-concurrency=1 <파일> 로 다시 돌린다(메모리 자리표 규칙대로). ' +
+      '3-가) 따로 돌리면 통과(동시 실행 때만 깨지는 흔들림)면: 보고에 그렇다고 쓰고 «상황판 맨 위 새 판 칸에서 업데이트 한 번 더» 를 안내한다(상황판 코드·git 은 건드리지 않음). ' +
+      '3-나) 따로 돌려도 깨지면: 이 서버만의 까닭(없는 프로그램·권한·root 실행·느림·이 서버 커밋 git log --oneline ' + tag + '..HEAD)인지 가린다. 이 서버 설정으로 풀리는 것이면 그 방법을 권고로, 아니면 상황판 만든 쪽에 전할 글(판 번호·깨진 시험 이름·오류 글·이 서버 node -v·uname -a)을 복사해 보낼 수 있게 보고에 붙인다. ' +
+      '상황판 코드를 직접 고치거나 시험을 지우지 않는다. 운영 배포·외부 발송 없음.',
+      'Board ' + tag + ' failed its self-tests on this server and was not installed (current version kept)' + (names ? ' · failed: ' + names : '') + '. Log: ' + logp + '. ' +
+      '1) Read the «결과», «not ok» and «깨진 시험 자세히» lines in the log for the failed tests and errors. 2) Extract that version to a temp folder (git -C ' + UPD_DIR + ' archive ' + tag + ' board | tar -x -C <tmp>) and re-run only the failed test files: cd <tmp>/board && node --test --test-concurrency=1 <files> (memory-slot rules). ' +
+      '3a) If they pass on their own (a race that only shows when all tests run together): say so and tell the owner to press Update once more in the update box at the top (do not touch board code or git). ' +
+      '3b) If they still fail: find out whether it is specific to this server (missing program, permissions, running as root, slowness, this server\'s commits: git log --oneline ' + tag + '..HEAD). If a setting here fixes it, recommend it; otherwise attach a note for the board maker (version, failed test names, error text, node -v, uname -a) ready to copy. ' +
+      'Do not edit board code or delete tests. No production deploys or outside sends.');
+    st.queue.push({ qid, project: 'server', task, ref: 'testfail:' + tag, title: K('상황판 새 판 시험 실패 까닭 ', 'Board update test failure ') + tag, createdAt: new Date().toISOString() });
+    st.update = st.update || {}; st.update.testfailQueued = tag; saveState(st); cache.at = 0;
+    writeLog({ action: 'update-testfail-queued', qid, tag });
     return send(res, 200, { ok: true, message: K('서버 방 대기열에 넣었어요', 'Added to the server queue') });
   }
   if (url === '/api/update/templates') {   // 바뀐 규칙·명령 틀을 이 서버 사본에 반영 — 서버 방 대기열 (2-5 · Fable: 범위·경로만 넘김, 자동으로 넣지 않음)
