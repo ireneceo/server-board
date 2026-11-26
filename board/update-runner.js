@@ -206,9 +206,27 @@ async function rollback(prev, snapDir, why) {
       : 'cd "' + tb + '" && "' + process.execPath + '" --test --test-reporter=tap $(ls test/*.test.js | grep -v "/public.test.js$")';
     const tenv = Object.assign({}, process.env); delete tenv.NODE_TEST_CONTEXT;
     const t = await runGroup(cmd, 300000, tenv);
-    const pass = +((t.out.match(/^# pass (\d+)/m) || [])[1] || 0), fail = +((t.out.match(/^# fail (\d+)/m) || [])[1] || 0);
-    if (!t.ok || (!TEST_CMD && (!pass || fail))) return finish('blocked', { why: 'tests', pass, fail, err: (t.err || '') + '\n' + t.out.split('\n').filter((l) => /^not ok|^# (pass|fail)/.test(l)).slice(0, 12).join('\n') });
-    log('새 판 시험 통과' + (pass ? ' ' + pass + '개' : ''));
+    let pass = +((t.out.match(/^# pass (\d+)/m) || [])[1] || 0), fail = +((t.out.match(/^# fail (\d+)/m) || [])[1] || 0);
+    const failNames = (out) => out.split('\n').filter((l) => /^not ok /.test(l)).map((l) => l.replace(/^not ok \d+ - /, '').replace(tb + path.sep, '').slice(0, 120)).slice(0, 12);
+    let failed = failNames(t.out), retried = null;
+    // 깨진 시험마다 오류 글(기대·실제·위치)을 기록에 — 다른 서버에서 까닭을 알려면 이것이 있어야 함
+    const failDetail = (out, tag) => { const L = out.split('\n'); const keep = []; L.forEach((l, i) => { if (!/^\s*not ok /.test(l) || keep.length >= 160) return; keep.push(l); for (let j = i + 1; j < Math.min(L.length, i + 30) && !/^\s*(ok|not ok) /.test(L[j]); j++) keep.push(L[j]); }); if (keep.length) log(tag + '\n' + keep.join('\n')); };
+    if (fail || !t.ok) failDetail(t.out + (t.ok ? '' : '\n' + (t.err || '')), '깨진 시험 자세히');
+    if (!TEST_CMD && t.ok === false && pass && fail) {
+      const files = [...new Set([...t.out.matchAll(/location: '([^']+?\.test\.js):\d+:\d+'/g)].map((m) => m[1])
+        .concat(t.out.split('\n').filter((l) => /^not ok \d+ - \S+\.test\.js$/.test(l)).map((l) => l.replace(/^not ok \d+ - /, '')))
+        .filter((f) => f.startsWith(tb + path.sep + 'test' + path.sep)).map((f) => path.relative(tb, f)))];
+      if (files.length && files.length <= 5) {
+        log('시험 ' + fail + '개 실패(' + failed.join(' · ') + ') — 그 파일만 따로 한 번 더: ' + files.join(' '));
+        const t2 = await runGroup('cd "' + tb + '" && "' + process.execPath + '" --test --test-concurrency=1 --test-reporter=tap ' + files.map((f) => '"' + f + '"').join(' '), 240000, tenv);
+        const p2 = +((t2.out.match(/^# pass (\d+)/m) || [])[1] || 0), f2 = +((t2.out.match(/^# fail (\d+)/m) || [])[1] || 0);
+        retried = { files, pass: p2, fail: f2, ok: t2.ok && p2 > 0 && !f2 };
+        if (retried.ok) { log('따로 다시 돌린 시험 통과 ' + p2 + '개 — 동시 실행 때만 깨지는 흔들림으로 보고 계속'); pass = pass + fail; fail = 0; }
+        else { failed = failNames(t2.out).length ? failNames(t2.out) : failed; failDetail(t2.out, '따로 다시 돌려도 깨진 시험 자세히'); }
+      }
+    }
+    if ((!t.ok && !(retried && retried.ok)) || (!TEST_CMD && (!pass || fail))) return finish('blocked', { why: 'tests', pass, fail, failed, retried, err: (t.err || '') + '\n' + t.out.split('\n').filter((l) => /^not ok|^# (pass|fail)/.test(l)).slice(0, 12).join('\n') });
+    log('새 판 시험 통과' + (pass ? ' ' + pass + '개' : '') + (retried ? ' (흔들린 시험 ' + retried.files.length + '파일은 따로 다시 돌려 통과)' : ''));
   } finally { try { fs.rmSync(tdir, { recursive: true, force: true }); } catch (_) {} TDIR = null; }
 
   // 4·5 바꿔 끼우기 — 먼저 «중간» 표시

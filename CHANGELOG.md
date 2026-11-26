@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.6.31]
+
+- **Board update: flaky self-tests no longer block, and failures say which test** — when the new version's self-tests fail, the update now re-runs just the failed test files once, on their own; if they pass alone (a timing race that only shows when all tests run at once, common on slower servers) the update continues. If they fail again, the update box lists the failed tests and gives a one-line command to show why; the log now keeps each failure's error (expected/actual/location).
+
 ## [0.6.30]
 
 - **«Build from a design doc» box fits narrow cards** — the doc path field now has its own line, with «N sessions/day» and «Plan it» on one line below it (squeezing all three onto one line folded the text vertically). On narrow cards that line wraps and the button takes a full row below instead of sticking out of the card.

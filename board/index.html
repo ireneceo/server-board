@@ -4457,7 +4457,19 @@ echo "⑥ Tailscale:"; /Applications/Tailscale.app/Contents/MacOS/Tailscale stat
       if (u.last.why) box.appendChild(el('div', null, UPD_WHY[u.last.why] || u.last.why));
       if (u.last.result === 'done' && !u.newer && !u.stale && u.latest && u.checkedAt) box.appendChild(el('small', null, K('지금 ' + u.current + ' · 공개 최신 ' + u.latest + ' (' + fmt(u.checkedAt) + ' 확인)', 'Now ' + u.current + ' · latest published ' + u.latest + ' (checked ' + fmt(u.checkedAt) + ')')));
       if (u.last.result === 'done' && u.last.backup) box.appendChild(el('small', null, K('이 서버에서 따로 한 커밋은 새 판 위에 다시 얹었어요 · 원래 이력은 가지 ' + u.last.backup + ' 에 남겨 둠', 'Commits made on this server were re-applied on top · the original history is kept in branch ' + u.last.backup)));
-      if (u.last.log && u.last.result !== 'done') box.appendChild(el('small', null, K('기록: ~/dev-server/', 'Log: ~/dev-server/') + u.last.log));
+      if (u.last.tests && (u.last.tests.fail || u.last.tests.failed.length)) {
+        box.appendChild(el('div', null, K('깨진 시험 ' + (u.last.tests.fail || u.last.tests.failed.length) + '개 (통과 ' + u.last.tests.pass + ')' + (u.last.tests.retried ? ' · 따로 다시 돌려도 실패' : ''), (u.last.tests.fail || u.last.tests.failed.length) + ' test(s) failed (' + u.last.tests.pass + ' passed)' + (u.last.tests.retried ? ' · failed again when re-run alone' : ''))));
+        if (u.last.tests.failed.length) { var ful = document.createElement('ul'); ful.style.cssText = 'margin:2px 0 0;padding-left:18px;font-size:12px;'; u.last.tests.failed.forEach(function (h) { var li = document.createElement('li'); li.textContent = h; ful.appendChild(li); }); box.appendChild(ful); }
+      }
+      if (u.last.log && u.last.result !== 'done') {
+        box.appendChild(el('small', null, K('기록: ~/dev-server/', 'Log: ~/dev-server/') + u.last.log));
+        if (u.last.why === 'tests') {
+          var lc = el('code', null, 'grep -E "^not ok|결과|location|expected|actual|Error" ~/dev-server/' + u.last.log + ' | head -40');
+          lc.style.cssText = 'display:block;margin-top:4px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:12px;word-break:break-all;';
+          var lh = box.appendChild(el('small', null, K('서버 창에서 깨진 까닭 보기(나온 글을 서버 방에 붙여 넣으면 AI 가 고쳐요):', 'See why in a server terminal (paste the output into the server room and the AI fixes it):'))); lh.style.display = 'block'; lh.style.marginTop = '4px';
+          box.appendChild(lc);
+        }
+      }
       if (u.lastTemplates && u.lastTemplates.length) {
         box.appendChild(el('div', null, K('설치 때 복사해 둔 규칙·명령 틀도 바뀌었어요(' + u.lastTemplates.length + '개) — 이 서버 사본에는 AI 가 손질한 부분을 지키며 반영해요.', 'Rule and command templates copied at install also changed (' + u.lastTemplates.length + ') — the AI applies them to this server\'s copies, keeping local edits.')));
         row = el('div', 'row'); row.style.marginTop = '6px';

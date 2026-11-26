@@ -639,7 +639,8 @@ function updateView() {
   return { on: c ? c.on : null, current: live || (c ? c.current : null), latest: c ? c.latest || null : null, newer: !!(c && c.newer && !stale), canApply: !!(c && c.canApply && !stale), stale, why: c ? c.why || null : null, repo: String(CONFIG.repoUrl || 'https://github.com/ireneceo/server-board').replace(/\.git$/, ''),
     dirty: c && c.dirty || null, local: c && c.local || [], conflict: c && c.conflict || [], rebase: c && c.rebase || null, tag: c && c.tag || null, divergedQueued: !!(u.divergedQueued && c && u.divergedQueued === c.tag), notes: c && c.notes ? String(c.notes).slice(0, 4000) : '', templates: c && c.templates || [], checkedAt: c ? c.checkedAt : null, err: c && c.err ? String(c.err).slice(0, 300) : null,
     running: run ? { at: run.at, mode: run.mode, tag: run.tag } : null, stalled: stalled ? { tag: stalled.tag, phase: stalled.phase, at: stalled.startedAt } : null,
-    last: last ? { result: last.result, why: last.why || null, backup: last.backup || null, conflict: last.conflict || null, from: last.from || null, to: last.to || null, at: last.at || last.startedAt, log: last.log || null, templatesQueued: !!u.templatesQueued } : null,
+    last: last ? { result: last.result, why: last.why || null, backup: last.backup || null, conflict: last.conflict || null, from: last.from || null, to: last.to || null, at: last.at || last.startedAt, log: last.log || null, templatesQueued: !!u.templatesQueued,
+      tests: last.why === 'tests' ? { pass: last.pass || 0, fail: last.fail || 0, failed: (Array.isArray(last.failed) ? last.failed : String(last.err || '').split('\n').filter((l) => /^not ok /.test(l)).map((l) => l.replace(/^not ok \d+ - /, ''))).slice(0, 8).map((x) => String(x).slice(0, 120)), retried: !!last.retried } : null } : null,
     lastTemplates: last && last.result === 'done' && u.applyTemplates && u.applyTemplates.tag === 'v' + u.last.to && !u.templatesQueued ? u.applyTemplates.paths : [] };
 }
 

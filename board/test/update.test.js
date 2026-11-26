@@ -64,6 +64,8 @@ async function setup() {
     fs.writeFileSync(path.join(work, 'board', 'VERSION'), ver + '\n');
     if (opts.broken) fs.writeFileSync(path.join(work, 'board', 'BROKEN'), '1'); else fs.rmSync(path.join(work, 'board', 'BROKEN'), { force: true });
     if (opts.failTests) fs.writeFileSync(path.join(work, 'board', 'FAIL_TESTS'), '1'); else fs.rmSync(path.join(work, 'board', 'FAIL_TESTS'), { force: true });
+    fs.rmSync(path.join(work, 'board', 'test'), { recursive: true, force: true });
+    if (opts.tests) { fs.mkdirSync(path.join(work, 'board', 'test')); for (const [n, src] of Object.entries(opts.tests)) fs.writeFileSync(path.join(work, 'board', 'test', n), src); }
     const cl = fs.readFileSync(path.join(work, 'CHANGELOG.md'), 'utf8').replace('# Changelog\n\n', '# Changelog\n\n## [' + ver + '] — ' + (opts.notes || 'new') + '\n- b\n\n');
     fs.writeFileSync(path.join(work, 'CHANGELOG.md'), cl);
     sh(work, 'git add -A && git commit -qm ' + ver + ' && git tag -a v' + ver + ' -m v' + ver + ' && git push -q ' + JSON.stringify(bare) + ' main v' + ver);
@@ -112,6 +114,34 @@ test('업데이트: 새 판 시험 실패 → 설치본 그대로(재시작도 �
     assert.strictEqual(t.head(), before);
     assert.deepStrictEqual(fs.readdirSync(path.join(t.root, 'tmp')), [], '새 판 시험 임시 폴더가 남음');
     assert.ok(!fs.existsSync(path.join(t.root, 'pm2.log')) || !/stop/.test(fs.readFileSync(path.join(t.root, 'pm2.log'), 'utf8').split('\n').slice(1).join('\n')));
+  } finally { t.cleanup(); }
+});
+
+test('업데이트: 흔들린 시험은 따로 다시 돌려 받음 · 늘 깨지는 시험은 막고 이름을 남김', async () => {
+  const t = await setup();
+  try {
+    const OK = "require('node:test')('fine', () => {});\n";
+    const FLAKY = "const fs = require('fs'), p = require('path').join(process.env.FAKE_ROOT, 'flaky-once');\nrequire('node:test')('once', () => { if (!fs.existsSync(p)) { fs.writeFileSync(p, '1'); throw new Error('race'); } });\n";
+    const BAD = "require('node:test')('always', () => { require('assert').strictEqual(1, 2); });\n";
+    const env = Object.assign({}, t.runEnv); delete env.UPDATE_TEST_CMD;
+    t.release('0.2.0', { tests: { 'a.test.js': OK, 'b.test.js': FLAKY } });
+    let c = await up.check(t.inst, {}, {}, '7');
+    up.start(t.inst, { tag: c.tag, port: t.port, pm2: t.pm, env });
+    let r = await t.waitDone();
+    assert.strictEqual(r.result, 'done', JSON.stringify(r));
+    assert.match(fs.readFileSync(path.join(t.inst, r.log), 'utf8'), /따로 다시 돌린 시험 통과/);
+    const before = t.head();
+    t.release('0.3.0', { tests: { 'a.test.js': OK, 'c.test.js': BAD } });
+    c = await up.check(t.inst, {}, c, '7');
+    fs.rmSync(up.resultFile(t.inst), { force: true });   // 앞 받기 결과를 새 결과로 읽지 않게
+    up.start(t.inst, { tag: c.tag, port: t.port, pm2: t.pm, env });
+    r = await t.waitDone();
+    assert.strictEqual(r.tag, 'v0.3.0', JSON.stringify(r));
+    assert.strictEqual(r.result, 'blocked', JSON.stringify(r)); assert.strictEqual(r.why, 'tests');
+    assert.strictEqual(t.head(), before);
+    assert.deepStrictEqual(r.failed, ['always']); assert.strictEqual(r.fail, 1); assert.ok(r.retried && r.retried.ok === false);
+    const lg = fs.readFileSync(path.join(t.inst, r.log), 'utf8');
+    assert.match(lg, /깨진 시험 자세히[\s\S]*not ok 1 - always[\s\S]*(expected|Expected)/);
   } finally { t.cleanup(); }
 });
 
